@@ -10,6 +10,19 @@ final class HomeViewRenderingTests: XCTestCase {
     XCTAssertNotNil(Bundle.main.url(forResource: "CodexMenuIcon", withExtension: "png"))
   }
 
+  func testCodexColorIconIsBundledWithTransparentCorners() {
+    guard let url = Bundle.main.url(forResource: "CodexColorIcon", withExtension: "png"),
+      let image = NSImage(contentsOf: url),
+      let data = image.tiffRepresentation,
+      let bitmap = NSBitmapImageRep(data: data),
+      let corner = bitmap.colorAt(x: 0, y: 0)
+    else {
+      return XCTFail("Could not load the color Codex icon")
+    }
+
+    XCTAssertLessThan(corner.alphaComponent, 0.01)
+  }
+
   func testThirdPartyNoticesAreBundled() {
     XCTAssertNotNil(Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "md"))
   }

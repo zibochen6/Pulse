@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct UsageView: View {
@@ -81,20 +80,5 @@ struct UsageView: View {
     }
   }
 
-  private var codexIcon: some View {
-    Group {
-      if let url = Bundle.main.url(forResource: "CodexMenuIcon", withExtension: "png"),
-        let image = NSImage(contentsOf: url)
-      {
-        Image(nsImage: image)
-          .resizable()
-          .renderingMode(.template)
-          .scaledToFit()
-      } else {
-        Image(systemName: "sparkle")
-      }
-    }
-    .frame(width: 16, height: 16)
-    .foregroundStyle(.secondary)
-  }
+  private var codexIcon: some View { CodexProviderIcon(size: 16) }
 }

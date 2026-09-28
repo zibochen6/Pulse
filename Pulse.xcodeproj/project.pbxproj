@@ -23,12 +23,14 @@
 		78C6122344747E555A5DF17A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AE5E25194558D68B33915D /* SettingsView.swift */; };
 		94B880F789FC10F3C8FD7AE2 /* PopoverPageControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */; };
 		9BC3BCEEE74FBA45F80F421B /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B0B70F343CCFB86ABADB8C9 /* TasksView.swift */; };
+		9D9FE44395812CDEE6AFDBBA /* CodexColorIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = F2A0A8DFBF3B7B1C314D8AEB /* CodexColorIcon.png */; };
 		A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */; };
 		A93E36A532A840A2C14E8460 /* CodexMenuIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */; };
 		B415DCE4C64CCFE45FDE4734 /* PulseSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B3677511248F21F5214EC7 /* PulseSection.swift */; };
 		B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE685F7EE3DC1774AF1A117C /* AppConfig.swift */; };
 		C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */; };
 		D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */; };
+		DB042EEBE631A96D5A209658 /* CodexProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F293341995B6DF958E21987 /* CodexProviderIcon.swift */; };
 		DEB5B3FDB91867F1AC2C3E70 /* PopoverHoverControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042EECB94368AEA980440D75 /* PopoverHoverControllerTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -53,6 +55,7 @@
 		4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseAppDelegate.swift; sourceTree = "<group>"; };
 		4FBA30D234A433E58E16508B /* PulseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5763D22FF29A87447FD82E62 /* UsageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageController.swift; sourceTree = "<group>"; };
+		5F293341995B6DF958E21987 /* CodexProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProviderIcon.swift; sourceTree = "<group>"; };
 		6B0B70F343CCFB86ABADB8C9 /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
 		6CBA39302CF835124B8AEF19 /* PulseMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseMain.swift; sourceTree = "<group>"; };
 		713E8909A7BD912071712C5E /* AIStatusSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStatusSummary.swift; sourceTree = "<group>"; };
@@ -66,6 +69,7 @@
 		DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigTests.swift; sourceTree = "<group>"; };
 		DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSnapshot.swift; sourceTree = "<group>"; };
 		DE685F7EE3DC1774AF1A117C /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		F2A0A8DFBF3B7B1C314D8AEB /* CodexColorIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = CodexColorIcon.png; sourceTree = "<group>"; };
 		F69D4C870D63B26C2433BCB4 /* PopoverPageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverPageController.swift; sourceTree = "<group>"; };
 		F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewRenderingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -105,6 +109,7 @@
 		1BBA6FCCC1FA176AD6D36324 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				5F293341995B6DF958E21987 /* CodexProviderIcon.swift */,
 				08B3677511248F21F5214EC7 /* PulseSection.swift */,
 			);
 			path = UI;
@@ -188,6 +193,7 @@
 		F7EE12501EB7201D317BF279 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				F2A0A8DFBF3B7B1C314D8AEB /* CodexColorIcon.png */,
 				30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */,
 			);
 			path = Resources;
@@ -293,6 +299,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9D9FE44395812CDEE6AFDBBA /* CodexColorIcon.png in Resources */,
 				A93E36A532A840A2C14E8460 /* CodexMenuIcon.png in Resources */,
 				1BE60A027FF7E01300C38221 /* THIRD_PARTY_NOTICES.md in Resources */,
 			);
@@ -321,6 +328,7 @@
 				B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */,
 				4A3779C2CB4D487729AB784A /* CodexAppServerTransport.swift in Sources */,
 				715C7B88CFE0C9B3DDB927B9 /* CodexProvider.swift in Sources */,
+				DB042EEBE631A96D5A209658 /* CodexProviderIcon.swift in Sources */,
 				3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */,
 				05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */,
 				6F7BDB9101FAE05E50004C43 /* PopoverHoverController.swift in Sources */,

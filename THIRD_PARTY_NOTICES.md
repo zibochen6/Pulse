@@ -1,9 +1,10 @@
 # Third-party notices
 
-Pulse includes `Pulse/Resources/CodexMenuIcon.png` from the local
+Pulse includes `Pulse/Resources/CodexMenuIcon.png` and the color popover
+variant `Pulse/Resources/CodexColorIcon.png` from the local
 [`codex-usage-status`](https://github.com/tollenceld/codex-usage-status) reference
-project. The artwork is used for Pulse's menu bar icon and is distributed under
-the following MIT license. Pulse's own source remains under [LICENSE](LICENSE).
+project. The artwork is used for Pulse's Codex iconography and is distributed
+under the following MIT license. Pulse's own source remains under [LICENSE](LICENSE).
 
 > MIT License
 >
