@@ -2,7 +2,7 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services and Obsidian every day. The intended product brings AI usage status and Markdown tasks into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with a Codex usage integration. It reads rate-limit windows from a locally installed, signed-in Codex CLI and shows remaining usage beside the Codex icon. Clicking the icon opens a native popover with a compact Usage summary and a disconnected Tasks state. Settings is a separate page inside the popover. Pulse does not request API credentials or access an Obsidian vault. This repository is not a downloadable MVP release yet.
+**Current state:** Pulse is a buildable menu bar app with a Codex usage integration. It reads rate-limit windows from a locally installed, signed-in Codex CLI and shows remaining usage beside the Codex icon. Clicking the icon opens a native popover focused on Tasks, with a compact Codex status in the header. Click that status for full Usage details; Settings is another page in the same popover. Obsidian is not connected, and Pulse does not request API credentials or access a Vault. This repository is not a downloadable MVP release yet.
 
 ## Build and run
 
@@ -10,7 +10,7 @@ Requirements: macOS 13 or newer and Xcode 26.6 or a compatible Xcode version.
 
 1. Open `Pulse.xcodeproj` in Xcode.
 2. Select the `Pulse` scheme and **My Mac**, then Run.
-3. Sign in to Codex if needed, then click the Codex icon in the menu bar to see the reported quota. Click it again or click outside to dismiss the popover. The popover also closes 400 ms after the pointer leaves both it and the menu bar item; returning the pointer cancels that close. Use the gear button to open Settings, then choose **Quit Pulse** to exit. Pulse has no Dock icon.
+3. Sign in to Codex if needed, then click the Codex icon in the menu bar. The Home popover shows Tasks first; click its compact Codex status for quota details, or the gear for Settings. Both pages return to Home. Click the menu bar item again or click outside to dismiss the popover. It also closes 400 ms after the pointer leaves both it and the menu bar item; returning the pointer cancels that close. Choose **Quit Pulse** in Settings to exit. Pulse has no Dock icon.
 
 Command-line build:
 
@@ -29,7 +29,7 @@ After rebuilding, quit any running Pulse instance and launch the new build. A me
 
 ## Codex usage
 
-Pulse launches the local Codex app-server and requests its ChatGPT rate-limit state. With one reported window, the menu bar shows only the remaining percentage, such as `98%`; with multiple windows, it uses short labels, such as `5h 66% 7d 63%`. Loading, unavailable data, and errors never become a fabricated percentage. The popover gives window and reset details. Pulse refreshes at startup and while running. It reads no Codex authentication files and stores no usage credentials.
+Pulse launches the local Codex app-server and requests its ChatGPT rate-limit state. With one reported window, the menu bar and Home summary show only the remaining percentage, such as `98%`; with multiple windows, they use short labels, such as `5h 66% 7d 63%`. Loading, unavailable data, and errors never become a fabricated percentage. The separate Usage page gives window, reset, update, and refresh details. Pulse refreshes at startup and while running. It reads no Codex authentication files and stores no usage credentials.
 
 If the app cannot find Codex, install or launch Codex and check that its CLI works in a terminal. Development builds can also use the `CODEX_BIN` environment variable to point to the executable. A failed explicit override is reported as an error. The local CLI protocol and app bundle layout can change, so please report reproducible failures without sharing account secrets.
 

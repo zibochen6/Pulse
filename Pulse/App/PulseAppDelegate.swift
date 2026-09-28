@@ -7,6 +7,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   private let config = AppConfig()
   private let usage = UsageController(provider: CodexProvider())
+  private let pages = PopoverPageController()
   private let popover = NSPopover()
   private var preferencesSubscription: AnyCancellable?
   private var usageSubscription: AnyCancellable?
@@ -101,7 +102,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     popover.animates = false
     popover.contentSize = HomeView.popoverSize
     let hostingController = NSHostingController(
-      rootView: HomeView(config: config, usage: usage, onQuit: { NSApp.terminate(nil) })
+      rootView: HomeView(
+        config: config, usage: usage, pages: pages, onQuit: { NSApp.terminate(nil) })
     )
     popover.contentViewController = hostingController
     installTrackingArea(on: hostingController.view, owner: contentTrackingOwner)
@@ -156,6 +158,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       popover.performClose(nil)
     } else {
       config.refreshLoginItemStatus()
+      pages.reset()
       hoverController.beginOpening()
       popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
       let presence = pointerPresence()
@@ -165,5 +168,6 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   func popoverDidClose(_ notification: Notification) {
     hoverController.reset()
+    pages.reset()
   }
 }

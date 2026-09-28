@@ -29,10 +29,19 @@ final class HomeViewRenderingTests: XCTestCase {
       guard let appearance = NSAppearance(named: appearanceName) else {
         return XCTFail("Could not create \(appearanceName) appearance")
       }
-      for destination in [nil, SettingsDestination.general, .providers, .tasks, .about] {
+      for page in [
+        PopoverPage.home, .usage, .settings(.general), .settings(.providers),
+        .settings(.tasks), .settings(.about),
+      ] {
+        let pages = PopoverPageController()
+        switch page {
+        case .home: break
+        case .usage: pages.showUsage()
+        case .settings(let destination): pages.showSettings(destination)
+        }
         let host = NSHostingView(
           rootView: HomeView(
-            config: config, usage: usage, onQuit: {}, initialDestination: destination
+            config: config, usage: usage, pages: pages, onQuit: {}
           )
         )
         host.appearance = appearance
@@ -80,21 +89,27 @@ final class HomeViewRenderingTests: XCTestCase {
         return XCTFail("Could not create \(appearanceName) appearance")
       }
       for usage in usages {
-        let host = NSHostingView(rootView: HomeView(config: config, usage: usage, onQuit: {}))
-        host.appearance = appearance
-        host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
-        host.layoutSubtreeIfNeeded()
-        guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
-          return XCTFail("Could not render Home with usage state \(usage.state)")
-        }
-        host.cacheDisplay(in: host.bounds, to: bitmap)
-        XCTAssertEqual(host.bounds.size, HomeView.popoverSize)
-        XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
-        for point in [(2, 2), (bitmap.pixelsWide - 2, bitmap.pixelsHigh - 2)] {
-          guard let color = bitmap.colorAt(x: point.0, y: point.1) else {
-            return XCTFail("Missing rendered pixel")
+        for page in [PopoverPage.home, .usage] {
+          let pages = PopoverPageController()
+          if page == .usage { pages.showUsage() }
+          let host = NSHostingView(
+            rootView: HomeView(config: config, usage: usage, pages: pages, onQuit: {})
+          )
+          host.appearance = appearance
+          host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
+          host.layoutSubtreeIfNeeded()
+          guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+            return XCTFail("Could not render \(page) with usage state \(usage.state)")
           }
-          XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01)
+          host.cacheDisplay(in: host.bounds, to: bitmap)
+          XCTAssertEqual(host.bounds.size, HomeView.popoverSize)
+          XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
+          for point in [(2, 2), (bitmap.pixelsWide - 2, bitmap.pixelsHigh - 2)] {
+            guard let color = bitmap.colorAt(x: point.0, y: point.1) else {
+              return XCTFail("Missing rendered pixel")
+            }
+            XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01)
+          }
         }
       }
     }

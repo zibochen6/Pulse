@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Check page navigation, display state, and popover behavior"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Review complete AppKit to SwiftUI lifecycle and reset"}
+{"file": ".trellis/spec/backend/codex-usage.md", "reason": "Verify fetching and menu bar formatting are unchanged"}

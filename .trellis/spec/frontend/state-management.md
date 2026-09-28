@@ -77,7 +77,7 @@ config.$showMenuBarLabel.sink { [weak self] showName in
 
 ### 1. Scope / Trigger
 
-The task-first Home and Settings pages share one transient popover. Pointer departure from both the menu bar button and popover content schedules a delayed close; an outside click still uses AppKit's native transient close.
+Home, Usage detail, and Settings share one transient popover. Pointer departure from both the menu bar button and popover content schedules a delayed close; an outside click still uses AppKit's native transient close.
 
 ### 2. Signatures
 
@@ -89,19 +89,35 @@ The task-first Home and Settings pages share one transient popover. Pointer depa
   func exited(_ region: PopoverPointerRegion)
   func reset()
 }
+
+enum PopoverPage: Equatable {
+  case home
+  case usage
+  case settings(SettingsDestination)
+}
+
+@MainActor final class PopoverPageController: ObservableObject {
+  private(set) var page: PopoverPage { get }
+  func showUsage()
+  func showSettings(_ destination: SettingsDestination)
+  func showHome()
+  func reset()
+}
 ```
 
-`HomeView` keeps `SettingsDestination?` in local `@State`. `PulseAppDelegate` remains the sole owner of the AppKit status item, popover, shared config, and shared usage controller.
+`PulseAppDelegate` owns one `PopoverPageController` alongside the AppKit status item, popover, shared config, and shared usage controller. It passes the page controller to `HomeView` and calls `reset()` before opening and after any popover close. There is no navigation stack.
 
 ### 3. Contracts
 
-- Navigation to Settings, Providers, or Tasks changes only SwiftUI page state. It never starts an integration or changes a UserDefaults key.
-- `UsageView` reads the existing `UsageRefreshState`; AppKit menu bar formatting continues to use that same state. Placeholder provider and task copy must never look like real account data.
+- The Home header contains Pulse identity, Settings gear, and one clickable `AIStatusSummary`. Its only data is the real Codex icon and `UsageMenuFormatter.title(for:)`: one window yields a bare percentage, multiple windows yield short labeled values, and loading/unavailable/failure yield `…`/`--`/`!`. Home has no usage reset time, update time, refresh control, or provider list. The AppKit menu bar uses the same formatter, but its behavior is unchanged.
+- Clicking the summary calls `showUsage()` and displays full `UsageView` in a separate scrollable page. The existing Usage details and manual refresh remain there. Add Provider routes only to the Settings Providers explanation. Back from Usage or Settings calls `showHome()`.
+- Tasks is Home's main, list-ready region. While Obsidian is unavailable it shows a compact disconnected row and Connect Obsidian routes to Settings' Tasks explanation. It never displays sample tasks, Memo, or Add Task controls.
+- `PopoverPageController` is presentation state only. It does not start an integration or change a UserDefaults key. `popoverDidClose` resets it to Home so a later open is task-first.
 - `NSTrackingArea` on both the status button and hosting view uses mouse entry/exit, active-always, and visible-rect tracking. `PulseAppDelegate` calls `beginOpening()` before `show`, then seeds tracked regions from actual geometry. During the one-second Opening state, enter/exit events update observations but cannot close the popover. At the end of Opening, reread status-button and content geometry; a stale exit around the initial click must not decide closure.
 - The controller has explicit Closed, Opening, Interactive, and PendingClose states. When neither tracked region contains the pointer, PendingClose waits 400 ms and rechecks the status button and entire popover window (including its arrow) before closure. If geometry still contains the pointer despite absent entry events, it reschedules the check so eventual departure still closes. Re-entry immediately cancels the pending close.
 - `popoverDidClose` resets Opening, PendingClose, and pointer state even when AppKit closed the transient popover. A second status-item click and an outside click retain their immediate AppKit behavior. The hover controller never opens the popover.
 - The popover retains its opaque adaptive background and fixed `HomeView.popoverSize` across page changes.
-- Home uses a bounded Usage scroll area, a larger Tasks area, and a fixed Connect Obsidian footer. The footer navigates to Settings' Tasks explanation; it does not connect a Vault. Extra quota windows and long messages remain scrollable without moving Tasks or the footer.
+- Home keeps the task region visually dominant within the fixed popover size. The Usage detail page scrolls for extra quota windows and long messages; no detailed Usage content appears on Home.
 
 ### 4. Validation & Error Matrix
 
@@ -114,17 +130,20 @@ The task-first Home and Settings pages share one transient popover. Pointer depa
 | Pointer stays over the popover arrow without a content entry event | Keep checking geometry; close after a later departure. |
 | AppKit closes from outside click or status item toggle | Reset pending close and pointer state. |
 | Settings or placeholder entry is clicked inside popover | Navigate in place; do not request a close or integration. |
+| AI status is clicked | Show Usage detail with real quota windows, reset/update times, refresh, and error state. |
+| Popover closes while Usage or Settings is visible | Reset page state; next open shows Home and Tasks. |
+| Codex returns one weekly window or multiple windows | Home shows bare percentage or labeled short values respectively, with no window-selection setting. |
 | Codex refresh fails | Preserve the existing explicit error state, not a fabricated percentage. |
 
 ### 5. Good / Base / Bad Cases
 
-- Good: the pointer crosses the button-popover gap and the panel stays open after entering content.
-- Base: the pointer leaves both regions; one delayed close task is pending and then closes the panel.
-- Bad: a stale exit event arrives after re-entry; the deadline geometry check prevents an erroneous close.
+- Good: the user opens Pulse and sees a compact Codex status above the task list region, then clicks status to inspect full Usage detail.
+- Base: the user views Settings or Usage, closes the popover, and sees Home on the next open.
+- Bad: Codex refresh fails; Home shows `!`, while Usage detail explains the failure rather than repeating a stale percentage.
 
 ### 6. Tests Required
 
-Unit tests cover Opening protection, end-of-Opening geometry resampling, delayed close, re-entry cancellation, continued checking across window-only hover, and reset after system dismissal. Render Home and Settings in Aqua and Dark Aqua and assert opaque edges; render loading, multiple windows, unavailable and long failure text. Keep the existing usage and preference tests. Runtime desktop checks are still needed for actual AppKit event delivery and click behavior. Do not infer duplicate same-click actions without observing their event order.
+Unit tests cover Opening protection, end-of-Opening geometry resampling, delayed close, re-entry cancellation, continued checking across window-only hover, and reset after system dismissal. Page tests assert Home → Usage, Home → Settings destination, Back → Home, and reset after popover closure. Render Home, Usage, and Settings in Aqua and Dark Aqua and assert opaque edges; cover single and multiple windows, loading, unavailable, and long failure text. Keep existing usage and preference tests. Runtime desktop checks are still needed for actual AppKit event delivery and click behavior. Do not infer duplicate same-click actions without observing their event order.
 
 ### 7. Wrong vs Correct
 
@@ -135,4 +154,13 @@ func mouseExited(with event: NSEvent) { popover.performClose(nil) }
 // Correct: record the exit and let the shared controller close only after
 // both tracked regions remain empty for the grace interval.
 func mouseExited(with event: NSEvent) { hoverController.exited(.statusButton) }
+
+// Wrong: leave Usage selected when AppKit dismisses the transient popover.
+func popoverDidClose(_ notification: Notification) { hoverController.reset() }
+
+// Correct: clear both independent states; the next open begins at Tasks.
+func popoverDidClose(_ notification: Notification) {
+  hoverController.reset()
+  pages.reset()
+}
 ```

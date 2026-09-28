@@ -1,45 +1,28 @@
 import AppKit
 import SwiftUI
 
-enum SettingsDestination: Hashable {
-  case general
-  case providers
-  case tasks
-  case about
-}
-
 struct HomeView: View {
   static let popoverSize = NSSize(width: 360, height: 510)
 
   @ObservedObject var config: AppConfig
   @ObservedObject var usage: UsageController
+  @ObservedObject var pages: PopoverPageController
   let onQuit: () -> Void
-
-  @State private var settingsDestination: SettingsDestination?
-
-  init(
-    config: AppConfig,
-    usage: UsageController,
-    onQuit: @escaping () -> Void,
-    initialDestination: SettingsDestination? = nil
-  ) {
-    self.config = config
-    self.usage = usage
-    self.onQuit = onQuit
-    _settingsDestination = State(initialValue: initialDestination)
-  }
 
   var body: some View {
     Group {
-      if let settingsDestination {
+      switch pages.page {
+      case .home:
+        homeContent
+      case .usage:
+        usageContent
+      case .settings(let destination):
         SettingsView(
           config: config,
-          destination: settingsDestination,
-          onBack: { self.settingsDestination = nil },
+          destination: destination,
+          onBack: { pages.showHome() },
           onQuit: onQuit
         )
-      } else {
-        homeContent
       }
     }
     .frame(width: Self.popoverSize.width, height: Self.popoverSize.height)
@@ -57,9 +40,14 @@ struct HomeView: View {
           .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
         Text("Pulse")
           .font(.system(size: 16, weight: .semibold))
-        Spacer()
+        Spacer(minLength: 4)
+        ScrollView(.horizontal, showsIndicators: false) {
+          AIStatusSummary(state: usage.state, onOpenUsage: { pages.showUsage() })
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: 174, alignment: .trailing)
         Button {
-          settingsDestination = .general
+          pages.showSettings()
         } label: {
           Image(systemName: "gearshape")
             .font(.system(size: 15, weight: .medium))
@@ -75,62 +63,41 @@ struct HomeView: View {
 
       Divider()
 
-      VStack(alignment: .leading, spacing: 8) {
-        Label("Usage", systemImage: "chart.bar")
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(.secondary)
+      TasksView(onConnect: { pages.showSettings(.tasks) })
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("tasksRegion")
+    }
+  }
 
-        ScrollView {
-          UsageView(usage: usage, onAddProvider: { settingsDestination = .providers })
-            .padding(.trailing, 3)
+  private var usageContent: some View {
+    VStack(spacing: 0) {
+      HStack(spacing: 8) {
+        Button {
+          pages.showHome()
+        } label: {
+          Image(systemName: "chevron.left")
+            .font(.system(size: 13, weight: .semibold))
+            .frame(width: 28, height: 28)
         }
-        .frame(height: 128)
-        .accessibilityIdentifier("usageRegion")
+        .buttonStyle(.borderless)
+        .help("Back to Home")
+        .accessibilityLabel("Back to Home")
+        .accessibilityIdentifier("backToHomeButton")
+        Text("Usage")
+          .font(.system(size: 16, weight: .semibold))
+        Spacer()
       }
       .padding(.horizontal, 16)
-      .padding(.vertical, 10)
+      .padding(.top, 16)
+      .padding(.bottom, 10)
 
       Divider()
 
-      VStack(alignment: .leading, spacing: 0) {
-        Label("Tasks", systemImage: "checklist")
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(.secondary)
-          .padding(.horizontal, 16)
-          .padding(.top, 14)
-
-        TasksView()
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      ScrollView {
+        UsageView(usage: usage, onAddProvider: { pages.showSettings(.providers) })
+          .padding(16)
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color(nsColor: .controlBackgroundColor))
-      .accessibilityIdentifier("tasksRegion")
-
-      Divider()
-
-      Button {
-        settingsDestination = .tasks
-      } label: {
-        HStack(spacing: 9) {
-          Image(systemName: "link.circle.fill")
-            .font(.system(size: 18))
-            .foregroundStyle(.secondary)
-          Text("Connect Obsidian")
-            .font(.subheadline.weight(.medium))
-          Spacer()
-          Image(systemName: "chevron.right")
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 38)
-        .frame(maxWidth: .infinity)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-      }
-      .buttonStyle(.plain)
-      .accessibilityIdentifier("connectObsidianButton")
-      .padding(.horizontal, 16)
-      .padding(.vertical, 10)
+      .accessibilityIdentifier("usageDetailRegion")
     }
   }
 }
