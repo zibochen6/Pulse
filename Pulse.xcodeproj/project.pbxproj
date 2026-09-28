@@ -8,9 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */; };
+		1B3A9C5B59FAFE1527DD6128 /* UsageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5763D22FF29A87447FD82E62 /* UsageController.swift */; };
 		1BE60A027FF7E01300C38221 /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = 2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */; };
 		3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D1390EE653F2D9B57F24AA /* HomeView.swift */; };
+		4598BC1202B93684E58A0DDA /* UsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BCCC91F953A8FF437E4BBA /* UsageView.swift */; };
+		4A3779C2CB4D487729AB784A /* CodexAppServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C278C9EFD158EEE6E7C50B92 /* CodexAppServerTransport.swift */; };
+		715C7B88CFE0C9B3DDB927B9 /* CodexProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D6D74D06E7A1FA2711BE28 /* CodexProvider.swift */; };
+		740B0BDB4D56172573B7C6D6 /* UsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */; };
 		77505DE63A22592DA6B881BC /* PulseMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBA39302CF835124B8AEF19 /* PulseMain.swift */; };
+		A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */; };
 		A93E36A532A840A2C14E8460 /* CodexMenuIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */; };
 		B415DCE4C64CCFE45FDE4734 /* PulseSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B3677511248F21F5214EC7 /* PulseSection.swift */; };
 		B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE685F7EE3DC1774AF1A117C /* AppConfig.swift */; };
@@ -36,9 +42,15 @@
 		34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemService.swift; sourceTree = "<group>"; };
 		4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseAppDelegate.swift; sourceTree = "<group>"; };
 		4FBA30D234A433E58E16508B /* PulseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5763D22FF29A87447FD82E62 /* UsageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageController.swift; sourceTree = "<group>"; };
 		6CBA39302CF835124B8AEF19 /* PulseMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseMain.swift; sourceTree = "<group>"; };
+		8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexUsageTests.swift; sourceTree = "<group>"; };
+		B8BCCC91F953A8FF437E4BBA /* UsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageView.swift; sourceTree = "<group>"; };
 		C0D1390EE653F2D9B57F24AA /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		C278C9EFD158EEE6E7C50B92 /* CodexAppServerTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAppServerTransport.swift; sourceTree = "<group>"; };
+		D3D6D74D06E7A1FA2711BE28 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
 		DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigTests.swift; sourceTree = "<group>"; };
+		DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSnapshot.swift; sourceTree = "<group>"; };
 		DE685F7EE3DC1774AF1A117C /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -48,6 +60,7 @@
 			children = (
 				DE685F7EE3DC1774AF1A117C /* AppConfig.swift */,
 				34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */,
+				C25E5FD084B360E1BCF08C27 /* Usage */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -62,6 +75,15 @@
 				1BBA6FCCC1FA176AD6D36324 /* UI */,
 			);
 			path = Pulse;
+			sourceTree = "<group>";
+		};
+		18CE619F6396E21694856648 /* Usage */ = {
+			isa = PBXGroup;
+			children = (
+				B8BCCC91F953A8FF437E4BBA /* UsageView.swift */,
+				FD1A4063B8C49DABDC6ECAD5 /* Providers */,
+			);
+			path = Usage;
 			sourceTree = "<group>";
 		};
 		1BBA6FCCC1FA176AD6D36324 /* UI */ = {
@@ -94,6 +116,7 @@
 			isa = PBXGroup;
 			children = (
 				EB05EB971523B38E8F3FCE6A /* Home */,
+				18CE619F6396E21694856648 /* Usage */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -106,6 +129,15 @@
 				FCB0E6001B954CCA450AA55C /* PulseTests */,
 				1FEE830988994786371D8E45 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		C25E5FD084B360E1BCF08C27 /* Usage */ = {
+			isa = PBXGroup;
+			children = (
+				5763D22FF29A87447FD82E62 /* UsageController.swift */,
+				DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */,
+			);
+			path = Usage;
 			sourceTree = "<group>";
 		};
 		EB05EB971523B38E8F3FCE6A /* Home */ = {
@@ -128,9 +160,19 @@
 			isa = PBXGroup;
 			children = (
 				DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */,
+				8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */,
 			);
 			name = PulseTests;
 			path = Tests/PulseTests;
+			sourceTree = "<group>";
+		};
+		FD1A4063B8C49DABDC6ECAD5 /* Providers */ = {
+			isa = PBXGroup;
+			children = (
+				C278C9EFD158EEE6E7C50B92 /* CodexAppServerTransport.swift */,
+				D3D6D74D06E7A1FA2711BE28 /* CodexProvider.swift */,
+			);
+			path = Providers;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -224,6 +266,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */,
+				A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -232,11 +275,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */,
+				4A3779C2CB4D487729AB784A /* CodexAppServerTransport.swift in Sources */,
+				715C7B88CFE0C9B3DDB927B9 /* CodexProvider.swift in Sources */,
 				3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */,
 				05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */,
 				C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */,
 				77505DE63A22592DA6B881BC /* PulseMain.swift in Sources */,
 				B415DCE4C64CCFE45FDE4734 /* PulseSection.swift in Sources */,
+				1B3A9C5B59FAFE1527DD6128 /* UsageController.swift in Sources */,
+				740B0BDB4D56172573B7C6D6 /* UsageSnapshot.swift in Sources */,
+				4598BC1202B93684E58A0DDA /* UsageView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

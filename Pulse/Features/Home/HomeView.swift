@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
   @ObservedObject var config: AppConfig
+  @ObservedObject var usage: UsageController
   let onQuit: () -> Void
 
   var body: some View {
@@ -15,8 +16,7 @@ struct HomeView: View {
       }
 
       PulseSection(title: "Usage", symbol: "chart.bar") {
-        Text("AI usage is not connected yet.")
-          .foregroundStyle(.secondary)
+        UsageView(usage: usage)
       }
 
       PulseSection(title: "Tasks", symbol: "checklist") {
