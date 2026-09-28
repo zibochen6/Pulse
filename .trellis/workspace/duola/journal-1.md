@@ -152,3 +152,25 @@ Moved detailed Codex usage to a separate page and made Tasks the Home surface, w
 ### Status
 
 [OK] **Completed**
+
+
+## Session 7: Color Codex popover icon
+<!-- trellis-session: v=2 fp=90d732f5afa4d946 -->
+
+**Date**: 2026-09-28
+**Task**: Color Codex popover icon
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Added an alpha-enabled blue-violet Codex icon for the Pulse popover, retained the monochrome menu bar template, refreshed attribution and tests, and verified the macOS build plus 34 unit tests.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `da7659e` | fix: show color Codex icon in popover |
+
+### Status
+
+[OK] **Completed**
