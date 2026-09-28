@@ -130,3 +130,25 @@ Added a guarded four-state popover hover lifecycle, task-first Home layout with 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 6: Pulse task-first homepage
+<!-- trellis-session: v=2 fp=878c36488478656e -->
+
+**Date**: 2026-09-28
+**Task**: Pulse task-first homepage
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Moved detailed Codex usage to a separate page and made Tasks the Home surface, with a compact clickable Codex header status and simple Home/Usage/Settings page reset. Updated UI documentation, README, tests, Xcode project, and Trellis state contract. Debug build, 33 tests, strict format lint, task validation and diff checks passed; Aqua/DarkAqua renders reviewed. Latest menu-bar app launched, but native click flow remains unverified because Computer Use timed out.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `adde519` | refactor: make Pulse task-first homepage |
+
+### Status
+
+[OK] **Completed**

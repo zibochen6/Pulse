@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-09-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~132 | Active |
+| `journal-1.md` | ~154 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-09-28 | Pulse task-first homepage | `adde519` | `codex/pulse-task-first-home` |
 | 5 | 2026-09-28 | Pulse popover stability and task-first home | `48886b9` | `codex/pulse-popover-ui-polish` |
 | 4 | 2026-09-28 | Pulse popover layout and interaction | `b96fd47` | `codex/pulse-ui-menu-interaction` |
 | 3 | 2026-09-28 | Pulse Codex usage integration | `f76bb6e` | `codex/phase2-codex-usage` |
