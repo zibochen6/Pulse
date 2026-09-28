@@ -71,3 +71,40 @@ Integrated local Codex app-server quota into the menu bar and popover, added pro
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: Pulse popover layout and interaction
+<!-- trellis-session: v=2 fp=97f244201b3fb35b -->
+
+**Date**: 2026-09-28
+**Task**: Pulse popover layout and interaction
+**Branch**: `codex/pulse-ui-menu-interaction`
+
+### Summary
+
+Refactored the popover into compact Home and Settings pages and added delayed hover dismissal without changing Codex data retrieval.
+
+### Main Changes
+
+- Added compact Codex usage and honest Tasks and provider empty states.
+- Added AppKit pointer tracking with a 400 ms close delay and window geometry checks.
+- Updated README, UI interaction documentation, and frontend state specification.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b96fd47` | refactor: redesign Pulse menu layout and interactions |
+
+### Testing
+
+- [OK] Swift 6 Debug build, strict swift-format lint, and 29 unit tests passed.
+- [OK] Launched latest build; Computer Use could not observe the menu-only popover.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Check live menu bar pointer and page navigation behavior on an interactive desktop.
