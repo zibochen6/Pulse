@@ -108,3 +108,25 @@ Refactored the popover into compact Home and Settings pages and added delayed ho
 ### Next Steps
 
 - Check live menu bar pointer and page navigation behavior on an interactive desktop.
+
+
+## Session 5: Pulse popover stability and task-first home
+<!-- trellis-session: v=2 fp=edbf69aa8ea55103 -->
+
+**Date**: 2026-09-28
+**Task**: Pulse popover stability and task-first home
+**Branch**: `codex/pulse-popover-ui-polish`
+
+### Summary
+
+Added a guarded four-state popover hover lifecycle, task-first Home layout with fixed Obsidian entry, rendering and hover regression tests, and updated UI/Trellis contracts. Debug build, 31 tests, strict format lint and diff checks passed. New menu-bar app launched; native pointer interactions remain unverified because Computer Use timed out on Pulse and SystemUIServer.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `48886b9` | fix: stabilize popover interaction and rebalance home layout |
+
+### Status
+
+[OK] **Completed**
