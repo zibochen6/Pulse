@@ -1,0 +1,2 @@
+{"file":"docs/02-architecture-decisions.md","reason":"Confirm the documentation keeps the current macOS, persistence, and distribution boundaries."}
+{"file":"docs/06-mvp-roadmap.md","reason":"Check the Apex read-only MVP is positioned as a narrower first slice of Obsidian integration."}
