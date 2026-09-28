@@ -67,7 +67,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate {
 
   private func configurePopover() {
     popover.behavior = .transient
-    popover.contentSize = NSSize(width: 360, height: 480)
+    // A frequently opened menu bar panel should appear immediately. The default
+    // popover fade exposed the desktop through SwiftUI's former clear background.
+    popover.animates = false
+    popover.contentSize = HomeView.popoverSize
     popover.contentViewController = NSHostingController(
       rootView: HomeView(config: config, usage: usage, onQuit: { NSApp.terminate(nil) })
     )

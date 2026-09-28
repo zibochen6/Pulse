@@ -1,65 +1,84 @@
+import AppKit
 import SwiftUI
 
 struct HomeView: View {
+  static let popoverSize = NSSize(width: 360, height: 510)
+
   @ObservedObject var config: AppConfig
   @ObservedObject var usage: UsageController
   let onQuit: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      HStack {
-        Image(systemName: "waveform.path")
-          .foregroundStyle(.tint)
-        Text("Pulse")
-          .font(.title2.bold())
-        Spacer()
-      }
+    ScrollView {
+      VStack(alignment: .leading, spacing: 12) {
+        HStack(spacing: 8) {
+          Image(systemName: "waveform.path")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.tint)
+            .frame(width: 28, height: 28)
+            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+          Text("Pulse")
+            .font(.system(size: 16, weight: .semibold))
+          Spacer()
+        }
+        .padding(.bottom, 4)
 
-      PulseSection(title: "Usage", symbol: "chart.bar") {
-        UsageView(usage: usage)
-      }
+        PulseSection(title: "Usage", symbol: "chart.bar") {
+          UsageView(usage: usage)
+        }
 
-      PulseSection(title: "Tasks", symbol: "checklist") {
-        Text("Tasks are not connected yet.")
-          .foregroundStyle(.secondary)
-      }
-
-      PulseSection(title: "Settings", symbol: "gearshape") {
-        VStack(alignment: .leading, spacing: 10) {
-          Toggle(
-            "Launch at login",
-            isOn: Binding(
-              get: { config.launchAtLoginRequested },
-              set: { config.setLaunchAtLogin($0) }
-            )
-          )
-          Text(loginItemMessage)
-            .font(.caption)
+        PulseSection(title: "Tasks", symbol: "checklist") {
+          Text("Not connected yet")
+            .font(.subheadline)
             .foregroundStyle(.secondary)
+        }
 
-          if let error = config.loginItemError {
-            Text(error)
-              .font(.caption)
-              .foregroundStyle(.red)
-          }
-
-          Toggle(
-            "Show Pulse name in menu bar",
-            isOn: Binding(
-              get: { config.showMenuBarLabel },
-              set: { config.setShowMenuBarLabel($0) }
+        PulseSection(title: "Settings", symbol: "gearshape") {
+          VStack(alignment: .leading, spacing: 10) {
+            Toggle(
+              "Launch at login",
+              isOn: Binding(
+                get: { config.launchAtLoginRequested },
+                set: { config.setLaunchAtLogin($0) }
+              )
             )
-          )
 
-          Divider()
-          Button("Quit Pulse", action: onQuit)
-            .accessibilityIdentifier("quitPulseButton")
+            if config.launchAtLoginRequested {
+              Text(loginItemMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let error = config.loginItemError {
+              Text(error)
+                .font(.caption)
+                .foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Toggle(
+              "Show Pulse name in menu bar",
+              isOn: Binding(
+                get: { config.showMenuBarLabel },
+                set: { config.setShowMenuBarLabel($0) }
+              )
+            )
+
+            Divider()
+            Button("Quit Pulse", action: onQuit)
+              .accessibilityIdentifier("quitPulseButton")
+          }
+          .font(.subheadline)
         }
       }
-      Spacer(minLength: 0)
+      .padding(16)
+      .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .padding(18)
-    .frame(width: 360)
+    .frame(width: Self.popoverSize.width, height: Self.popoverSize.height)
+    // NSPopover's default material exposes windows behind a transparent hosting
+    // view. Cover the entire content area with an adaptive, opaque system color.
+    .background(Color(nsColor: .windowBackgroundColor))
   }
 
   private var loginItemMessage: String {

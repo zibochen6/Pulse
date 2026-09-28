@@ -173,6 +173,28 @@ final class UsageControllerTests: XCTestCase {
     await controller.refresh()
     XCTAssertEqual(controller.state, .success(snapshot))
   }
+
+  func testBackgroundRefreshKeepsCurrentQuotaVisible() async {
+    let snapshot = UsageSnapshot(
+      providerID: "codex",
+      fetchedAt: Date(timeIntervalSince1970: 100),
+      metrics: [.quota(QuotaWindow(durationMinutes: 300, remainingPercent: 75, resetsAt: nil))]
+    )
+    let provider = PausedUsageProvider(snapshot: snapshot)
+    let controller = UsageController(provider: provider)
+
+    await controller.refresh()
+    let secondRefresh = Task { await controller.refresh() }
+    await provider.waitForSecondFetch()
+
+    XCTAssertTrue(controller.isRefreshing)
+    XCTAssertEqual(controller.state, .success(snapshot))
+    XCTAssertEqual(UsageMenuFormatter.title(for: controller.state), "75%")
+
+    await provider.completeSecondFetch()
+    await secondRefresh.value
+    XCTAssertFalse(controller.isRefreshing)
+  }
 }
 
 private struct StubAppServer: CodexAppServerReading {
@@ -189,5 +211,34 @@ private actor QueueUsageProvider: UsageProviding {
   func fetch() async throws -> UsageSnapshot {
     guard !results.isEmpty else { throw CodexUsageError.noQuota }
     return try results.removeFirst().get()
+  }
+}
+
+private actor PausedUsageProvider: UsageProviding {
+  private let snapshot: UsageSnapshot
+  private var fetchCount = 0
+  private var secondStarted = false
+  private var secondStartWaiter: CheckedContinuation<Void, Never>?
+  private var secondFetchWaiter: CheckedContinuation<UsageSnapshot, Never>?
+
+  init(snapshot: UsageSnapshot) { self.snapshot = snapshot }
+
+  func fetch() async throws -> UsageSnapshot {
+    fetchCount += 1
+    guard fetchCount > 1 else { return snapshot }
+    secondStarted = true
+    secondStartWaiter?.resume()
+    secondStartWaiter = nil
+    return await withCheckedContinuation { secondFetchWaiter = $0 }
+  }
+
+  func waitForSecondFetch() async {
+    if secondStarted { return }
+    await withCheckedContinuation { secondStartWaiter = $0 }
+  }
+
+  func completeSecondFetch() {
+    secondFetchWaiter?.resume(returning: snapshot)
+    secondFetchWaiter = nil
   }
 }

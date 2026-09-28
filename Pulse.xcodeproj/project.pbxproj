@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */; };
+		0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */; };
 		1B3A9C5B59FAFE1527DD6128 /* UsageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5763D22FF29A87447FD82E62 /* UsageController.swift */; };
 		1BE60A027FF7E01300C38221 /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = 2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */; };
 		3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D1390EE653F2D9B57F24AA /* HomeView.swift */; };
@@ -52,6 +53,7 @@
 		DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigTests.swift; sourceTree = "<group>"; };
 		DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSnapshot.swift; sourceTree = "<group>"; };
 		DE685F7EE3DC1774AF1A117C /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewRenderingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -161,6 +163,7 @@
 			children = (
 				DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */,
 				8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */,
+				F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */,
 			);
 			name = PulseTests;
 			path = Tests/PulseTests;
@@ -267,6 +270,7 @@
 			files = (
 				D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */,
 				A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */,
+				0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

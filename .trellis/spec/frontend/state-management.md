@@ -30,7 +30,9 @@ The production initializer supplies `.standard` and `SystemLoginItemService()` b
 - `launchAtLoginRequested` is user intent. `loginItemStatus` is the operating system's observed state and can independently be `notRegistered`, `enabled`, `requiresApproval`, or `notFound`.
 - Opening the popover calls `refreshLoginItemStatus()` before presentation. Enabling or disabling calls `SMAppService.mainApp` through `LoginItemManaging`, then refreshes status.
 - The status item renders the bundled Codex icon plus the current `UsageRefreshState` title (`…`, percentage, `--`, or `!`). `showMenuBarLabel` only adds the word “Pulse”; it never hides the usage state.
+- The popover uses one `HomeView.popoverSize` for both AppKit and SwiftUI, disables its show/close animation, and covers the entire hosting surface with adaptive opaque `windowBackgroundColor`. Section cards use opaque `controlBackgroundColor`. This prevents the desktop from flashing through the panel.
 - `@Published` emits during `willSet`. Subscribers that update AppKit controls must use the emitted value rather than re-read the stored property in the same callback.
+- Rebuilding the app does not replace an already-running menu bar process. Restart the built app before judging its icon, quota, or popover appearance.
 
 ### 4. Validation & Error Matrix
 

@@ -4,11 +4,11 @@ import Foundation
 @MainActor
 final class UsageController: ObservableObject {
   @Published private(set) var state: UsageRefreshState = .loading
+  @Published private(set) var isRefreshing = false
 
   private let provider: any UsageProviding
   private let refreshInterval: Duration
   private var loop: Task<Void, Never>?
-  private var isRefreshing = false
 
   init(provider: any UsageProviding, refreshInterval: Duration = .seconds(60)) {
     self.provider = provider
@@ -44,7 +44,9 @@ final class UsageController: ObservableObject {
   func refresh() async {
     guard !isRefreshing else { return }
     isRefreshing = true
-    state = .loading
+    // Keep a visible quota steady during a background refresh. A failed fetch
+    // still replaces it with an error, so an old value is never shown as current.
+    if case .success = state {} else { state = .loading }
     defer { isRefreshing = false }
 
     do {

@@ -31,7 +31,7 @@ struct UsageSnapshot: Sendable {
 - Accept `result.rateLimitsByLimitId.codex` or a legacy `result.rateLimits` whose `limitId` is `codex` or absent. Never use another limit ID as Codex quota.
 - Windows come from `primary` and `secondary`; `usedPercent` is optional. Compute `remainingPercent = round(100 - clamp(usedPercent, 0...100))`; missing or non-finite values remain unknown. Preserve valid `windowDurationMins` and `resetsAt` (Unix seconds). Use reported windows, not `planType`, for display.
 - One reported window displays only its percentage; multiple windows display short duration labels. An unknown percentage displays `--`, never zero. Quota is distinct from balance/cost metric kinds.
-- Refresh at launch and every 60 seconds while running. A refresh failure replaces the prior success state so stale numbers are not shown as current. The app reads no authentication files and logs no raw responses or account identifiers.
+- Refresh at launch and every 60 seconds while running. While a refresh is in flight, keep the prior success state visible and expose `isRefreshing` for the refresh control; do not publish `.loading` over a known quota. A refresh failure replaces the prior success state so stale numbers are not shown as current. The app reads no authentication files and logs no raw responses or account identifiers.
 - XcodeGen's `Pulse` test scheme sets `PULSE_DISABLE_LIVE_USAGE=1` for the app test host. `PulseAppDelegate` must check it before calling `UsageController.start()`. Unit tests assert the marker is present, so they cannot accidentally query a real Codex account when XCTest launches the host app.
 
 ## 4. Validation & Error Matrix
@@ -46,6 +46,7 @@ struct UsageSnapshot: Sendable {
 | Malformed JSON or unexpected response shape | Error state |
 | No Codex limit or no known percentage | Unavailable; no invented value |
 | One or two valid windows | Success; menu and popover share the same snapshot |
+| Background refresh in flight after success | Keep the previous percentage visible until a result or error arrives |
 
 ## 5. Good / Base / Bad Cases
 
@@ -55,7 +56,7 @@ struct UsageSnapshot: Sendable {
 
 ## 6. Tests Required
 
-Use synthetic JSON and mock transports/providers only. Assert legacy and keyed responses, single and dual windows, unknown percent, clamping, reset preservation, refusal to substitute a different limit ID, server error/malformed/no quota, distinct CLI override behavior, provider-neutral non-quota snapshots, and success-to-error state clearing. Assert `PULSE_DISABLE_LIVE_USAGE=1` in the test host and that it disables startup refresh. No automated test should access a real account.
+Use synthetic JSON and mock transports/providers only. Assert legacy and keyed responses, single and dual windows, unknown percent, clamping, reset preservation, refusal to substitute a different limit ID, server error/malformed/no quota, distinct CLI override behavior, provider-neutral non-quota snapshots, success-to-error state clearing, and preservation of a successful percentage during a paused refresh. Assert `PULSE_DISABLE_LIVE_USAGE=1` in the test host and that it disables startup refresh. No automated test should access a real account.
 
 ## 7. Wrong vs Correct
 
