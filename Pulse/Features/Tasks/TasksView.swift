@@ -1,25 +1,20 @@
 import SwiftUI
 
 struct TasksView: View {
-  let onConnect: () -> Void
-
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      HStack(spacing: 8) {
-        Image(systemName: "checklist")
-          .foregroundStyle(.secondary)
-        Text("Obsidian is not connected")
-          .font(.subheadline.weight(.medium))
-      }
+    VStack(spacing: 10) {
+      Image(systemName: "checkmark.circle")
+        .font(.system(size: 29, weight: .light))
+        .foregroundStyle(.secondary)
+      Text("Obsidian is not connected")
+        .font(.subheadline.weight(.semibold))
       Text("Your tasks will appear here after connection is available.")
         .font(.caption)
         .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
-      Button("Connect Obsidian", action: onConnect)
-        .buttonStyle(.borderless)
-        .font(.caption.weight(.medium))
-        .accessibilityIdentifier("connectObsidianButton")
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal, 28)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }

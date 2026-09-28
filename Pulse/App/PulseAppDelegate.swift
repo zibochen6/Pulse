@@ -11,7 +11,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private var preferencesSubscription: AnyCancellable?
   private var usageSubscription: AnyCancellable?
   private lazy var hoverController = PopoverHoverController(
-    isPointerInside: { [weak self] in self?.pointerInsideEitherRegion() ?? false },
+    pointerPresence: { [weak self] in
+      self?.pointerPresence()
+        ?? PopoverPointerPresence(statusButton: false, content: false, popoverWindow: false)
+    },
     close: { [weak self] in self?.popover.performClose(nil) }
   )
   private lazy var statusTrackingOwner = PopoverPointerTrackingOwner(
@@ -114,12 +117,13 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     view.addTrackingArea(area)
   }
 
-  private func pointerInsideEitherRegion() -> Bool {
-    let insideStatusButton = statusItem.button.map(pointerInside) ?? false
-    let insidePopoverWindow =
-      popover.contentViewController?.view.window?.frame.contains(
-        NSEvent.mouseLocation) ?? false
-    return insideStatusButton || insidePopoverWindow
+  private func pointerPresence() -> PopoverPointerPresence {
+    let contentView = popover.contentViewController?.view
+    return PopoverPointerPresence(
+      statusButton: pointerInside(statusItem.button),
+      content: pointerInside(contentView),
+      popoverWindow: contentView?.window?.frame.contains(NSEvent.mouseLocation) ?? false
+    )
   }
 
   private func pointerInside(_ view: NSView?) -> Bool {
@@ -152,11 +156,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       popover.performClose(nil)
     } else {
       config.refreshLoginItemStatus()
+      hoverController.beginOpening()
       popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-      hoverController.synchronize(
-        statusButton: pointerInside(button),
-        content: pointerInside(popover.contentViewController?.view)
-      )
+      let presence = pointerPresence()
+      hoverController.synchronize(statusButton: presence.statusButton, content: presence.content)
     }
   }
 

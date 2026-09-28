@@ -6,7 +6,7 @@ struct UsageView: View {
   let onAddProvider: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 9) {
+    VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 8) {
         codexIcon
         Text("Codex")
@@ -66,10 +66,10 @@ struct UsageView: View {
     VStack(alignment: .leading, spacing: 3) {
       HStack(alignment: .firstTextBaseline) {
         Text(window.displayName)
-          .font(.subheadline)
+          .font(.caption)
         Spacer()
         Text(window.remainingPercent.map { "\($0)%" } ?? "--")
-          .font(.system(size: 20, weight: .semibold, design: .rounded))
+          .font(.system(size: 17, weight: .semibold, design: .rounded))
           .monospacedDigit()
       }
       Text(

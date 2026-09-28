@@ -121,6 +121,16 @@ After implementation:
 - [ ] Checked that derived state points back to the source event identifier
       (`seq`, `id`, `version`) instead of inventing a second cursor
 
+### AppKit popover lifecycle boundary
+
+For menu bar popovers, trace one physical click through the status-item action,
+`NSPopover.show` or transient close, tracking-area enter/exit events, and the
+popover delegate callback. Seed hover state from current pointer geometry after
+showing, then reread it after any opening guard; initial tracking events can be
+missing or stale. Test the click-to-open sequence and system dismissal as well
+as steady-state hover. Do not attribute a repeated open to duplicate AppKit
+actions without observing the action and close callback order on a desktop.
+
 ---
 
 ## Cross-Platform Template Consistency

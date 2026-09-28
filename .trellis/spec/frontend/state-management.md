@@ -73,16 +73,17 @@ config.$showMenuBarLabel.sink { [weak self] showName in
 
 `PulseAppDelegate` owns one `UsageController` and passes it to `HomeView`. The controller is `@MainActor` and publishes loading, success, unavailable, and failure. `UsageView` and the AppKit status item consume that same state. When subscribing to `usage.$state`, use the emitted value because `@Published` emits during `willSet`. The normal refresh period is 60 seconds; manual refresh does not overlap an active fetch. On failure, the status item shows `!` and the popover shows the message instead of presenting the previous percentage as current. See [Codex Usage](../backend/codex-usage.md) for the app-server contract and tests.
 
-## Scenario: in-popover navigation and delayed pointer dismissal
+## Scenario: in-popover navigation and guarded pointer dismissal
 
 ### 1. Scope / Trigger
 
-The compact Home and Settings pages share one transient popover. Pointer departure from both the menu bar button and popover content schedules a delayed close; an outside click still uses AppKit's native transient close.
+The task-first Home and Settings pages share one transient popover. Pointer departure from both the menu bar button and popover content schedules a delayed close; an outside click still uses AppKit's native transient close.
 
 ### 2. Signatures
 
 ```swift
 @MainActor final class PopoverHoverController {
+  func beginOpening()
   func synchronize(statusButton: Bool, content: Bool)
   func entered(_ region: PopoverPointerRegion)
   func exited(_ region: PopoverPointerRegion)
@@ -96,15 +97,18 @@ The compact Home and Settings pages share one transient popover. Pointer departu
 
 - Navigation to Settings, Providers, or Tasks changes only SwiftUI page state. It never starts an integration or changes a UserDefaults key.
 - `UsageView` reads the existing `UsageRefreshState`; AppKit menu bar formatting continues to use that same state. Placeholder provider and task copy must never look like real account data.
-- `NSTrackingArea` on both the status button and hosting view uses mouse entry/exit, active-always, and visible-rect tracking. The delegate initializes region state from the pointer location after `show` and rechecks the status button and entire popover window (including its arrow) before delayed closure. If geometry still contains the pointer despite absent entry events, it reschedules the check so eventual departure still closes.
-- The delay is 400 ms. Entering either region cancels the pending close. `popoverDidClose` resets pending work even when AppKit closed the transient popover.
+- `NSTrackingArea` on both the status button and hosting view uses mouse entry/exit, active-always, and visible-rect tracking. `PulseAppDelegate` calls `beginOpening()` before `show`, then seeds tracked regions from actual geometry. During the one-second Opening state, enter/exit events update observations but cannot close the popover. At the end of Opening, reread status-button and content geometry; a stale exit around the initial click must not decide closure.
+- The controller has explicit Closed, Opening, Interactive, and PendingClose states. When neither tracked region contains the pointer, PendingClose waits 400 ms and rechecks the status button and entire popover window (including its arrow) before closure. If geometry still contains the pointer despite absent entry events, it reschedules the check so eventual departure still closes. Re-entry immediately cancels the pending close.
+- `popoverDidClose` resets Opening, PendingClose, and pointer state even when AppKit closed the transient popover. A second status-item click and an outside click retain their immediate AppKit behavior. The hover controller never opens the popover.
 - The popover retains its opaque adaptive background and fixed `HomeView.popoverSize` across page changes.
+- Home uses a bounded Usage scroll area, a larger Tasks area, and a fixed Connect Obsidian footer. The footer navigates to Settings' Tasks explanation; it does not connect a Vault. Extra quota windows and long messages remain scrollable without moving Tasks or the footer.
 
 ### 4. Validation & Error Matrix
 
 | Condition | Required behavior |
 | --- | --- |
 | Pointer moves from status item toward popover | Grace period allows entry; entry cancels the close. |
+| Pointer stays on the clicked status item through Opening | Geometry resampling retains the panel, including after two seconds. |
 | Pointer leaves both and stays outside | Close after 400 ms, provided current geometry still confirms outside. |
 | Pointer re-enters before deadline | Cancel close. |
 | Pointer stays over the popover arrow without a content entry event | Keep checking geometry; close after a later departure. |
@@ -120,7 +124,7 @@ The compact Home and Settings pages share one transient popover. Pointer departu
 
 ### 6. Tests Required
 
-Unit tests cover delayed close, re-entry cancellation, stale-exit geometry, continued checking across window-only hover, and reset after system dismissal. Render Home and Settings in Aqua and Dark Aqua and assert opaque edges. Keep the existing usage and preference tests. Runtime desktop checks are still needed for actual AppKit event delivery and click behavior.
+Unit tests cover Opening protection, end-of-Opening geometry resampling, delayed close, re-entry cancellation, continued checking across window-only hover, and reset after system dismissal. Render Home and Settings in Aqua and Dark Aqua and assert opaque edges; render loading, multiple windows, unavailable and long failure text. Keep the existing usage and preference tests. Runtime desktop checks are still needed for actual AppKit event delivery and click behavior. Do not infer duplicate same-click actions without observing their event order.
 
 ### 7. Wrong vs Correct
 

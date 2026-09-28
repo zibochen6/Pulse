@@ -48,41 +48,89 @@ struct HomeView: View {
   }
 
   private var homeContent: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 12) {
-        HStack(spacing: 8) {
-          Image(systemName: "waveform.path")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.tint)
+    VStack(spacing: 0) {
+      HStack(spacing: 8) {
+        Image(systemName: "waveform.path")
+          .font(.system(size: 14, weight: .semibold))
+          .foregroundStyle(.tint)
+          .frame(width: 28, height: 28)
+          .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        Text("Pulse")
+          .font(.system(size: 16, weight: .semibold))
+        Spacer()
+        Button {
+          settingsDestination = .general
+        } label: {
+          Image(systemName: "gearshape")
+            .font(.system(size: 15, weight: .medium))
             .frame(width: 28, height: 28)
-            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-          Text("Pulse")
-            .font(.system(size: 16, weight: .semibold))
-          Spacer()
-          Button {
-            settingsDestination = .general
-          } label: {
-            Image(systemName: "gearshape")
-              .font(.system(size: 15, weight: .medium))
-              .frame(width: 28, height: 28)
-          }
-          .buttonStyle(.borderless)
-          .help("Settings")
-          .accessibilityLabel("Open Settings")
-          .accessibilityIdentifier("openSettingsButton")
         }
-        .padding(.bottom, 2)
-
-        PulseSection(title: "Usage", symbol: "chart.bar") {
-          UsageView(usage: usage, onAddProvider: { settingsDestination = .providers })
-        }
-
-        PulseSection(title: "Tasks", symbol: "checklist") {
-          TasksView(onConnect: { settingsDestination = .tasks })
-        }
+        .buttonStyle(.borderless)
+        .help("Settings")
+        .accessibilityLabel("Open Settings")
+        .accessibilityIdentifier("openSettingsButton")
       }
-      .padding(16)
-      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal, 16)
+      .padding(.vertical, 12)
+
+      Divider()
+
+      VStack(alignment: .leading, spacing: 8) {
+        Label("Usage", systemImage: "chart.bar")
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.secondary)
+
+        ScrollView {
+          UsageView(usage: usage, onAddProvider: { settingsDestination = .providers })
+            .padding(.trailing, 3)
+        }
+        .frame(height: 128)
+        .accessibilityIdentifier("usageRegion")
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 10)
+
+      Divider()
+
+      VStack(alignment: .leading, spacing: 0) {
+        Label("Tasks", systemImage: "checklist")
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .padding(.horizontal, 16)
+          .padding(.top, 14)
+
+        TasksView()
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(Color(nsColor: .controlBackgroundColor))
+      .accessibilityIdentifier("tasksRegion")
+
+      Divider()
+
+      Button {
+        settingsDestination = .tasks
+      } label: {
+        HStack(spacing: 9) {
+          Image(systemName: "link.circle.fill")
+            .font(.system(size: 18))
+            .foregroundStyle(.secondary)
+          Text("Connect Obsidian")
+            .font(.subheadline.weight(.medium))
+          Spacer()
+          Image(systemName: "chevron.right")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 38)
+        .frame(maxWidth: .infinity)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+      }
+      .buttonStyle(.plain)
+      .accessibilityIdentifier("connectObsidianButton")
+      .padding(.horizontal, 16)
+      .padding(.vertical, 10)
     }
   }
 }
