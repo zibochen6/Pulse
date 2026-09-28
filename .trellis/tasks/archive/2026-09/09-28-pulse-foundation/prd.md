@@ -28,9 +28,11 @@ Establish a buildable, launchable native macOS menu bar project and evidence-bas
 
 ## Acceptance Criteria
 
-- [ ] Pulse is an independent Git repository; no parent project changes are staged or committed.
-- [ ] The Xcode app builds for macOS and launches as a menu bar app with a working Quit action.
-- [ ] README accurately explains current capabilities and build/run steps; required project metadata is present.
-- [ ] Documents 01–07 cover all required topics, distinguish confirmed capabilities from future work, and cite local source paths or authoritative external references.
-- [ ] Private Vault inspection is read-only; no private absolute path or note content appears in public files.
-- [ ] The final staged diff is reviewed, committed with the required message, and pushed to the empty Pulse remote.
+- [x] Pulse is an independent Git repository; no parent project changes are staged or committed.
+- [x] The Xcode app builds for macOS and launches as a menu bar app with a working Quit action.
+- [x] README accurately explains current capabilities and build/run steps; required project metadata is present.
+- [x] Documents 01–07 cover all required topics, distinguish confirmed capabilities from future work, and cite local source paths or authoritative external references.
+- [x] Private Vault inspection is read-only; no private absolute path or note content appears in public files.
+- [x] The final staged diff is reviewed, committed with the required message, and pushed to the empty Pulse remote.
+
+Validation note: Debug and Release builds passed, `LSUIElement` and macOS 13.0 were confirmed in the built app, the app launched, and a macOS Quit event ended the process. Direct pointer interaction with the menu item could not be observed through the available desktop tool; the AppKit menu action wiring was reviewed in source.
