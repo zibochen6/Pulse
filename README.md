@@ -2,7 +2,7 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services and Obsidian every day. The intended product brings AI usage status and Markdown tasks into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with a Codex usage integration. It reads rate-limit windows from a locally installed, signed-in Codex CLI and shows remaining usage beside the Codex icon. Clicking the icon opens a native popover with Codex details, a Tasks placeholder, and basic Settings. It does not request API credentials or access an Obsidian vault. This repository is not a downloadable MVP release yet.
+**Current state:** Pulse is a buildable menu bar app with a Codex usage integration. It reads rate-limit windows from a locally installed, signed-in Codex CLI and shows remaining usage beside the Codex icon. Clicking the icon opens a native popover with a compact Usage summary and a disconnected Tasks state. Settings is a separate page inside the popover. Pulse does not request API credentials or access an Obsidian vault. This repository is not a downloadable MVP release yet.
 
 ## Build and run
 
@@ -10,7 +10,7 @@ Requirements: macOS 13 or newer and Xcode 26.6 or a compatible Xcode version.
 
 1. Open `Pulse.xcodeproj` in Xcode.
 2. Select the `Pulse` scheme and **My Mac**, then Run.
-3. Sign in to Codex if needed, then click the Codex icon in the menu bar to see the reported quota. Click it again or click outside to dismiss the popover; choose **Quit Pulse** in Settings to exit. Pulse has no Dock icon.
+3. Sign in to Codex if needed, then click the Codex icon in the menu bar to see the reported quota. Click it again or click outside to dismiss the popover. The popover also closes 400 ms after the pointer leaves both it and the menu bar item; returning the pointer cancels that close. Use the gear button to open Settings, then choose **Quit Pulse** to exit. Pulse has no Dock icon.
 
 Command-line build:
 
@@ -39,7 +39,7 @@ If the app cannot find Codex, install or launch Codex and check that its CLI wor
 - **Obsidian tasks:** the user chooses a Vault. Pulse will scan Markdown tasks without assuming folder names and will preserve the source note as the source of truth.
 - **Privacy:** the app runs locally; future API secrets belong in macOS Keychain. The app stores only the two preferences above, with no keys or Vault data. No analytics are present.
 
-See [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
+See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
 
 ## 中文简介
 

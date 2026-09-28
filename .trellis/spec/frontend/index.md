@@ -17,7 +17,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
 | [Component Guidelines](./component-guidelines.md) | Component patterns, props, composition | To fill |
 | [Hook Guidelines](./hook-guidelines.md) | Custom hooks, data fetching patterns | To fill |
-| [State Management](./state-management.md) | AppConfig preferences, Login Items, and shared Codex usage state | Phase 2A |
+| [State Management](./state-management.md) | Shared preferences and usage state, in-popover navigation, and pointer dismissal | Current |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Type Safety](./type-safety.md) | Type patterns, validation | To fill |
 

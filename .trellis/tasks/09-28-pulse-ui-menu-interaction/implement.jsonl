@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Preserve AppConfig and UsageController sharing across AppKit and SwiftUI"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check pointer and view state boundaries"}

@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+enum SettingsDestination: Hashable {
+  case general
+  case providers
+  case tasks
+  case about
+}
+
 struct HomeView: View {
   static let popoverSize = NSSize(width: 360, height: 510)
 
@@ -8,7 +15,39 @@ struct HomeView: View {
   @ObservedObject var usage: UsageController
   let onQuit: () -> Void
 
+  @State private var settingsDestination: SettingsDestination?
+
+  init(
+    config: AppConfig,
+    usage: UsageController,
+    onQuit: @escaping () -> Void,
+    initialDestination: SettingsDestination? = nil
+  ) {
+    self.config = config
+    self.usage = usage
+    self.onQuit = onQuit
+    _settingsDestination = State(initialValue: initialDestination)
+  }
+
   var body: some View {
+    Group {
+      if let settingsDestination {
+        SettingsView(
+          config: config,
+          destination: settingsDestination,
+          onBack: { self.settingsDestination = nil },
+          onQuit: onQuit
+        )
+      } else {
+        homeContent
+      }
+    }
+    .frame(width: Self.popoverSize.width, height: Self.popoverSize.height)
+    // Cover the entire hosting surface with an adaptive opaque color.
+    .background(Color(nsColor: .windowBackgroundColor))
+  }
+
+  private var homeContent: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 12) {
         HStack(spacing: 8) {
@@ -20,77 +59,30 @@ struct HomeView: View {
           Text("Pulse")
             .font(.system(size: 16, weight: .semibold))
           Spacer()
+          Button {
+            settingsDestination = .general
+          } label: {
+            Image(systemName: "gearshape")
+              .font(.system(size: 15, weight: .medium))
+              .frame(width: 28, height: 28)
+          }
+          .buttonStyle(.borderless)
+          .help("Settings")
+          .accessibilityLabel("Open Settings")
+          .accessibilityIdentifier("openSettingsButton")
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, 2)
 
         PulseSection(title: "Usage", symbol: "chart.bar") {
-          UsageView(usage: usage)
+          UsageView(usage: usage, onAddProvider: { settingsDestination = .providers })
         }
 
         PulseSection(title: "Tasks", symbol: "checklist") {
-          Text("Not connected yet")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        }
-
-        PulseSection(title: "Settings", symbol: "gearshape") {
-          VStack(alignment: .leading, spacing: 10) {
-            Toggle(
-              "Launch at login",
-              isOn: Binding(
-                get: { config.launchAtLoginRequested },
-                set: { config.setLaunchAtLogin($0) }
-              )
-            )
-
-            if config.launchAtLoginRequested {
-              Text(loginItemMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let error = config.loginItemError {
-              Text(error)
-                .font(.caption)
-                .foregroundStyle(.red)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Toggle(
-              "Show Pulse name in menu bar",
-              isOn: Binding(
-                get: { config.showMenuBarLabel },
-                set: { config.setShowMenuBarLabel($0) }
-              )
-            )
-
-            Divider()
-            Button("Quit Pulse", action: onQuit)
-              .accessibilityIdentifier("quitPulseButton")
-          }
-          .font(.subheadline)
+          TasksView(onConnect: { settingsDestination = .tasks })
         }
       }
       .padding(16)
       .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .frame(width: Self.popoverSize.width, height: Self.popoverSize.height)
-    // NSPopover's default material exposes windows behind a transparent hosting
-    // view. Cover the entire content area with an adaptive, opaque system color.
-    .background(Color(nsColor: .windowBackgroundColor))
-  }
-
-  private var loginItemMessage: String {
-    switch config.loginItemStatus {
-    case .enabled:
-      "Enabled in macOS Login Items."
-    case .requiresApproval:
-      "Approve Pulse in System Settings > General > Login Items."
-    case .notRegistered:
-      "Not enabled in macOS Login Items."
-    case .notFound:
-      "macOS cannot locate this app for login. Try an installed build."
     }
   }
 }

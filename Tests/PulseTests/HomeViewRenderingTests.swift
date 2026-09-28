@@ -10,6 +10,10 @@ final class HomeViewRenderingTests: XCTestCase {
     XCTAssertNotNil(Bundle.main.url(forResource: "CodexMenuIcon", withExtension: "png"))
   }
 
+  func testThirdPartyNoticesAreBundled() {
+    XCTAssertNotNil(Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "md"))
+  }
+
   func testHomeViewCoversPopoverSurfaceInBothAppearances() async {
     let suiteName = "PulseRenderingTests.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -25,27 +29,33 @@ final class HomeViewRenderingTests: XCTestCase {
       guard let appearance = NSAppearance(named: appearanceName) else {
         return XCTFail("Could not create \(appearanceName) appearance")
       }
-      let host = NSHostingView(rootView: HomeView(config: config, usage: usage, onQuit: {}))
-      host.appearance = appearance
-      host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
-      host.layoutSubtreeIfNeeded()
-      guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
-        return XCTFail("Could not render HomeView")
-      }
-      host.cacheDisplay(in: host.bounds, to: bitmap)
-
-      let width = bitmap.pixelsWide
-      let height = bitmap.pixelsHigh
-      guard width > 4, height > 4 else { return XCTFail("Empty HomeView render") }
-      let points = [
-        (2, 2), (width - 2, 2), (2, height - 2), (width - 2, height - 2),
-        (width / 2, height / 2),
-      ]
-      for point in points {
-        guard let color = bitmap.colorAt(x: point.0, y: point.1) else {
-          return XCTFail("Missing rendered pixel")
+      for destination in [nil, SettingsDestination.general, .providers, .tasks, .about] {
+        let host = NSHostingView(
+          rootView: HomeView(
+            config: config, usage: usage, onQuit: {}, initialDestination: destination
+          )
+        )
+        host.appearance = appearance
+        host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
+        host.layoutSubtreeIfNeeded()
+        guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+          return XCTFail("Could not render HomeView")
         }
-        XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01)
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+
+        let width = bitmap.pixelsWide
+        let height = bitmap.pixelsHigh
+        guard width > 4, height > 4 else { return XCTFail("Empty HomeView render") }
+        let points = [
+          (2, 2), (width - 2, 2), (2, height - 2), (width - 2, height - 2),
+          (width / 2, height / 2),
+        ]
+        for point in points {
+          guard let color = bitmap.colorAt(x: point.0, y: point.1) else {
+            return XCTFail("Missing rendered pixel")
+          }
+          XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01)
+        }
       }
     }
   }

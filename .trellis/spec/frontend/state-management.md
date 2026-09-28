@@ -72,3 +72,63 @@ config.$showMenuBarLabel.sink { [weak self] showName in
 ## Phase 2A addition: shared usage state
 
 `PulseAppDelegate` owns one `UsageController` and passes it to `HomeView`. The controller is `@MainActor` and publishes loading, success, unavailable, and failure. `UsageView` and the AppKit status item consume that same state. When subscribing to `usage.$state`, use the emitted value because `@Published` emits during `willSet`. The normal refresh period is 60 seconds; manual refresh does not overlap an active fetch. On failure, the status item shows `!` and the popover shows the message instead of presenting the previous percentage as current. See [Codex Usage](../backend/codex-usage.md) for the app-server contract and tests.
+
+## Scenario: in-popover navigation and delayed pointer dismissal
+
+### 1. Scope / Trigger
+
+The compact Home and Settings pages share one transient popover. Pointer departure from both the menu bar button and popover content schedules a delayed close; an outside click still uses AppKit's native transient close.
+
+### 2. Signatures
+
+```swift
+@MainActor final class PopoverHoverController {
+  func synchronize(statusButton: Bool, content: Bool)
+  func entered(_ region: PopoverPointerRegion)
+  func exited(_ region: PopoverPointerRegion)
+  func reset()
+}
+```
+
+`HomeView` keeps `SettingsDestination?` in local `@State`. `PulseAppDelegate` remains the sole owner of the AppKit status item, popover, shared config, and shared usage controller.
+
+### 3. Contracts
+
+- Navigation to Settings, Providers, or Tasks changes only SwiftUI page state. It never starts an integration or changes a UserDefaults key.
+- `UsageView` reads the existing `UsageRefreshState`; AppKit menu bar formatting continues to use that same state. Placeholder provider and task copy must never look like real account data.
+- `NSTrackingArea` on both the status button and hosting view uses mouse entry/exit, active-always, and visible-rect tracking. The delegate initializes region state from the pointer location after `show` and rechecks the status button and entire popover window (including its arrow) before delayed closure. If geometry still contains the pointer despite absent entry events, it reschedules the check so eventual departure still closes.
+- The delay is 400 ms. Entering either region cancels the pending close. `popoverDidClose` resets pending work even when AppKit closed the transient popover.
+- The popover retains its opaque adaptive background and fixed `HomeView.popoverSize` across page changes.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Pointer moves from status item toward popover | Grace period allows entry; entry cancels the close. |
+| Pointer leaves both and stays outside | Close after 400 ms, provided current geometry still confirms outside. |
+| Pointer re-enters before deadline | Cancel close. |
+| Pointer stays over the popover arrow without a content entry event | Keep checking geometry; close after a later departure. |
+| AppKit closes from outside click or status item toggle | Reset pending close and pointer state. |
+| Settings or placeholder entry is clicked inside popover | Navigate in place; do not request a close or integration. |
+| Codex refresh fails | Preserve the existing explicit error state, not a fabricated percentage. |
+
+### 5. Good / Base / Bad Cases
+
+- Good: the pointer crosses the button-popover gap and the panel stays open after entering content.
+- Base: the pointer leaves both regions; one delayed close task is pending and then closes the panel.
+- Bad: a stale exit event arrives after re-entry; the deadline geometry check prevents an erroneous close.
+
+### 6. Tests Required
+
+Unit tests cover delayed close, re-entry cancellation, stale-exit geometry, continued checking across window-only hover, and reset after system dismissal. Render Home and Settings in Aqua and Dark Aqua and assert opaque edges. Keep the existing usage and preference tests. Runtime desktop checks are still needed for actual AppKit event delivery and click behavior.
+
+### 7. Wrong vs Correct
+
+```swift
+// Wrong: closes during the short trip from the menu bar button to the popover.
+func mouseExited(with event: NSEvent) { popover.performClose(nil) }
+
+// Correct: record the exit and let the shared controller close only after
+// both tracked regions remain empty for the grace interval.
+func mouseExited(with event: NSEvent) { hoverController.exited(.statusButton) }
+```

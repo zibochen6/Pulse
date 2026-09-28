@@ -3,13 +3,37 @@ import Combine
 import SwiftUI
 
 @MainActor
-final class PulseAppDelegate: NSObject, NSApplicationDelegate {
+final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
   private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   private let config = AppConfig()
   private let usage = UsageController(provider: CodexProvider())
   private let popover = NSPopover()
   private var preferencesSubscription: AnyCancellable?
   private var usageSubscription: AnyCancellable?
+  private lazy var hoverController = PopoverHoverController(
+    isPointerInside: { [weak self] in self?.pointerInsideEitherRegion() ?? false },
+    close: { [weak self] in self?.popover.performClose(nil) }
+  )
+  private lazy var statusTrackingOwner = PopoverPointerTrackingOwner(
+    onEnter: { [weak self] in
+      guard let self, self.popover.isShown else { return }
+      self.hoverController.entered(.statusButton)
+    },
+    onExit: { [weak self] in
+      guard let self, self.popover.isShown else { return }
+      self.hoverController.exited(.statusButton)
+    }
+  )
+  private lazy var contentTrackingOwner = PopoverPointerTrackingOwner(
+    onEnter: { [weak self] in
+      guard let self, self.popover.isShown else { return }
+      self.hoverController.entered(.content)
+    },
+    onExit: { [weak self] in
+      guard let self, self.popover.isShown else { return }
+      self.hoverController.exited(.content)
+    }
+  )
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.accessory)
@@ -47,6 +71,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate {
     button.toolTip = "Pulse · Loading Codex usage"
     button.target = self
     button.action = #selector(togglePopover)
+    installTrackingArea(on: button, owner: statusTrackingOwner)
     updateStatusButton(showName: config.showMenuBarLabel, usageState: usage.state)
   }
 
@@ -67,13 +92,40 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate {
 
   private func configurePopover() {
     popover.behavior = .transient
+    popover.delegate = self
     // A frequently opened menu bar panel should appear immediately. The default
     // popover fade exposed the desktop through SwiftUI's former clear background.
     popover.animates = false
     popover.contentSize = HomeView.popoverSize
-    popover.contentViewController = NSHostingController(
+    let hostingController = NSHostingController(
       rootView: HomeView(config: config, usage: usage, onQuit: { NSApp.terminate(nil) })
     )
+    popover.contentViewController = hostingController
+    installTrackingArea(on: hostingController.view, owner: contentTrackingOwner)
+  }
+
+  private func installTrackingArea(on view: NSView, owner: PopoverPointerTrackingOwner) {
+    let area = NSTrackingArea(
+      rect: .zero,
+      options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+      owner: owner,
+      userInfo: nil
+    )
+    view.addTrackingArea(area)
+  }
+
+  private func pointerInsideEitherRegion() -> Bool {
+    let insideStatusButton = statusItem.button.map(pointerInside) ?? false
+    let insidePopoverWindow =
+      popover.contentViewController?.view.window?.frame.contains(
+        NSEvent.mouseLocation) ?? false
+    return insideStatusButton || insidePopoverWindow
+  }
+
+  private func pointerInside(_ view: NSView?) -> Bool {
+    guard let view, let window = view.window else { return false }
+    let rect = window.convertToScreen(view.convert(view.bounds, to: nil))
+    return rect.contains(NSEvent.mouseLocation)
   }
 
   private func updateStatusButton(showName: Bool, usageState: UsageRefreshState) {
@@ -101,6 +153,14 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate {
     } else {
       config.refreshLoginItemStatus()
       popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+      hoverController.synchronize(
+        statusButton: pointerInside(button),
+        content: pointerInside(popover.contentViewController?.view)
+      )
     }
+  }
+
+  func popoverDidClose(_ notification: Notification) {
+    hoverController.reset()
   }
 }

@@ -7,14 +7,14 @@ struct PulseSection<Content: View>: View {
   @ViewBuilder let content: Content
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading, spacing: 8) {
       Label(title, systemImage: symbol)
         .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
       content
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .padding(16)
+    .padding(12)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
     .overlay {
