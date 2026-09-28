@@ -4,6 +4,8 @@
 
 AI services do not expose a single universal “quota percentage.” Pulse's future adapter boundary should return typed observations with the data source, collection time, and failure/freshness state. An illustrative Swift contract (design, not current code):
 
+The menu bar should pair the selected source's icon with a compact value in its real unit. The popover may show every configured source. A later Provider phase must decide how users select the one menu bar source, verify icon redistribution rights, and test each icon in light and dark menu bars; see [menu bar status requirements](08-menu-bar-status-requirements.md).
+
 ```swift
 protocol UsageProvider: Sendable {
     var id: String { get }

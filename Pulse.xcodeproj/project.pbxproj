@@ -7,50 +7,159 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		497D92E7576315EFDD404E73 /* PulseAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A691E58272040E50EF7D485 /* PulseAppDelegate.swift */; };
-		5DEC9F7D1216FDDC37D0FA37 /* PulseMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8504DC2594611083AE1E59F6 /* PulseMain.swift */; };
+		05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */; };
+		1BE60A027FF7E01300C38221 /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = 2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */; };
+		3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D1390EE653F2D9B57F24AA /* HomeView.swift */; };
+		77505DE63A22592DA6B881BC /* PulseMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBA39302CF835124B8AEF19 /* PulseMain.swift */; };
+		A93E36A532A840A2C14E8460 /* CodexMenuIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */; };
+		B415DCE4C64CCFE45FDE4734 /* PulseSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B3677511248F21F5214EC7 /* PulseSection.swift */; };
+		B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE685F7EE3DC1774AF1A117C /* AppConfig.swift */; };
+		C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */; };
+		D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		EE9EFEEC20EB618CA7451ADB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 84FEC84833EC6BF77563A3F6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CF79B1BAD3D70F54153FE0B3;
+			remoteInfo = Pulse;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		08B3677511248F21F5214EC7 /* PulseSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseSection.swift; sourceTree = "<group>"; };
 		13FEF2D2118D74C3572DF349 /* Pulse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pulse.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		7A691E58272040E50EF7D485 /* PulseAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseAppDelegate.swift; sourceTree = "<group>"; };
-		8504DC2594611083AE1E59F6 /* PulseMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseMain.swift; sourceTree = "<group>"; };
+		2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
+		30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = CodexMenuIcon.png; sourceTree = "<group>"; };
+		34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemService.swift; sourceTree = "<group>"; };
+		4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseAppDelegate.swift; sourceTree = "<group>"; };
+		4FBA30D234A433E58E16508B /* PulseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6CBA39302CF835124B8AEF19 /* PulseMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseMain.swift; sourceTree = "<group>"; };
+		C0D1390EE653F2D9B57F24AA /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigTests.swift; sourceTree = "<group>"; };
+		DE685F7EE3DC1774AF1A117C /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		0DBDBE9D62FC59B0A976D043 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				DE685F7EE3DC1774AF1A117C /* AppConfig.swift */,
+				34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
 		16C8605271C6A45188D07E13 /* Pulse */ = {
 			isa = PBXGroup;
 			children = (
-				7A691E58272040E50EF7D485 /* PulseAppDelegate.swift */,
-				8504DC2594611083AE1E59F6 /* PulseMain.swift */,
+				38F29541A06B8A159C0EFF06 /* App */,
+				0DBDBE9D62FC59B0A976D043 /* Core */,
+				6BBC8380317D62458772FCFE /* Features */,
+				F7EE12501EB7201D317BF279 /* Resources */,
+				1BBA6FCCC1FA176AD6D36324 /* UI */,
 			);
 			path = Pulse;
+			sourceTree = "<group>";
+		};
+		1BBA6FCCC1FA176AD6D36324 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				08B3677511248F21F5214EC7 /* PulseSection.swift */,
+			);
+			path = UI;
 			sourceTree = "<group>";
 		};
 		1FEE830988994786371D8E45 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				13FEF2D2118D74C3572DF349 /* Pulse.app */,
+				4FBA30D234A433E58E16508B /* PulseTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		38F29541A06B8A159C0EFF06 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */,
+				6CBA39302CF835124B8AEF19 /* PulseMain.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		6BBC8380317D62458772FCFE /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				EB05EB971523B38E8F3FCE6A /* Home */,
+			);
+			path = Features;
 			sourceTree = "<group>";
 		};
 		7A87E3B4AE2E59047EFB8F61 = {
 			isa = PBXGroup;
 			children = (
+				2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */,
 				16C8605271C6A45188D07E13 /* Pulse */,
+				FCB0E6001B954CCA450AA55C /* PulseTests */,
 				1FEE830988994786371D8E45 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		EB05EB971523B38E8F3FCE6A /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				C0D1390EE653F2D9B57F24AA /* HomeView.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+		F7EE12501EB7201D317BF279 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		FCB0E6001B954CCA450AA55C /* PulseTests */ = {
+			isa = PBXGroup;
+			children = (
+				DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */,
+			);
+			name = PulseTests;
+			path = Tests/PulseTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		26CB5097CD9CC52FD2F253AB /* PulseTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F2F1EA2CB05C310F102D486E /* Build configuration list for PBXNativeTarget "PulseTests" */;
+			buildPhases = (
+				8B00C375CD98515701D2325C /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				43B12092B94F779018A5F285 /* PBXTargetDependency */,
+			);
+			name = PulseTests;
+			packageProductDependencies = (
+			);
+			productName = PulseTests;
+			productReference = 4FBA30D234A433E58E16508B /* PulseTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		CF79B1BAD3D70F54153FE0B3 /* Pulse */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9608D96881FD5C17BB380FA0 /* Build configuration list for PBXNativeTarget "Pulse" */;
 			buildPhases = (
 				D70CFAE236269B6E146109F4 /* Sources */,
+				606EBA1EB03BF3A2D7674713 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -92,23 +201,73 @@
 			projectRoot = "";
 			targets = (
 				CF79B1BAD3D70F54153FE0B3 /* Pulse */,
+				26CB5097CD9CC52FD2F253AB /* PulseTests */,
 			);
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		606EBA1EB03BF3A2D7674713 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A93E36A532A840A2C14E8460 /* CodexMenuIcon.png in Resources */,
+				1BE60A027FF7E01300C38221 /* THIRD_PARTY_NOTICES.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
+		8B00C375CD98515701D2325C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D70CFAE236269B6E146109F4 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				497D92E7576315EFDD404E73 /* PulseAppDelegate.swift in Sources */,
-				5DEC9F7D1216FDDC37D0FA37 /* PulseMain.swift in Sources */,
+				B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */,
+				3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */,
+				05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */,
+				C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */,
+				77505DE63A22592DA6B881BC /* PulseMain.swift in Sources */,
+				B415DCE4C64CCFE45FDE4734 /* PulseSection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		43B12092B94F779018A5F285 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CF79B1BAD3D70F54153FE0B3 /* Pulse */;
+			targetProxy = EE9EFEEC20EB618CA7451ADB /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		2269555CAF74F95347158B33 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.zibochen.PulseTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Pulse.app/Contents/MacOS/Pulse";
+			};
+			name = Release;
+		};
 		2E7048B1817FBF01C246A8F3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -201,6 +360,23 @@
 			};
 			name = Release;
 		};
+		F4D6E71E3061EE0C8446C127 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.zibochen.PulseTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Pulse.app/Contents/MacOS/Pulse";
+			};
+			name = Debug;
+		};
 		FA223E74BBF86702C72CD3A8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -281,6 +457,15 @@
 			buildConfigurations = (
 				FA223E74BBF86702C72CD3A8 /* Debug */,
 				2E7048B1817FBF01C246A8F3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F2F1EA2CB05C310F102D486E /* Build configuration list for PBXNativeTarget "PulseTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F4D6E71E3061EE0C8446C127 /* Debug */,
+				2269555CAF74F95347158B33 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -1,51 +1,68 @@
 # State Management
 
-> How state is managed in this project.
+## Scenario: menu bar preferences and macOS Login Items
 
----
+### 1. Scope / Trigger
 
-## Overview
+Phase 1's AppKit status item and SwiftUI settings share one `@MainActor AppConfig: ObservableObject`. Use this pattern for ordinary local preferences that affect both layers. It does not define future provider or task state.
 
-<!--
-Document your project's state management conventions here.
+### 2. Signatures
 
-Questions to answer:
-- What state management solution do you use?
-- How is local vs global state decided?
-- How do you handle server state?
-- What are the patterns for derived state?
--->
+```swift
+@MainActor protocol LoginItemManaging {
+  var status: LoginItemStatus { get }
+  func setEnabled(_ enabled: Bool) throws
+}
 
-(To be filled by the team)
+@MainActor final class AppConfig: ObservableObject {
+  init(defaults: UserDefaults, loginItemService: any LoginItemManaging)
+  func setShowMenuBarLabel(_ enabled: Bool)
+  func setLaunchAtLogin(_ enabled: Bool)
+  func refreshLoginItemStatus()
+}
+```
 
----
+The production initializer supplies `.standard` and `SystemLoginItemService()` by default. The app delegate owns one `AppConfig` and passes it to `HomeView`.
 
-## State Categories
+### 3. Contracts
 
-<!-- Local state, global state, server state, URL state -->
+- UserDefaults keys `launchAtLoginRequested` and `showMenuBarLabel` store Booleans; absent keys mean `false`.
+- `launchAtLoginRequested` is user intent. `loginItemStatus` is the operating system's observed state and can independently be `notRegistered`, `enabled`, `requiresApproval`, or `notFound`.
+- Opening the popover calls `refreshLoginItemStatus()` before presentation. Enabling or disabling calls `SMAppService.mainApp` through `LoginItemManaging`, then refreshes status.
+- The status item always renders the bundled Codex icon plus `--%` until real usage data exists. `showMenuBarLabel` only adds the word “Pulse”; it never hides the no-data readout.
+- `@Published` emits during `willSet`. Subscribers that update AppKit controls must use the emitted value rather than re-read the stored property in the same callback.
 
-(To be filled by the team)
+### 4. Validation & Error Matrix
 
----
+| Condition | Required behavior |
+| --- | --- |
+| No saved preference | Show both settings off. |
+| macOS already reports `enabled` and user requests on | Do not call register again; show enabled. |
+| macOS reports `notRegistered` and user requests off | Do not call unregister again; show not enabled. |
+| macOS reports `requiresApproval` | Keep requested intent, show approval guidance, do not claim enabled. |
+| Registration throws | Keep menu bar and popover usable; expose `loginItemError` and refresh actual status. |
+| Later refresh matches requested state | Clear an obsolete login item error. |
 
-## When to Use Global State
+### 5. Good / Base / Bad Cases
 
-<!-- Criteria for promoting state to global -->
+- Good: user enables login launch, macOS reports `enabled`, and Settings reports success.
+- Base: no usage source or login preference exists; menu bar shows `--%` and Settings reports not enabled.
+- Bad: registration fails or needs approval; the requested toggle may be on, while a separate message reports that the OS has not enabled it.
 
-(To be filled by the team)
+### 6. Tests Required
 
----
+Use an isolated `UserDefaults(suiteName:)` and a fake `LoginItemManaging`; unit tests must never register the test host as a real login item. Assert preference persistence, registration and unregistration requests, approval state, failure state, idempotent already-enabled behavior, and stale-error clearing. Build with Swift 6 and macOS 13 deployment settings.
 
-## Server State
+### 7. Wrong vs Correct
 
-<!-- How server data is cached and synchronized -->
+```swift
+// Wrong: @Published may still expose the old stored value inside sink.
+config.$showMenuBarLabel.sink { [weak self] _ in
+  self?.updateStatusButton(showName: config.showMenuBarLabel)
+}
 
-(To be filled by the team)
-
----
-
-## Common Mistakes
-
-<!-- State management mistakes your team has made -->
-
-(To be filled by the team)
+// Correct: use the value emitted for this update.
+config.$showMenuBarLabel.sink { [weak self] showName in
+  self?.updateStatusButton(showName: showName)
+}
+```

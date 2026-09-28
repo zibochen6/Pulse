@@ -1,6 +1,6 @@
 # Local reference analysis: codex-usage-status
 
-This analysis is based on the locally cloned `codex-usage-status` source under `macos/CodexUsageStatus/` as inspected on 2026-09-28. Paths below are relative to that reference repository. The reference uses MIT (its root `LICENSE`). Pulse's current shell copies no reference source.
+This analysis is based on the locally cloned `codex-usage-status` source under `macos/CodexUsageStatus/` as inspected on 2026-09-28. Paths below are relative to that reference repository. The reference uses MIT (its root `LICENSE`). Phase 1 bundles its `CodexMenuIcon.png` artwork with attribution in [third-party notices](../THIRD_PARTY_NOTICES.md); no reference application source code is copied.
 
 ## Architecture
 
@@ -38,3 +38,5 @@ Source anchors: `main.swift`; `App/AppDelegate.swift` lines 7–80, 187–257; `
 | Shell/environment-only configuration as the public onboarding path | Pulse targets ordinary users who should not need CLI flags or paths. |
 
 If future Pulse work copies any reference code, retain the reference project's MIT copyright and license notice as required by its `LICENSE`; prefer adapting the idea behind its boundaries and testing against the installed Codex version.
+
+The user's earlier iteration established additional presentation requirements: the icon must render as a macOS template icon, one quota window needs only its percentage in the menu bar, and multiple windows need short labels. Those requirements and future provider implications are captured in [menu bar status requirements](08-menu-bar-status-requirements.md).
