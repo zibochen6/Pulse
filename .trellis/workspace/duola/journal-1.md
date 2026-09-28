@@ -174,3 +174,25 @@ Added an alpha-enabled blue-violet Codex icon for the Pulse popover, retained th
 ### Status
 
 [OK] **Completed**
+
+
+## Session 8: Apex Dashboard architecture research
+<!-- trellis-session: v=2 fp=3e729d64dfd1795a -->
+
+**Date**: 2026-09-28
+**Task**: Apex Dashboard architecture research
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Documented the observed Apex Dashboard 1.4.4 structure, read-only parser/UI/onboarding architecture, writeback risks, and MVP; added a fictional fixture and verified privacy and links.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `88f1049` | docs: analyze apex dashboard integration design |
+
+### Status
+
+[OK] **Completed**
