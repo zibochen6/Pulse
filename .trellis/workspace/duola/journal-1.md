@@ -49,3 +49,25 @@ Built AppKit status item and SwiftUI popover foundation with Codex reference ico
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: Pulse Codex usage integration
+<!-- trellis-session: v=2 fp=ec8e57b6df5c0c1c -->
+
+**Date**: 2026-09-28
+**Task**: Pulse Codex usage integration
+**Branch**: `codex/phase2-codex-usage`
+
+### Summary
+
+Integrated local Codex app-server quota into the menu bar and popover, added provider-neutral usage state and isolated tests, verified build/lint/20 tests and sanitized live transport, and documented locked-desktop GUI limit.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f76bb6e` | feat: integrate codex usage provider |
+
+### Status
+
+[OK] **Completed**
