@@ -61,7 +61,7 @@ struct TasksView: View {
   private func dashboardContent(_ dashboard: Dashboard) -> some View {
     VStack(spacing: 0) {
       ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
           ForEach(dashboard.columns) { column in
             TaskColumnTab(
               title: column.title,
@@ -72,14 +72,14 @@ struct TasksView: View {
             .accessibilityIdentifier("dashboardColumnTab.\(column.sourceOrder)")
           }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 3)
       }
 
       Divider()
 
       ScrollView {
-        VStack(alignment: .leading, spacing: 13) {
+        VStack(alignment: .leading, spacing: 9) {
           if let column = selectedColumn(dashboard) {
             if column.cards.isEmpty {
               Text("No tasks")
@@ -98,8 +98,8 @@ struct TasksView: View {
               .foregroundStyle(.red)
           }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
       }
     }
@@ -108,11 +108,11 @@ struct TasksView: View {
   }
 
   private func cardContent(_ card: DashboardCard) -> some View {
-    VStack(alignment: .leading, spacing: 3) {
+    VStack(alignment: .leading, spacing: 2) {
       Text(card.title)
         .font(.system(size: 13, weight: .medium))
         .foregroundStyle(.secondary)
-        .padding(.leading, 2)
+        .padding(.leading, 1)
       ForEach(card.tasks) { task in
         TaskRow(task: task) {
           openErrorMessage = onOpenTask(task) ? nil : "Obsidian could not open this Dashboard file."
@@ -159,8 +159,8 @@ private struct TaskColumnTab: View {
         .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
         .foregroundStyle(isSelected ? .primary : .secondary)
         .lineLimit(1)
-        .padding(.horizontal, 12)
-        .frame(height: 30)
+        .padding(.horizontal, 9)
+        .frame(height: 26)
         .background(tabBackground, in: Capsule())
         .contentShape(Capsule())
     }
@@ -184,9 +184,9 @@ private struct TaskRow: View {
 
   var body: some View {
     Button(action: action) {
-      HStack(alignment: .top, spacing: 9) {
+      HStack(alignment: .top, spacing: 8) {
         Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
-          .font(.system(size: 14, weight: .medium))
+          .font(.system(size: 15, weight: .medium))
           .symbolRenderingMode(.hierarchical)
           .foregroundStyle(
             task.completed
@@ -205,7 +205,7 @@ private struct TaskRow: View {
           .fixedSize(horizontal: false, vertical: true)
         Spacer(minLength: 0)
       }
-      .frame(minHeight: 38)
+      .frame(minHeight: 30)
       .frame(maxWidth: .infinity, alignment: .leading)
       .contentShape(Rectangle())
     }
@@ -219,14 +219,14 @@ private struct TaskRowButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .padding(.horizontal, 9)
-      .padding(.vertical, 4)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 3)
       .background(
         (isHovered || configuration.isPressed)
           ? Color(nsColor: .quaternaryLabelColor)
             .opacity(configuration.isPressed ? 0.28 : 0.16)
           : .clear,
-        in: RoundedRectangle(cornerRadius: 8)
+        in: RoundedRectangle(cornerRadius: 6)
       )
       .opacity(configuration.isPressed ? 0.72 : 1)
       .animation(.easeOut(duration: 0.12), value: isHovered)

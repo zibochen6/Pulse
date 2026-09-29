@@ -6,16 +6,18 @@ the native macOS presentation inside the 360×510 menu-bar popover.
 ## Home hierarchy
 
 The Home header contains the Pulse identity, compact Codex and 88VIP summaries,
-and Settings. Its status controls remain clickable, but use smaller icons and
-text so the task list is the primary visual element. Detailed usage stays on
-the separate Usage page.
+and Settings. Pulse uses a 19-point title, a 26-point identity icon, and
+7-point vertical padding. Its status controls remain clickable, but use smaller
+icons and text so the task list is the primary visual element. Detailed usage
+stays on the separate Usage page.
 
 ## Task list
 
 The source Dashboard column names and order are preserved in the tab strip.
 Cards use a subdued 13-point group label rather than a Dashboard-style card.
-Rows have a 38-point minimum touch target, 15-point task text, compact spacing,
-and neutral hover and press feedback. Long task text wraps inside the row.
+The tab strip is 32 points high including its container. Rows have a 36-point
+minimum target, 15-point task text, compact spacing, and neutral hover and
+press feedback. Long task text wraps inside the row.
 Completed tasks use a dimmer label and small completion symbol without a
 strikethrough.
 

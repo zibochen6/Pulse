@@ -43,26 +43,26 @@ struct HomeView: View {
   private var homeContent: some View {
     VStack(spacing: 0) {
       ViewThatFits(in: .horizontal) {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
           brand
           Spacer(minLength: 4)
           statusSummaries
           settingsButton
         }
-        VStack(spacing: 8) {
-          HStack(spacing: 8) {
+        VStack(spacing: 6) {
+          HStack(spacing: 7) {
             brand
             Spacer()
             settingsButton
           }
-          HStack(spacing: 8) {
+          HStack(spacing: 7) {
             Spacer()
             statusSummaries
           }
         }
       }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 10)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 7)
 
       Divider()
 
@@ -113,19 +113,19 @@ struct HomeView: View {
   }
 
   private var brand: some View {
-    HStack(spacing: 9) {
+    HStack(spacing: 7) {
       Image(systemName: "waveform.path")
-        .font(.system(size: 15, weight: .semibold))
+        .font(.system(size: 13, weight: .semibold))
         .foregroundStyle(.tint)
-        .frame(width: 30, height: 30)
-        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+        .frame(width: 26, height: 26)
+        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
       Text("Pulse")
-        .font(.system(size: 21, weight: .semibold))
+        .font(.system(size: 19, weight: .semibold))
     }
   }
 
   private var statusSummaries: some View {
-    HStack(spacing: 6) {
+    HStack(spacing: 5) {
       AIStatusSummary(state: usage.state, onOpenUsage: { pages.showUsage() })
       VIPStatusSummary(state: vipUsage.state, onOpenUsage: { pages.showUsage() })
     }
