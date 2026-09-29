@@ -62,7 +62,7 @@ struct HomeView: View {
         }
       }
       .padding(.horizontal, 16)
-      .padding(.vertical, 12)
+      .padding(.vertical, 10)
 
       Divider()
 
@@ -113,14 +113,14 @@ struct HomeView: View {
   }
 
   private var brand: some View {
-    HStack(spacing: 8) {
+    HStack(spacing: 9) {
       Image(systemName: "waveform.path")
-        .font(.system(size: 14, weight: .semibold))
+        .font(.system(size: 15, weight: .semibold))
         .foregroundStyle(.tint)
-        .frame(width: 28, height: 28)
-        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .frame(width: 30, height: 30)
+        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
       Text("Pulse")
-        .font(.system(size: 16, weight: .semibold))
+        .font(.system(size: 21, weight: .semibold))
     }
   }
 

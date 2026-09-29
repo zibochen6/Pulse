@@ -61,7 +61,7 @@ struct TasksView: View {
   private func dashboardContent(_ dashboard: Dashboard) -> some View {
     VStack(spacing: 0) {
       ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
           ForEach(dashboard.columns) { column in
             TaskColumnTab(
               title: column.title,
@@ -73,13 +73,13 @@ struct TasksView: View {
           }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.vertical, 7)
       }
 
       Divider()
 
       ScrollView {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 13) {
           if let column = selectedColumn(dashboard) {
             if column.cards.isEmpty {
               Text("No tasks")
@@ -99,7 +99,7 @@ struct TasksView: View {
           }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 16)
+        .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
       }
     }
@@ -108,10 +108,11 @@ struct TasksView: View {
   }
 
   private func cardContent(_ card: DashboardCard) -> some View {
-    VStack(alignment: .leading, spacing: 5) {
+    VStack(alignment: .leading, spacing: 3) {
       Text(card.title)
-        .font(.caption.weight(.semibold))
+        .font(.system(size: 13, weight: .medium))
         .foregroundStyle(.secondary)
+        .padding(.leading, 2)
       ForEach(card.tasks) { task in
         TaskRow(task: task) {
           openErrorMessage = onOpenTask(task) ? nil : "Obsidian could not open this Dashboard file."
@@ -155,11 +156,11 @@ private struct TaskColumnTab: View {
   var body: some View {
     Button(action: action) {
       Text(title)
-        .font(.caption.weight(isSelected ? .semibold : .regular))
+        .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
         .foregroundStyle(isSelected ? .primary : .secondary)
         .lineLimit(1)
-        .padding(.horizontal, 11)
-        .frame(height: 28)
+        .padding(.horizontal, 12)
+        .frame(height: 30)
         .background(tabBackground, in: Capsule())
         .contentShape(Capsule())
     }
@@ -183,19 +184,28 @@ private struct TaskRow: View {
 
   var body: some View {
     Button(action: action) {
-      HStack(alignment: .top, spacing: 10) {
+      HStack(alignment: .top, spacing: 9) {
         Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
-          .font(.system(size: 15, weight: .medium))
+          .font(.system(size: 14, weight: .medium))
           .symbolRenderingMode(.hierarchical)
-          .foregroundStyle(task.completed ? .tertiary : .secondary)
-          .padding(.top, 1)
+          .foregroundStyle(
+            task.completed
+              ? Color(nsColor: .tertiaryLabelColor)
+              : Color(nsColor: .secondaryLabelColor).opacity(0.8)
+          )
+          .padding(.top, 2)
         Text(task.text)
-          .font(.system(size: 13, weight: .regular))
-          .foregroundStyle(task.completed ? .secondary : .primary)
+          .font(.system(size: 15, weight: .regular))
+          .foregroundStyle(
+            task.completed
+              ? Color(nsColor: .secondaryLabelColor).opacity(0.7)
+              : Color.primary
+          )
           .multilineTextAlignment(.leading)
           .fixedSize(horizontal: false, vertical: true)
         Spacer(minLength: 0)
       }
+      .frame(minHeight: 38)
       .frame(maxWidth: .infinity, alignment: .leading)
       .contentShape(Rectangle())
     }
@@ -209,12 +219,12 @@ private struct TaskRowButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .padding(.horizontal, 10)
-      .padding(.vertical, 7)
+      .padding(.horizontal, 9)
+      .padding(.vertical, 4)
       .background(
         (isHovered || configuration.isPressed)
-          ? Color(nsColor: .selectedContentBackgroundColor)
-            .opacity(configuration.isPressed ? 0.18 : 0.10)
+          ? Color(nsColor: .quaternaryLabelColor)
+            .opacity(configuration.isPressed ? 0.28 : 0.16)
           : .clear,
         in: RoundedRectangle(cornerRadius: 8)
       )

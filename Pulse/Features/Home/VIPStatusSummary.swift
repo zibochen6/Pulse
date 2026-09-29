@@ -7,17 +7,17 @@ struct VIPStatusSummary: View {
 
   var body: some View {
     Button(action: onOpenUsage) {
-      HStack(spacing: 5) {
-        VIPProviderIcon(size: 16)
+      HStack(spacing: 4) {
+        VIPProviderIcon(size: 14)
         Text(VIPUsageFormatter.title(for: state))
-          .font(.caption.weight(.medium))
+          .font(.system(size: 12, weight: .medium))
           .monospacedDigit()
           .lineLimit(1)
           .fixedSize(horizontal: true, vertical: false)
       }
       .foregroundStyle(.secondary)
-      .padding(.horizontal, 4)
-      .frame(height: 24)
+      .padding(.horizontal, 3)
+      .frame(height: 22)
       .contentShape(RoundedRectangle(cornerRadius: 6))
     }
     .buttonStyle(.plain)
