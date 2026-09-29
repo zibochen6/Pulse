@@ -10,33 +10,7 @@ struct TasksView: View {
   @State private var openErrorMessage: String?
 
   var body: some View {
-    VStack(spacing: 0) {
-      header
-      Divider()
-      content
-    }
-  }
-
-  private var header: some View {
-    HStack(spacing: 8) {
-      Text("Tasks")
-        .font(.headline)
-      Spacer()
-      Button {
-        tasks.requestRefresh()
-      } label: {
-        Image(systemName: "arrow.clockwise")
-          .font(.system(size: 12, weight: .medium))
-          .frame(width: 28, height: 28)
-      }
-      .buttonStyle(.borderless)
-      .disabled(tasks.isRefreshing || !tasks.configuration.hasDashboardSelection)
-      .help("Refresh Dashboard")
-      .accessibilityLabel("Refresh Dashboard")
-      .accessibilityIdentifier("refreshDashboardButton")
-    }
-    .padding(.horizontal, 18)
-    .padding(.vertical, 8)
+    content
   }
 
   @ViewBuilder

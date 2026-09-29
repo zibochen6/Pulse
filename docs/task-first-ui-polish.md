@@ -5,6 +5,10 @@ contains Pulse identity, lightweight Codex and 88VIP status buttons, and the
 Settings entry. Usage details remain on the separate Usage page so the task
 surface receives the available height.
 
+The task surface has no repeated “Tasks” title or toolbar. It starts directly
+with the current Dashboard column tabs; Pulse reloads the selected Dashboard
+when its popover opens.
+
 ## Task surface
 
 Tabs use the Dashboard's original column names and order. Pulse does not label
