@@ -218,3 +218,25 @@ Added the fixed 88API 88VIP balance provider with Keychain credentials, independ
 ### Status
 
 [OK] **Completed**
+
+
+## Session 10: Implement Apex Dashboard read-only MVP
+<!-- trellis-session: v=2 fp=bf09a524dbe398ee -->
+
+**Date**: 2026-09-29
+**Task**: Implement Apex Dashboard read-only MVP
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Added strict Apex Dashboard parsing, bookmark-backed Dashboard selection, read-only task browsing, Obsidian file opening, tests, and documentation.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3d02e94` | feat: integrate apex dashboard readonly tasks |
+
+### Status
+
+[OK] **Completed**
