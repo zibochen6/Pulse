@@ -308,3 +308,34 @@ Refined the compact Pulse header and status summaries, tightened Apex task tabs 
 ### Next Steps
 
 - Perform a desktop visual pass of the running menu-bar popover; no code behavior changes are pending.
+
+
+## Session 13: Adjust Pulse task UI density
+<!-- trellis-session: v=2 fp=d4dd99093445b0ed -->
+
+**Date**: 2026-09-29
+**Task**: Adjust Pulse task UI density
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Reduced Home header, tab strip, task row, and spacing dimensions while preserving task behavior and visual hierarchy.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `42e4793` | refactor: adjust task ui density and typography |
+
+### Testing
+
+- [OK] xcodebuild Debug build passed
+- [OK] xcodebuild test passed: 52 tests
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Review the compact menu-bar popover during normal desktop use.
