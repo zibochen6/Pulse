@@ -190,7 +190,6 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   private func chooseDashboardFile() {
-    guard let window = popover.contentViewController?.view.window else { return }
     let panel = NSOpenPanel()
     panel.title = "Select Apex Dashboard"
     panel.message = "Choose the Apex Dashboard Markdown file Pulse should read."
@@ -201,11 +200,13 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     if let markdownType = UTType(filenameExtension: "md") {
       panel.allowedContentTypes = [markdownType]
     }
-    panel.beginSheetModal(for: window) { [weak self] response in
-      guard response == .OK, let url = panel.url else { return }
-      Task { [weak self] in
-        await self?.tasks.saveDashboard(url: url)
-      }
+    // A transient popover is not a reliable sheet parent. Presenting the
+    // document picker independently keeps dashboard selection available even
+    // if AppKit closes the popover while it changes focus.
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+
+    Task { [weak self] in
+      await self?.tasks.saveDashboard(url: url)
     }
   }
 
