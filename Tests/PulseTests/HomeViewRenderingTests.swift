@@ -61,8 +61,11 @@ final class HomeViewRenderingTests: XCTestCase {
             usage: usage,
             vipUsage: vipUsage,
             vipConfiguration: vipConfiguration,
+            tasks: DashboardTaskController(configuration: DashboardConfiguration(defaults: defaults)),
             pages: pages,
             onVIPCredentialsChanged: {},
+            onSelectDashboardFile: {},
+            onOpenDashboardFile: { _ in true },
             onQuit: {}
           )
         )
@@ -123,8 +126,11 @@ final class HomeViewRenderingTests: XCTestCase {
               usage: usage,
               vipUsage: vipUsage,
               vipConfiguration: vipConfiguration,
+              tasks: DashboardTaskController(configuration: DashboardConfiguration(defaults: defaults)),
               pages: pages,
               onVIPCredentialsChanged: {},
+              onSelectDashboardFile: {},
+              onOpenDashboardFile: { _ in true },
               onQuit: {}
             )
           )
@@ -178,8 +184,11 @@ final class HomeViewRenderingTests: XCTestCase {
             usage: codexUsage,
             vipUsage: vipUsage,
             vipConfiguration: vipConfiguration,
+            tasks: DashboardTaskController(configuration: DashboardConfiguration(defaults: defaults)),
             pages: pages,
             onVIPCredentialsChanged: {},
+            onSelectDashboardFile: {},
+            onOpenDashboardFile: { _ in true },
             onQuit: {}
           )
         )
@@ -198,6 +207,65 @@ final class HomeViewRenderingTests: XCTestCase {
         XCTAssertEqual(topLeft.alphaComponent, 1, accuracy: 0.01)
         XCTAssertEqual(bottomRight.alphaComponent, 1, accuracy: 0.01)
       }
+    }
+  }
+
+  func testLoadedApexDashboardRendersInBothAppearances() async throws {
+    let suiteName = "PulseApexRenderingTests.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+      return XCTFail("Could not create isolated defaults")
+    }
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    guard let fixtureURL = Bundle(for: Self.self).url(forResource: "sample-apex-dashboard", withExtension: "md") else {
+      return XCTFail("Could not load the Apex fixture")
+    }
+
+    let taskConfiguration = DashboardConfiguration(defaults: defaults)
+    try taskConfiguration.saveDashboard(url: fixtureURL)
+    let tasks = DashboardTaskController(configuration: taskConfiguration)
+    await tasks.refresh()
+    guard case .loaded = tasks.state else { return XCTFail("Expected loaded Apex Dashboard") }
+
+    let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
+    let usage = UsageController(provider: PreviewUsageProvider())
+    let vipUsage = UsageController(provider: PreviewVIPUsageProvider())
+    let vipConfiguration = VIPConfiguration(secretStore: PreviewSecretStore())
+    await usage.refresh()
+    await vipUsage.refresh()
+
+    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+      guard let appearance = NSAppearance(named: appearanceName) else {
+        return XCTFail("Could not create \(appearanceName) appearance")
+      }
+      let host = NSHostingView(
+        rootView: HomeView(
+          config: config,
+          usage: usage,
+          vipUsage: vipUsage,
+          vipConfiguration: vipConfiguration,
+          tasks: tasks,
+          pages: PopoverPageController(),
+          onVIPCredentialsChanged: {},
+          onSelectDashboardFile: {},
+          onOpenDashboardFile: { _ in true },
+          onQuit: {}
+        )
+      )
+      host.appearance = appearance
+      host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
+      host.layoutSubtreeIfNeeded()
+      guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+        return XCTFail("Could not render loaded Apex Dashboard")
+      }
+      host.cacheDisplay(in: host.bounds, to: bitmap)
+      XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
+      guard let topLeft = bitmap.colorAt(x: 2, y: 2),
+        let bottomRight = bitmap.colorAt(x: bitmap.pixelsWide - 2, y: bitmap.pixelsHigh - 2)
+      else {
+        return XCTFail("Missing loaded Dashboard render pixels")
+      }
+      XCTAssertEqual(topLeft.alphaComponent, 1, accuracy: 0.01)
+      XCTAssertEqual(bottomRight.alphaComponent, 1, accuracy: 0.01)
     }
   }
 }

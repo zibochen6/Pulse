@@ -4,9 +4,11 @@ import SwiftUI
 struct SettingsView: View {
   @ObservedObject var config: AppConfig
   @ObservedObject var vipConfiguration: VIPConfiguration
+  @ObservedObject var tasks: DashboardTaskController
   let destination: SettingsDestination
   let onBack: () -> Void
   let onVIPCredentialsChanged: () -> Void
+  let onSelectDashboardFile: () -> Void
   let onQuit: () -> Void
 
   @State private var vipAPIKey = ""
@@ -45,10 +47,7 @@ struct SettingsView: View {
             .id(SettingsDestination.providers)
 
             PulseSection(title: "Tasks", symbol: "checklist") {
-              Text("Obsidian connection is coming soon. No notes are read or changed yet.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+              tasksContent
             }
             .id(SettingsDestination.tasks)
 
@@ -180,6 +179,44 @@ struct SettingsView: View {
       Text("More AI providers are coming soon.")
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+  }
+
+  private var tasksContent: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(spacing: 8) {
+        Image(systemName: "checklist")
+          .foregroundStyle(.secondary)
+        Text("Apex Dashboard")
+          .font(.subheadline.weight(.semibold))
+        Spacer()
+        Text(tasks.configuration.hasDashboardSelection ? "Connected" : "Not connected")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
+      Text("Pulse reads one selected Apex Dashboard file. Tasks remain read-only and open in Obsidian.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      HStack(spacing: 10) {
+        Button(tasks.configuration.hasDashboardSelection ? "Choose another file" : "Select Dashboard File") {
+          onSelectDashboardFile()
+        }
+        .buttonStyle(.borderless)
+        .font(.caption.weight(.medium))
+        .accessibilityIdentifier("selectDashboardFileButton")
+
+        if tasks.configuration.hasDashboardSelection {
+          Button("Remove", role: .destructive) {
+            tasks.removeDashboard()
+          }
+          .buttonStyle(.borderless)
+          .font(.caption.weight(.medium))
+          .accessibilityIdentifier("removeDashboardFileButton")
+        }
+      }
     }
   }
 

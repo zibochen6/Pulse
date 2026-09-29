@@ -2,7 +2,7 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services and Obsidian every day. The intended product brings AI usage status and Markdown tasks into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with Codex usage and optional 88VIP balance integrations. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query a user-configured 88VIP account balance. The menu bar remains Codex-only; the popover header shows both compact statuses. Click either status for Usage details; Settings is another page in the same popover. Obsidian is not connected. This repository is not a downloadable MVP release yet.
+**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP balance integrations, and a read-only Apex Dashboard task view. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query a user-configured 88VIP account balance. The menu bar remains Codex-only; the popover header shows both compact statuses. Click either status for Usage details; Settings is another page in the same popover. This repository is not a downloadable MVP release yet.
 
 ## Build and run
 
@@ -39,17 +39,28 @@ Open **Settings → Providers**, enter your 88VIP API key, and select **Save key
 
 88VIP refreshes at launch and every ten minutes. Opening the popover refreshes it only after the last result becomes stale. Missing keys, invalid keys, rate limits, unsupported billing endpoints, network problems, and malformed responses are shown as clear states; Pulse never converts a USD value to another currency or fabricates a remaining balance.
 
+## Apex Dashboard tasks
+
+Open **Settings → Tasks** and select one Apex Dashboard Markdown file. Pulse
+reads the verified Apex structure—frontmatter columns, `##` columns, `###`
+cards, and ordinary Markdown checkbox rows—and shows it in the Home task area.
+Use the column tabs to browse and click a row to open the Dashboard file in
+Obsidian. Pulse only reads the selected file: it does not scan a Vault, edit
+tasks, watch for file changes, or infer due dates. It rereads the file when the
+popover opens and when you press Refresh. See [the read-only MVP details](docs/apex-dashboard-readonly-mvp.md).
+
 ## Direction
 
 - **AI status:** Codex and 88VIP are connected. Provider-specific capabilities for OpenAI API, DeepSeek, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window are displayed as different kinds of information.
-- **Obsidian tasks:** the user chooses a Vault. Pulse will scan Markdown tasks without assuming folder names and will preserve the source note as the source of truth.
+- **Obsidian tasks:** Pulse can read one selected Apex Dashboard in the verified
+  format. General Vault scanning and task write-back remain future work.
 - **Privacy:** the app runs locally. 88VIP API keys are stored in macOS Keychain; ordinary preferences use UserDefaults. Pulse stores no Vault data and has no analytics.
 
 See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
 
 ## 中文简介
 
-Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI 与可选的 88VIP USD 余额：菜单栏只显示 Codex，弹窗可显示两者并查看详情；Vault 读写和其他 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
+Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额，以及只读 Apex Dashboard 任务展示：菜单栏只显示 Codex，弹窗可显示额度与选定 Dashboard 的任务；任务写回、通用 Vault 扫描和其他 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
 
 ## License
 

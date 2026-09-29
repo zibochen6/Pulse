@@ -155,11 +155,11 @@ final class PopoverPointerTrackingOwner: NSObject {
     self.onExit = onExit
   }
 
-  @objc func mouseEntered(with event: NSEvent) {
+  @objc(mouseEntered:) func mouseEntered(with event: NSEvent) {
     onEnter()
   }
 
-  @objc func mouseExited(with event: NSEvent) {
+  @objc(mouseExited:) func mouseExited(with event: NSEvent) {
     onExit()
   }
 }

@@ -2,9 +2,9 @@
 
 ## 边界与数据流
 
-未来的读取链路为：用户选定文件 → 严格读取 UTF-8 → 解析 YAML 文件头 → 扫描 Markdown 列／卡片／复选框 → 生成不可变 `Dashboard` 快照 → Tasks 界面。解析层不依赖 SwiftUI、AppKit 或 Codex Provider，不修改文件，也不把私人任务写进日志或持久缓存。初期放在现有 `Core`／`Features/Tasks` 边界内；只有独立复用和测试需求出现时再抽成 Swift Package。
+读取链路为：用户选定文件 → 严格读取 UTF-8 → 扫描受限 frontmatter → 扫描 Markdown 列／卡片／复选框 → 生成不可变 `Dashboard` 快照 → Tasks 界面。解析层不依赖 SwiftUI、AppKit 或 Codex Provider，不修改文件，也不把私人任务写进日志或持久缓存。实现放在 `Features/Tasks`；只有独立复用和测试需求出现时再抽成 Swift Package。
 
-首版只解释 [结构分析](apex-dashboard-analysis.md)中已确认的 Apex 子集。YAML 应按 YAML 语义读取 `dashboard` 与 `columns`，不能用跨全文的单个正则猜列名；正文以行扫描器处理标题和任务。未识别的结构应返回明确错误或忽略非任务内容，绝不把任务分配到错误列。具体 YAML 解析依赖在实现阶段评估，不为本次文档任务添加依赖。
+首版只解释 [结构分析](apex-dashboard-analysis.md)中已确认的 Apex 子集。它用严格的行状态机读取 `dashboard: true` 和简单 `columns` 值，再用同一行扫描器处理标题和任务；不引入 YAML 依赖，也不把它称为通用 YAML 解析。未识别的结构应返回明确错误或忽略非任务内容，绝不把任务分配到错误列。
 
 ## 概念数据模型
 

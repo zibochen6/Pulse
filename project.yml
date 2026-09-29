@@ -27,6 +27,8 @@ targets:
     platform: macOS
     sources:
       - path: Tests/PulseTests
+      - path: Tests/Fixtures
+        buildPhase: resources
     dependencies:
       - target: Pulse
     settings:

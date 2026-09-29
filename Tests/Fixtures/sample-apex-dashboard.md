@@ -10,7 +10,7 @@ columns:
   - name: Workstreams
     color: "#10b981"
     type: todo
-  - name: Reference
+  - name: 参考
     color: "#8b5cf6"
     type: projects
 ---
@@ -35,4 +35,4 @@ id: card-sample-project
 type: task
 - [ ] Write a demo checklist
 
-## Reference
+## 参考

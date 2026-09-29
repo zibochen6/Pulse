@@ -165,3 +165,17 @@ func popoverDidClose(_ notification: Notification) {
   pages.reset()
 }
 ```
+
+## Apex Dashboard read-only task state
+
+`PulseAppDelegate` owns one `DashboardTaskController` and refreshes it before
+showing the popover. The controller resolves a UserDefaults bookmark, reads the
+selected file, and publishes one of `notConfigured`, `loading`, `fileMissing`,
+`permissionDenied`, `readError`, `parseError`, or `loaded`. `TasksView` only
+renders this state and delegates Dashboard selection to the app delegate; it
+does not read Markdown, invoke `NSOpenPanel`, or write source files. A task row
+may call the injected Obsidian opener, but never toggles task completion.
+
+The current build is non-sandboxed, so it uses an ordinary Foundation bookmark
+only for relocation. Treat a sandboxed release as a distinct integration that
+adds security-scoped access rather than changing the existing read path.

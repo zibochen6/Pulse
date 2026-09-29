@@ -8,8 +8,11 @@ struct HomeView: View {
   @ObservedObject var usage: UsageController
   @ObservedObject var vipUsage: UsageController
   @ObservedObject var vipConfiguration: VIPConfiguration
+  @ObservedObject var tasks: DashboardTaskController
   @ObservedObject var pages: PopoverPageController
   let onVIPCredentialsChanged: () -> Void
+  let onSelectDashboardFile: () -> Void
+  let onOpenDashboardFile: (DashboardTask) -> Bool
   let onQuit: () -> Void
 
   var body: some View {
@@ -23,9 +26,11 @@ struct HomeView: View {
         SettingsView(
           config: config,
           vipConfiguration: vipConfiguration,
+          tasks: tasks,
           destination: destination,
           onBack: { pages.showHome() },
           onVIPCredentialsChanged: onVIPCredentialsChanged,
+          onSelectDashboardFile: onSelectDashboardFile,
           onQuit: onQuit
         )
       }
@@ -61,7 +66,11 @@ struct HomeView: View {
 
       Divider()
 
-      TasksView(onConnect: { pages.showSettings(.tasks) })
+      TasksView(
+        tasks: tasks,
+        onConfigure: { pages.showSettings(.tasks) },
+        onOpenTask: onOpenDashboardFile
+      )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("tasksRegion")
     }
@@ -136,4 +145,5 @@ struct HomeView: View {
     .accessibilityLabel("Open Settings")
     .accessibilityIdentifier("openSettingsButton")
   }
+
 }

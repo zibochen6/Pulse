@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
@@ -9,6 +10,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private let usage = UsageController(provider: CodexProvider())
   private let vipConfiguration = VIPConfiguration()
   private let vipUsage = UsageController(provider: VIPProvider(), refreshInterval: .seconds(600))
+  private let tasks = DashboardTaskController()
   private let pages = PopoverPageController()
   private let popover = NSPopover()
   private var preferencesSubscription: AnyCancellable?
@@ -111,8 +113,11 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         usage: usage,
         vipUsage: vipUsage,
         vipConfiguration: vipConfiguration,
+        tasks: tasks,
         pages: pages,
         onVIPCredentialsChanged: { [weak self] in self?.vipUsage.requestRefresh() },
+        onSelectDashboardFile: { [weak self] in self?.chooseDashboardFile() },
+        onOpenDashboardFile: { [weak self] task in self?.openDashboardFileInObsidian(task) ?? false },
         onQuit: { NSApp.terminate(nil) }
       )
     )
@@ -170,6 +175,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     } else {
       config.refreshLoginItemStatus()
       vipUsage.refreshIfStale(maxAge: 600)
+      tasks.requestRefresh()
       pages.reset()
       hoverController.beginOpening()
       popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -181,5 +187,30 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   func popoverDidClose(_ notification: Notification) {
     hoverController.reset()
     pages.reset()
+  }
+
+  private func chooseDashboardFile() {
+    guard let window = popover.contentViewController?.view.window else { return }
+    let panel = NSOpenPanel()
+    panel.title = "Select Apex Dashboard"
+    panel.message = "Choose the Apex Dashboard Markdown file Pulse should read."
+    panel.prompt = "Select Dashboard"
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = false
+    panel.allowsMultipleSelection = false
+    if let markdownType = UTType(filenameExtension: "md") {
+      panel.allowedContentTypes = [markdownType]
+    }
+    panel.beginSheetModal(for: window) { [weak self] response in
+      guard response == .OK, let url = panel.url else { return }
+      Task { [weak self] in
+        await self?.tasks.saveDashboard(url: url)
+      }
+    }
+  }
+
+  private func openDashboardFileInObsidian(_ task: DashboardTask) -> Bool {
+    guard let url = ObsidianURLOpener.url(for: task.sourceFileURL) else { return false }
+    return NSWorkspace.shared.open(url)
   }
 }

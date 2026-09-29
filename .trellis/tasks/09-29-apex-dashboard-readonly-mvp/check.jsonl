@@ -1,0 +1,2 @@
+{"file": "docs/apex-mvp-plan.md", "reason": "Provides MVP acceptance limits for read-only integration."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Checks task state and popover lifecycle integration."}

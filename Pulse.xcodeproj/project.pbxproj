@@ -9,10 +9,13 @@
 /* Begin PBXBuildFile section */
 		05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */; };
 		0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */; };
+		0D76F3E584FFBF0E12B1AAD2 /* ApexDashboardParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC89F07DD7D9AD92476F82EF /* ApexDashboardParser.swift */; };
 		1B3A9C5B59FAFE1527DD6128 /* UsageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5763D22FF29A87447FD82E62 /* UsageController.swift */; };
 		1BE60A027FF7E01300C38221 /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = 2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */; };
 		24E16A2A520AF859941E39E8 /* PopoverPageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D4C870D63B26C2433BCB4 /* PopoverPageController.swift */; };
 		3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D1390EE653F2D9B57F24AA /* HomeView.swift */; };
+		3D9C0BCC1DB625541F7AB8CC /* ObsidianURLOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D388DA8F4C4E03EDD8317B8 /* ObsidianURLOpener.swift */; };
+		3DB52E68CA6794F2F1C56BBB /* sample-apex-dashboard.md in Resources */ = {isa = PBXBuildFile; fileRef = FE634AFDAC3E2B16AF7D5589 /* sample-apex-dashboard.md */; };
 		4598BC1202B93684E58A0DDA /* UsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BCCC91F953A8FF437E4BBA /* UsageView.swift */; };
 		4A3779C2CB4D487729AB784A /* CodexAppServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C278C9EFD158EEE6E7C50B92 /* CodexAppServerTransport.swift */; };
 		6116F768A78F36250C2AC8C1 /* AIStatusSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 713E8909A7BD912071712C5E /* AIStatusSummary.swift */; };
@@ -33,10 +36,14 @@
 		B5E5FCABA3E15E4DA7FF07F1 /* VIPConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5823C23B8E4F0D4F7DA8E7A9 /* VIPConfiguration.swift */; };
 		B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE685F7EE3DC1774AF1A117C /* AppConfig.swift */; };
 		B86308E401912B97D7DC7580 /* VIPStatusSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF50DC8A711AB126591F56DA /* VIPStatusSummary.swift */; };
+		BD5820F58346DFA449BA0B40 /* DashboardConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846A5B65A68152F8BA16A0EA /* DashboardConfiguration.swift */; };
 		C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */; };
 		D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */; };
 		DB042EEBE631A96D5A209658 /* CodexProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F293341995B6DF958E21987 /* CodexProviderIcon.swift */; };
+		DD5BE2D9B0E33D90B86563C2 /* Dashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D542992BA19E48BE5D4BAD11 /* Dashboard.swift */; };
 		DEB5B3FDB91867F1AC2C3E70 /* PopoverHoverControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042EECB94368AEA980440D75 /* PopoverHoverControllerTests.swift */; };
+		E5B660D86EEEF1430F2CE278 /* DashboardTaskController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86289849745CB3C7DE902B3E /* DashboardTaskController.swift */; };
+		F15FF9063E32D8024DD410D8 /* ApexDashboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E271CEA373E40EDA8325DEA4 /* ApexDashboardTests.swift */; };
 		FAA3C692F56898992578FFF8 /* VIPProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FB59F65E0164FAEC859576B /* VIPProviderIcon.swift */; };
 /* End PBXBuildFile section */
 
@@ -68,25 +75,40 @@
 		6B0B70F343CCFB86ABADB8C9 /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
 		6CBA39302CF835124B8AEF19 /* PulseMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseMain.swift; sourceTree = "<group>"; };
 		713E8909A7BD912071712C5E /* AIStatusSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStatusSummary.swift; sourceTree = "<group>"; };
+		846A5B65A68152F8BA16A0EA /* DashboardConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardConfiguration.swift; sourceTree = "<group>"; };
 		84E9A7F3F6DE36F13930B307 /* VIPProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPProvider.swift; sourceTree = "<group>"; };
+		86289849745CB3C7DE902B3E /* DashboardTaskController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskController.swift; sourceTree = "<group>"; };
 		8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexUsageTests.swift; sourceTree = "<group>"; };
 		9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverPageControllerTests.swift; sourceTree = "<group>"; };
+		9D388DA8F4C4E03EDD8317B8 /* ObsidianURLOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObsidianURLOpener.swift; sourceTree = "<group>"; };
 		AA5304F589667B9760522B5D /* VIPUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPUsageTests.swift; sourceTree = "<group>"; };
 		B8BCCC91F953A8FF437E4BBA /* UsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageView.swift; sourceTree = "<group>"; };
+		BC89F07DD7D9AD92476F82EF /* ApexDashboardParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApexDashboardParser.swift; sourceTree = "<group>"; };
 		C0D1390EE653F2D9B57F24AA /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		C278C9EFD158EEE6E7C50B92 /* CodexAppServerTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAppServerTransport.swift; sourceTree = "<group>"; };
 		CF50DC8A711AB126591F56DA /* VIPStatusSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPStatusSummary.swift; sourceTree = "<group>"; };
 		D0AE5E25194558D68B33915D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D3D6D74D06E7A1FA2711BE28 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
+		D542992BA19E48BE5D4BAD11 /* Dashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dashboard.swift; sourceTree = "<group>"; };
 		DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigTests.swift; sourceTree = "<group>"; };
 		DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSnapshot.swift; sourceTree = "<group>"; };
 		DE685F7EE3DC1774AF1A117C /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		E271CEA373E40EDA8325DEA4 /* ApexDashboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApexDashboardTests.swift; sourceTree = "<group>"; };
 		F2A0A8DFBF3B7B1C314D8AEB /* CodexColorIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = CodexColorIcon.png; sourceTree = "<group>"; };
 		F69D4C870D63B26C2433BCB4 /* PopoverPageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverPageController.swift; sourceTree = "<group>"; };
 		F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewRenderingTests.swift; sourceTree = "<group>"; };
+		FE634AFDAC3E2B16AF7D5589 /* sample-apex-dashboard.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "sample-apex-dashboard.md"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		04FD9FBF3CEF13019557FBAD /* Parser */ = {
+			isa = PBXGroup;
+			children = (
+				BC89F07DD7D9AD92476F82EF /* ApexDashboardParser.swift */,
+			);
+			path = Parser;
+			sourceTree = "<group>";
+		};
 		0DBDBE9D62FC59B0A976D043 /* Core */ = {
 			isa = PBXGroup;
 			children = (
@@ -134,6 +156,9 @@
 			isa = PBXGroup;
 			children = (
 				6B0B70F343CCFB86ABADB8C9 /* TasksView.swift */,
+				536AFF13AAD187E7A08319F3 /* Models */,
+				04FD9FBF3CEF13019557FBAD /* Parser */,
+				E09C48C05FA28C9329A1FEB1 /* Services */,
 			);
 			path = Tasks;
 			sourceTree = "<group>";
@@ -158,6 +183,23 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		3D33189D82F097DF4B7CC07E /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				FE634AFDAC3E2B16AF7D5589 /* sample-apex-dashboard.md */,
+			);
+			name = Fixtures;
+			path = Tests/Fixtures;
+			sourceTree = "<group>";
+		};
+		536AFF13AAD187E7A08319F3 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				D542992BA19E48BE5D4BAD11 /* Dashboard.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		6BBC8380317D62458772FCFE /* Features */ = {
 			isa = PBXGroup;
 			children = (
@@ -173,6 +215,7 @@
 			isa = PBXGroup;
 			children = (
 				2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */,
+				3D33189D82F097DF4B7CC07E /* Fixtures */,
 				16C8605271C6A45188D07E13 /* Pulse */,
 				FCB0E6001B954CCA450AA55C /* PulseTests */,
 				1FEE830988994786371D8E45 /* Products */,
@@ -194,6 +237,16 @@
 				DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */,
 			);
 			path = Usage;
+			sourceTree = "<group>";
+		};
+		E09C48C05FA28C9329A1FEB1 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				846A5B65A68152F8BA16A0EA /* DashboardConfiguration.swift */,
+				86289849745CB3C7DE902B3E /* DashboardTaskController.swift */,
+				9D388DA8F4C4E03EDD8317B8 /* ObsidianURLOpener.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		EB05EB971523B38E8F3FCE6A /* Home */ = {
@@ -218,6 +271,7 @@
 		FCB0E6001B954CCA450AA55C /* PulseTests */ = {
 			isa = PBXGroup;
 			children = (
+				E271CEA373E40EDA8325DEA4 /* ApexDashboardTests.swift */,
 				DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */,
 				8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */,
 				F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */,
@@ -247,6 +301,7 @@
 			buildConfigurationList = F2F1EA2CB05C310F102D486E /* Build configuration list for PBXNativeTarget "PulseTests" */;
 			buildPhases = (
 				8B00C375CD98515701D2325C /* Sources */,
+				93C796CF73706F0C16F31375 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -323,6 +378,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		93C796CF73706F0C16F31375 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3DB52E68CA6794F2F1C56BBB /* sample-apex-dashboard.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -330,6 +393,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F15FF9063E32D8024DD410D8 /* ApexDashboardTests.swift in Sources */,
 				D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */,
 				A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */,
 				0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */,
@@ -344,12 +408,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				6116F768A78F36250C2AC8C1 /* AIStatusSummary.swift in Sources */,
+				0D76F3E584FFBF0E12B1AAD2 /* ApexDashboardParser.swift in Sources */,
 				B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */,
 				4A3779C2CB4D487729AB784A /* CodexAppServerTransport.swift in Sources */,
 				715C7B88CFE0C9B3DDB927B9 /* CodexProvider.swift in Sources */,
 				DB042EEBE631A96D5A209658 /* CodexProviderIcon.swift in Sources */,
+				DD5BE2D9B0E33D90B86563C2 /* Dashboard.swift in Sources */,
+				BD5820F58346DFA449BA0B40 /* DashboardConfiguration.swift in Sources */,
+				E5B660D86EEEF1430F2CE278 /* DashboardTaskController.swift in Sources */,
 				3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */,
 				05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */,
+				3D9C0BCC1DB625541F7AB8CC /* ObsidianURLOpener.swift in Sources */,
 				6F7BDB9101FAE05E50004C43 /* PopoverHoverController.swift in Sources */,
 				24E16A2A520AF859941E39E8 /* PopoverPageController.swift in Sources */,
 				C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */,

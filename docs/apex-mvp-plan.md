@@ -2,9 +2,9 @@
 
 ## 用户价值与范围
 
-Pulse 是菜单栏里的任务快速入口。用户选择自己的 Vault 和 Apex Dashboard Markdown 文件后，可以在任务优先首页按原列切换，查看卡片与任务，并在 Obsidian 中打开源文件继续工作。Codex 状态仍是页眉中的简短摘要；Pulse 不复制 Apex Dashboard 的完整工作台。
+Pulse 是菜单栏里的任务快速入口。用户选择一份 Apex Dashboard Markdown 文件后，可以在任务优先首页按原列切换，查看卡片与任务，并在 Obsidian 中打开源文件继续工作。Codex 状态仍是页眉中的简短摘要；Pulse 不复制 Apex Dashboard 的完整工作台。
 
-首版必须完成：选择 Vault 和 Dashboard 文件、校验并读取已观察到的 Apex 结构、展示列／卡片／任务及完成状态、打开源 Markdown 文件、弹窗打开时刷新和手动刷新、清晰处理未配置／文件缺失／读取或解析失败。空列也保留，列页签按文件顺序生成。
+首版必须完成：选择 Dashboard 文件、校验并读取已观察到的 Apex 结构、展示列／卡片／任务及完成状态、打开源 Markdown 文件、弹窗打开时刷新和手动刷新、清晰处理未配置／文件缺失／读取或解析失败。空列也保留，列页签按文件顺序生成。
 
 首版不包含任务勾选、新增、编辑、删除、移动、AI 总结、日期或标签语义、自动 Today 筛选、文件监听、云同步、数据库或跨 Vault 搜索。Pulse 按 Dashboard 原列和文件顺序展示任务，不推断哪些任务今天到期。若用户需要修改任务，进入 Obsidian。这个 Apex 专项只读切片比 [现有通用 Obsidian 路线图](06-mvp-roadmap.md)中设想的完整待办写入范围更窄；完成它不等于通用 Obsidian Phase 3 已完成。
 

@@ -1,0 +1,2 @@
+{"file": "docs/apex-parser-design.md", "reason": "Defines the verified Apex source structure and strict parser boundary."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Defines shared AppKit and SwiftUI state ownership."}
