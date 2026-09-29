@@ -240,3 +240,39 @@ Added strict Apex Dashboard parsing, bookmark-backed Dashboard selection, read-o
 ### Status
 
 [OK] **Completed**
+
+
+## Session 11: Polish task-first home and popover hover
+<!-- trellis-session: v=2 fp=e51757183bb6bc1b -->
+
+**Date**: 2026-09-29
+**Task**: Polish task-first home and popover hover
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Polished the Apex task list and made hover dismissal recover from missed AppKit tracking events.
+
+### Main Changes
+
+- Reduced Home usage summary weight and improved task tabs, grouped rows, wrapping, and pointer feedback.
+- Added geometry reconciliation to PopoverHoverController with regression coverage for missed entry and exit events.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6477f34` | fix: polish task first ui and restore popover hover behavior |
+
+### Testing
+
+- [OK] xcodebuild build and test passed: 52 tests.
+- [OK] Desktop automation timed out for the accessory-only menu bar app; manual checklist remains documented.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Run the documented live menu-bar checklist before publishing this local commit.

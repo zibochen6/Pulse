@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
+- **Total Sessions**: 11
 - **Last Active**: 2026-09-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~242 | Active |
+| `journal-1.md` | ~278 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-09-29 | Polish task-first home and popover hover | `6477f34` | `codex/pulse-task-first-home` |
 | 10 | 2026-09-29 | Implement Apex Dashboard read-only MVP | `3d02e94` | `codex/pulse-task-first-home` |
 | 9 | 2026-09-29 | 88VIP balance provider | `fcb0e4f` | `codex/pulse-task-first-home` |
 | 8 | 2026-09-28 | Apex Dashboard architecture research | `88f1049` | `codex/pulse-task-first-home` |
