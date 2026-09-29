@@ -16,8 +16,12 @@ struct UsageSnapshot: Equatable, Sendable {
 
 enum UsageMetric: Equatable, Sendable {
   case quota(QuotaWindow)
+  case allowance(amount: Decimal, currency: String)
+  case usage(amount: Decimal, currency: String)
   case balance(amount: Decimal, currency: String)
   case cost(amount: Decimal, currency: String, period: String)
+  case expiresAt(Date)
+  case unlimited
   case unavailable(reason: String)
 }
 

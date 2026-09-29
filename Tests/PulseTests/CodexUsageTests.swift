@@ -195,6 +195,32 @@ final class UsageControllerTests: XCTestCase {
     await secondRefresh.value
     XCTAssertFalse(controller.isRefreshing)
   }
+
+  func testStaleRefreshSkipsRecentSnapshotAndRefreshesAnOldOne() async {
+    let recent = UsageSnapshot(
+      providerID: "88vip",
+      fetchedAt: Date(),
+      metrics: [.balance(amount: 1, currency: "USD")]
+    )
+    let old = UsageSnapshot(
+      providerID: "88vip",
+      fetchedAt: Date(timeIntervalSince1970: 0),
+      metrics: [.balance(amount: 2, currency: "USD")]
+    )
+    let recentProvider = QueueUsageProvider(results: [.success(recent), .success(old)])
+    let recentController = UsageController(provider: recentProvider)
+    await recentController.refresh()
+    XCTAssertNil(recentController.refreshIfStale(maxAge: 600))
+    XCTAssertEqual(recentController.state, .success(recent))
+
+    let oldProvider = QueueUsageProvider(results: [.success(old), .success(recent)])
+    let oldController = UsageController(provider: oldProvider)
+    await oldController.refresh()
+    let refreshTask = oldController.refreshIfStale(maxAge: 600)
+    XCTAssertNotNil(refreshTask)
+    await refreshTask?.value
+    XCTAssertEqual(oldController.state, .success(recent))
+  }
 }
 
 private struct StubAppServer: CodexAppServerReading {

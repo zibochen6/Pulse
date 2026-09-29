@@ -3,9 +3,13 @@ import SwiftUI
 
 struct SettingsView: View {
   @ObservedObject var config: AppConfig
+  @ObservedObject var vipConfiguration: VIPConfiguration
   let destination: SettingsDestination
   let onBack: () -> Void
+  let onVIPCredentialsChanged: () -> Void
   let onQuit: () -> Void
+
+  @State private var vipAPIKey = ""
 
   var body: some View {
     VStack(spacing: 0) {
@@ -36,10 +40,7 @@ struct SettingsView: View {
             .id(SettingsDestination.general)
 
             PulseSection(title: "Providers", symbol: "square.stack") {
-              Text("More AI providers are coming soon. Codex is the only connected source today.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+              providerContent
             }
             .id(SettingsDestination.providers)
 
@@ -66,6 +67,7 @@ struct SettingsView: View {
         }
         .onAppear {
           proxy.scrollTo(destination, anchor: .top)
+          vipConfiguration.refresh()
         }
       }
     }
@@ -124,6 +126,60 @@ struct SettingsView: View {
           .font(.caption)
           .foregroundStyle(.secondary)
       }
+    }
+  }
+
+  private var providerContent: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(spacing: 8) {
+        VIPProviderIcon(size: 18)
+        Text("88VIP")
+          .font(.subheadline.weight(.semibold))
+        Spacer()
+        Text(vipConfiguration.hasAPIKey ? "Connected" : "Not connected")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
+      SecureField("88VIP API key", text: $vipAPIKey)
+        .textFieldStyle(.roundedBorder)
+        .accessibilityIdentifier("vipAPIKeyField")
+
+      HStack(spacing: 10) {
+        Button(vipConfiguration.hasAPIKey ? "Replace key" : "Save key") {
+          guard vipConfiguration.save(apiKey: vipAPIKey) else { return }
+          vipAPIKey = ""
+          onVIPCredentialsChanged()
+        }
+        .disabled(vipAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .accessibilityIdentifier("saveVIPAPIKeyButton")
+
+        if vipConfiguration.hasAPIKey {
+          Button("Remove key", role: .destructive) {
+            guard vipConfiguration.removeAPIKey() else { return }
+            vipAPIKey = ""
+            onVIPCredentialsChanged()
+          }
+          .accessibilityIdentifier("removeVIPAPIKeyButton")
+        }
+      }
+      .buttonStyle(.borderless)
+      .font(.caption.weight(.medium))
+
+      if let errorMessage = vipConfiguration.errorMessage {
+        Text(errorMessage)
+          .font(.caption)
+          .foregroundStyle(.red)
+          .fixedSize(horizontal: false, vertical: true)
+      } else {
+        Text("Your API key is stored only in macOS Keychain.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
+      Text("More AI providers are coming soon.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
   }
 

@@ -36,7 +36,10 @@ final class HomeViewRenderingTests: XCTestCase {
 
     let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
     let usage = UsageController(provider: PreviewUsageProvider())
+    let vipUsage = UsageController(provider: PreviewVIPUsageProvider())
+    let vipConfiguration = VIPConfiguration(secretStore: PreviewSecretStore())
     await usage.refresh()
+    await vipUsage.refresh()
 
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
       guard let appearance = NSAppearance(named: appearanceName) else {
@@ -54,7 +57,13 @@ final class HomeViewRenderingTests: XCTestCase {
         }
         let host = NSHostingView(
           rootView: HomeView(
-            config: config, usage: usage, pages: pages, onQuit: {}
+            config: config,
+            usage: usage,
+            vipUsage: vipUsage,
+            vipConfiguration: vipConfiguration,
+            pages: pages,
+            onVIPCredentialsChanged: {},
+            onQuit: {}
           )
         )
         host.appearance = appearance
@@ -88,6 +97,9 @@ final class HomeViewRenderingTests: XCTestCase {
     }
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
+    let vipUsage = UsageController(provider: PreviewVIPUsageProvider())
+    let vipConfiguration = VIPConfiguration(secretStore: PreviewSecretStore())
+    await vipUsage.refresh()
 
     let providers: [any UsageProviding] = [
       PreviewUsageProvider(), MultipleWindowUsageProvider(), UnavailableUsageProvider(),
@@ -106,7 +118,15 @@ final class HomeViewRenderingTests: XCTestCase {
           let pages = PopoverPageController()
           if page == .usage { pages.showUsage() }
           let host = NSHostingView(
-            rootView: HomeView(config: config, usage: usage, pages: pages, onQuit: {})
+            rootView: HomeView(
+              config: config,
+              usage: usage,
+              vipUsage: vipUsage,
+              vipConfiguration: vipConfiguration,
+              pages: pages,
+              onVIPCredentialsChanged: {},
+              onQuit: {}
+            )
           )
           host.appearance = appearance
           host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
@@ -124,6 +144,59 @@ final class HomeViewRenderingTests: XCTestCase {
             XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01)
           }
         }
+      }
+    }
+  }
+
+  func testVIPStatesRenderInBothAppearances() async {
+    let suiteName = "PulseVIPRenderingStates.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+      return XCTFail("Could not create isolated defaults")
+    }
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
+    let codexUsage = UsageController(provider: PreviewUsageProvider())
+    await codexUsage.refresh()
+    let vipConfiguration = VIPConfiguration(secretStore: PreviewSecretStore())
+    let providers: [any UsageProviding] = [
+      PreviewVIPUsageProvider(), VIPUnavailableUsageProvider(), VIPFailedUsageProvider(),
+    ]
+    let loading = UsageController(provider: PreviewVIPUsageProvider())
+    let vipUsages = [loading] + providers.map { UsageController(provider: $0) }
+    for vipUsage in vipUsages.dropFirst() { await vipUsage.refresh() }
+
+    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+      guard let appearance = NSAppearance(named: appearanceName) else {
+        return XCTFail("Could not create \(appearanceName) appearance")
+      }
+      for vipUsage in vipUsages {
+        let pages = PopoverPageController()
+        let host = NSHostingView(
+          rootView: HomeView(
+            config: config,
+            usage: codexUsage,
+            vipUsage: vipUsage,
+            vipConfiguration: vipConfiguration,
+            pages: pages,
+            onVIPCredentialsChanged: {},
+            onQuit: {}
+          )
+        )
+        host.appearance = appearance
+        host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
+        host.layoutSubtreeIfNeeded()
+        guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+          return XCTFail("Could not render 88VIP state \(vipUsage.state)")
+        }
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        guard let topLeft = bitmap.colorAt(x: 2, y: 2),
+          let bottomRight = bitmap.colorAt(x: bitmap.pixelsWide - 2, y: bitmap.pixelsHigh - 2)
+        else {
+          return XCTFail("Missing rendered 88VIP pixels")
+        }
+        XCTAssertEqual(topLeft.alphaComponent, 1, accuracy: 0.01)
+        XCTAssertEqual(bottomRight.alphaComponent, 1, accuracy: 0.01)
       }
     }
   }
@@ -182,4 +255,32 @@ private struct FailedUsageProvider: UsageProviding {
 private struct PreviewUsageError: UsageFailureDescribing {
   let isUnavailable: Bool
   let userMessage: String
+}
+
+private struct PreviewVIPUsageProvider: UsageProviding {
+  func fetch() async throws -> UsageSnapshot {
+    UsageSnapshot(
+      providerID: VIPProvider.providerID,
+      fetchedAt: Date(),
+      metrics: [.balance(amount: 42.5, currency: "USD")]
+    )
+  }
+}
+
+private struct VIPUnavailableUsageProvider: UsageProviding {
+  func fetch() async throws -> UsageSnapshot {
+    throw PreviewUsageError(isUnavailable: true, userMessage: "Add an 88VIP API key in Settings.")
+  }
+}
+
+private struct VIPFailedUsageProvider: UsageProviding {
+  func fetch() async throws -> UsageSnapshot {
+    throw PreviewUsageError(isUnavailable: false, userMessage: "88VIP is rate-limiting balance requests.")
+  }
+}
+
+private final class PreviewSecretStore: SecretStoring, @unchecked Sendable {
+  func read(account: String) throws -> String? { nil }
+  func save(_ secret: String, account: String) throws {}
+  func delete(account: String) throws {}
 }

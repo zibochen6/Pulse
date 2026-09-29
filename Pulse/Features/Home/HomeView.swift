@@ -6,7 +6,10 @@ struct HomeView: View {
 
   @ObservedObject var config: AppConfig
   @ObservedObject var usage: UsageController
+  @ObservedObject var vipUsage: UsageController
+  @ObservedObject var vipConfiguration: VIPConfiguration
   @ObservedObject var pages: PopoverPageController
+  let onVIPCredentialsChanged: () -> Void
   let onQuit: () -> Void
 
   var body: some View {
@@ -19,8 +22,10 @@ struct HomeView: View {
       case .settings(let destination):
         SettingsView(
           config: config,
+          vipConfiguration: vipConfiguration,
           destination: destination,
           onBack: { pages.showHome() },
+          onVIPCredentialsChanged: onVIPCredentialsChanged,
           onQuit: onQuit
         )
       }
@@ -32,31 +37,24 @@ struct HomeView: View {
 
   private var homeContent: some View {
     VStack(spacing: 0) {
-      HStack(spacing: 8) {
-        Image(systemName: "waveform.path")
-          .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(.tint)
-          .frame(width: 28, height: 28)
-          .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-        Text("Pulse")
-          .font(.system(size: 16, weight: .semibold))
-        Spacer(minLength: 4)
-        ScrollView(.horizontal, showsIndicators: false) {
-          AIStatusSummary(state: usage.state, onOpenUsage: { pages.showUsage() })
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 8) {
+          brand
+          Spacer(minLength: 4)
+          statusSummaries
+          settingsButton
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: 174, alignment: .trailing)
-        Button {
-          pages.showSettings()
-        } label: {
-          Image(systemName: "gearshape")
-            .font(.system(size: 15, weight: .medium))
-            .frame(width: 28, height: 28)
+        VStack(spacing: 8) {
+          HStack(spacing: 8) {
+            brand
+            Spacer()
+            settingsButton
+          }
+          HStack(spacing: 8) {
+            Spacer()
+            statusSummaries
+          }
         }
-        .buttonStyle(.borderless)
-        .help("Settings")
-        .accessibilityLabel("Open Settings")
-        .accessibilityIdentifier("openSettingsButton")
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 12)
@@ -94,10 +92,48 @@ struct HomeView: View {
       Divider()
 
       ScrollView {
-        UsageView(usage: usage, onAddProvider: { pages.showSettings(.providers) })
+        UsageView(
+          usage: usage,
+          vipUsage: vipUsage,
+          onAddProvider: { pages.showSettings(.providers) }
+        )
           .padding(16)
       }
       .accessibilityIdentifier("usageDetailRegion")
     }
+  }
+
+  private var brand: some View {
+    HStack(spacing: 8) {
+      Image(systemName: "waveform.path")
+        .font(.system(size: 14, weight: .semibold))
+        .foregroundStyle(.tint)
+        .frame(width: 28, height: 28)
+        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+      Text("Pulse")
+        .font(.system(size: 16, weight: .semibold))
+    }
+  }
+
+  private var statusSummaries: some View {
+    HStack(spacing: 6) {
+      AIStatusSummary(state: usage.state, onOpenUsage: { pages.showUsage() })
+      VIPStatusSummary(state: vipUsage.state, onOpenUsage: { pages.showUsage() })
+    }
+    .fixedSize(horizontal: true, vertical: false)
+  }
+
+  private var settingsButton: some View {
+    Button {
+      pages.showSettings()
+    } label: {
+      Image(systemName: "gearshape")
+        .font(.system(size: 15, weight: .medium))
+        .frame(width: 28, height: 28)
+    }
+    .buttonStyle(.borderless)
+    .help("Settings")
+    .accessibilityLabel("Open Settings")
+    .accessibilityIdentifier("openSettingsButton")
   }
 }

@@ -37,8 +37,23 @@ final class UsageController: ObservableObject {
     loop = nil
   }
 
-  func requestRefresh() {
+  @discardableResult
+  func requestRefresh() -> Task<Void, Never> {
     Task { await refresh() }
+  }
+
+  /// Refreshes only when no current successful snapshot is recent enough.
+  /// This is used by providers whose normal refresh cadence is longer than
+  /// a typical popover open/close cycle.
+  @discardableResult
+  func refreshIfStale(maxAge: TimeInterval, now: Date = Date()) -> Task<Void, Never>? {
+    guard !isRefreshing else { return nil }
+    if case .success(let snapshot) = state,
+      now.timeIntervalSince(snapshot.fetchedAt) < maxAge
+    {
+      return nil
+    }
+    return requestRefresh()
   }
 
   func refresh() async {

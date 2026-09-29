@@ -20,6 +20,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 | [Codex Usage](./codex-usage.md) | Local app-server protocol, normalization, and display contract | Phase 2A |
+| [88VIP Usage](./vip-usage.md) | 88API billing, Keychain credential, and balance normalization contract | Phase 3 |
 
 ---
 

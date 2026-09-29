@@ -7,6 +7,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   private let config = AppConfig()
   private let usage = UsageController(provider: CodexProvider())
+  private let vipConfiguration = VIPConfiguration()
+  private let vipUsage = UsageController(provider: VIPProvider(), refreshInterval: .seconds(600))
   private let pages = PopoverPageController()
   private let popover = NSPopover()
   private var preferencesSubscription: AnyCancellable?
@@ -57,6 +59,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     // The unit test host launches this app; its synthetic tests must not query a real account.
     if Self.shouldStartLiveUsage(environment: ProcessInfo.processInfo.environment) {
       usage.start()
+      vipUsage.start()
     }
   }
 
@@ -66,6 +69,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   func applicationWillTerminate(_ notification: Notification) {
     usage.stop()
+    vipUsage.stop()
   }
 
   private func configureStatusItem() {
@@ -103,7 +107,14 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     popover.contentSize = HomeView.popoverSize
     let hostingController = NSHostingController(
       rootView: HomeView(
-        config: config, usage: usage, pages: pages, onQuit: { NSApp.terminate(nil) })
+        config: config,
+        usage: usage,
+        vipUsage: vipUsage,
+        vipConfiguration: vipConfiguration,
+        pages: pages,
+        onVIPCredentialsChanged: { [weak self] in self?.vipUsage.requestRefresh() },
+        onQuit: { NSApp.terminate(nil) }
+      )
     )
     popover.contentViewController = hostingController
     installTrackingArea(on: hostingController.view, owner: contentTrackingOwner)
@@ -158,6 +169,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       popover.performClose(nil)
     } else {
       config.refreshLoginItemStatus()
+      vipUsage.refreshIfStale(maxAge: 600)
       pages.reset()
       hoverController.beginOpening()
       popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)

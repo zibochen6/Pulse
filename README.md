@@ -2,7 +2,7 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services and Obsidian every day. The intended product brings AI usage status and Markdown tasks into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with a Codex usage integration. It reads rate-limit windows from a locally installed, signed-in Codex CLI and shows remaining usage beside the Codex icon. Clicking the icon opens a native popover focused on Tasks, with a compact Codex status in the header. Click that status for full Usage details; Settings is another page in the same popover. Obsidian is not connected, and Pulse does not request API credentials or access a Vault. This repository is not a downloadable MVP release yet.
+**Current state:** Pulse is a buildable menu bar app with Codex usage and optional 88VIP balance integrations. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query a user-configured 88VIP account balance. The menu bar remains Codex-only; the popover header shows both compact statuses. Click either status for Usage details; Settings is another page in the same popover. Obsidian is not connected. This repository is not a downloadable MVP release yet.
 
 ## Build and run
 
@@ -33,17 +33,23 @@ Pulse launches the local Codex app-server and requests its ChatGPT rate-limit st
 
 If the app cannot find Codex, install or launch Codex and check that its CLI works in a terminal. Development builds can also use the `CODEX_BIN` environment variable to point to the executable. A failed explicit override is reported as an error. The local CLI protocol and app bundle layout can change, so please report reproducible failures without sharing account secrets.
 
+## 88VIP balance
+
+Open **Settings → Providers**, enter your 88VIP API key, and select **Save key**. Pulse stores the key only in your macOS Keychain. It queries 88API's documented billing subscription and usage endpoints, calculates the remaining balance in USD, and shows it beside Codex in the popover. The full Usage page includes the limit, used amount, remaining amount, available expiry, update time, and a manual refresh action.
+
+88VIP refreshes at launch and every ten minutes. Opening the popover refreshes it only after the last result becomes stale. Missing keys, invalid keys, rate limits, unsupported billing endpoints, network problems, and malformed responses are shown as clear states; Pulse never converts a USD value to another currency or fabricates a remaining balance.
+
 ## Direction
 
-- **AI status:** Codex is connected first; provider-specific capabilities for OpenAI API, DeepSeek, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window will be displayed as different kinds of information.
+- **AI status:** Codex and 88VIP are connected. Provider-specific capabilities for OpenAI API, DeepSeek, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window are displayed as different kinds of information.
 - **Obsidian tasks:** the user chooses a Vault. Pulse will scan Markdown tasks without assuming folder names and will preserve the source note as the source of truth.
-- **Privacy:** the app runs locally; future API secrets belong in macOS Keychain. The app stores only the two preferences above, with no keys or Vault data. No analytics are present.
+- **Privacy:** the app runs locally. 88VIP API keys are stored in macOS Keychain; ordinary preferences use UserDefaults. Pulse stores no Vault data and has no analytics.
 
 See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
 
 ## 中文简介
 
-Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI，菜单栏可显示真实额度，弹窗可查看窗口详情；其他 Provider 与 Vault 读写尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
+Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI 与可选的 88VIP USD 余额：菜单栏只显示 Codex，弹窗可显示两者并查看详情；Vault 读写和其他 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
 
 ## License
 
