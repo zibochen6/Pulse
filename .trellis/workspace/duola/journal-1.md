@@ -196,3 +196,25 @@ Documented the observed Apex Dashboard 1.4.4 structure, read-only parser/UI/onbo
 ### Status
 
 [OK] **Completed**
+
+
+## Session 9: 88VIP balance provider
+<!-- trellis-session: v=2 fp=a9a9d0729a901374 -->
+
+**Date**: 2026-09-29
+**Task**: 88VIP balance provider
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Added the fixed 88API 88VIP balance provider with Keychain credentials, independent refresh, compact popover status, Usage detail, tests, and provider contracts.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fcb0e4f` | feat: integrate 88VIP balance provider |
+
+### Status
+
+[OK] **Completed**
