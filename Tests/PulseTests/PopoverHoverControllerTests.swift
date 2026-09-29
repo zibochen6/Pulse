@@ -82,6 +82,41 @@ final class PopoverHoverControllerTests: XCTestCase {
     XCTAssertEqual(closeCount, 1)
   }
 
+  func testInteractiveReconcilesMissedExitBeforeClosing() async throws {
+    var closeCount = 0
+    let pointer = TestPointerLocation(statusButton: true)
+    let controller = makeController(pointer: pointer) { closeCount += 1 }
+
+    controller.beginOpening()
+    try await waitForState(.interactive, on: controller)
+    XCTAssertEqual(controller.state, .interactive)
+
+    // Simulate AppKit missing mouseExited while the SwiftUI content changes.
+    pointer.statusButton = false
+    try await waitForState(.pendingClose, on: controller)
+    try await waitForState(.closed, on: controller)
+    XCTAssertEqual(closeCount, 1)
+  }
+
+  func testInteractiveReconcilesMissedEntryAndCancelsPendingClose() async throws {
+    var closeCount = 0
+    let pointer = TestPointerLocation()
+    let controller = makeController(pointer: pointer) { closeCount += 1 }
+
+    controller.beginOpening()
+    try await waitForState(.pendingClose, on: controller)
+
+    // Simulate AppKit missing mouseEntered after the pointer returns to content.
+    pointer.content = true
+    try await waitForState(.interactive, on: controller)
+    try await Task.sleep(nanoseconds: 110_000_000)
+    XCTAssertEqual(closeCount, 0)
+
+    pointer.content = false
+    try await waitForState(.closed, on: controller)
+    XCTAssertEqual(closeCount, 1)
+  }
+
   func testResetCancelsOpeningAndPendingWork() async throws {
     var closeCount = 0
     let pointer = TestPointerLocation()
@@ -130,6 +165,7 @@ final class PopoverHoverControllerTests: XCTestCase {
     PopoverHoverController(
       openingNanoseconds: openingDelay ?? self.openingDelay,
       closeDelayNanoseconds: closeDelay,
+      reconciliationNanoseconds: 15_000_000,
       pointerPresence: { pointer.presence },
       close: close
     )

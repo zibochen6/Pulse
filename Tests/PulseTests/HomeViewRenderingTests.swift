@@ -210,7 +210,7 @@ final class HomeViewRenderingTests: XCTestCase {
     }
   }
 
-  func testLoadedApexDashboardRendersInBothAppearances() async throws {
+  func testLoadedApexDashboardWithLongTaskRendersInBothAppearances() async throws {
     let suiteName = "PulseApexRenderingTests.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {
       return XCTFail("Could not create isolated defaults")

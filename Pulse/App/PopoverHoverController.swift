@@ -25,23 +25,27 @@ enum PopoverHoverState: Equatable {
 final class PopoverHoverController {
   private let openingNanoseconds: UInt64
   private let closeDelayNanoseconds: UInt64
+  private let reconciliationNanoseconds: UInt64
   private let pointerPresence: @MainActor () -> PopoverPointerPresence
   private let close: @MainActor () -> Void
   private var overStatusButton = false
   private var overContent = false
   private var openingTask: Task<Void, Never>?
   private var pendingCloseTask: Task<Void, Never>?
+  private var reconciliationTask: Task<Void, Never>?
 
   private(set) var state: PopoverHoverState = .closed
 
   init(
     openingNanoseconds: UInt64 = 1_000_000_000,
     closeDelayNanoseconds: UInt64 = 400_000_000,
+    reconciliationNanoseconds: UInt64 = 100_000_000,
     pointerPresence: @escaping @MainActor () -> PopoverPointerPresence,
     close: @escaping @MainActor () -> Void
   ) {
     self.openingNanoseconds = openingNanoseconds
     self.closeDelayNanoseconds = closeDelayNanoseconds
+    self.reconciliationNanoseconds = reconciliationNanoseconds
     self.pointerPresence = pointerPresence
     self.close = close
   }
@@ -49,6 +53,7 @@ final class PopoverHoverController {
   func beginOpening() {
     reset()
     state = .opening
+    startReconciliation()
     openingTask = Task { [weak self, openingNanoseconds] in
       do {
         try await Task.sleep(nanoseconds: openingNanoseconds)
@@ -82,6 +87,8 @@ final class PopoverHoverController {
     openingTask = nil
     pendingCloseTask?.cancel()
     pendingCloseTask = nil
+    reconciliationTask?.cancel()
+    reconciliationTask = nil
     overStatusButton = false
     overContent = false
     state = .closed
@@ -107,6 +114,32 @@ final class PopoverHoverController {
     // no matching content-exit event. The pending check polls its geometry.
     overContent = presence.content
     state = .interactive
+    updateCloseSchedule()
+  }
+
+  private func startReconciliation() {
+    reconciliationTask = Task { [weak self, reconciliationNanoseconds] in
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(nanoseconds: reconciliationNanoseconds)
+        } catch {
+          return
+        }
+        guard let self, !Task.isCancelled, self.state != .closed else { return }
+        self.reconcilePointerPresence()
+      }
+    }
+  }
+
+  private func reconcilePointerPresence() {
+    let presence = pointerPresence()
+    let didChange = overStatusButton != presence.statusButton || overContent != presence.content
+    guard didChange else { return }
+
+    // AppKit can omit an exit while a SwiftUI hierarchy changes. Correct the
+    // tracked state from geometry without restarting an existing close timer.
+    overStatusButton = presence.statusButton
+    overContent = presence.content
     updateCloseSchedule()
   }
 

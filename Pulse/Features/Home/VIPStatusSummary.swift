@@ -10,14 +10,15 @@ struct VIPStatusSummary: View {
       HStack(spacing: 5) {
         VIPProviderIcon(size: 16)
         Text(VIPUsageFormatter.title(for: state))
-          .font(.subheadline.weight(.medium))
+          .font(.caption.weight(.medium))
           .monospacedDigit()
           .lineLimit(1)
           .fixedSize(horizontal: true, vertical: false)
       }
-      .padding(.horizontal, 8)
-      .frame(height: 28)
-      .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+      .foregroundStyle(.secondary)
+      .padding(.horizontal, 4)
+      .frame(height: 24)
+      .contentShape(RoundedRectangle(cornerRadius: 6))
     }
     .buttonStyle(.plain)
     .help("Open 88VIP usage details")

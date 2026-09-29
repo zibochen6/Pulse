@@ -35,8 +35,8 @@ struct TasksView: View {
       .accessibilityLabel("Refresh Dashboard")
       .accessibilityIdentifier("refreshDashboardButton")
     }
-    .padding(.horizontal, 20)
-    .padding(.vertical, 10)
+    .padding(.horizontal, 18)
+    .padding(.vertical, 8)
   }
 
   @ViewBuilder
@@ -89,18 +89,12 @@ struct TasksView: View {
       ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 6) {
           ForEach(dashboard.columns) { column in
-            Button(column.title) {
+            TaskColumnTab(
+              title: column.title,
+              isSelected: selectedColumn(dashboard)?.title == column.title
+            ) {
               selectedColumnTitle = column.title
             }
-            .buttonStyle(.borderless)
-            .font(.caption.weight(selectedColumn(dashboard)?.title == column.title ? .semibold : .regular))
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(
-              selectedColumn(dashboard)?.title == column.title
-                ? Color(nsColor: .selectedControlColor).opacity(0.16) : .clear,
-              in: Capsule()
-            )
             .accessibilityIdentifier("dashboardColumnTab.\(column.sourceOrder)")
           }
         }
@@ -111,7 +105,7 @@ struct TasksView: View {
       Divider()
 
       ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
           if let column = selectedColumn(dashboard) {
             if column.cards.isEmpty {
               Text("No tasks")
@@ -130,8 +124,8 @@ struct TasksView: View {
               .foregroundStyle(.red)
           }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
       }
     }
@@ -140,29 +134,14 @@ struct TasksView: View {
   }
 
   private func cardContent(_ card: DashboardCard) -> some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: 5) {
       Text(card.title)
         .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
       ForEach(card.tasks) { task in
-        Button {
+        TaskRow(task: task) {
           openErrorMessage = onOpenTask(task) ? nil : "Obsidian could not open this Dashboard file."
-        } label: {
-          HStack(alignment: .top, spacing: 9) {
-            Image(systemName: task.completed ? "checkmark.square" : "square")
-              .font(.system(size: 15))
-              .foregroundStyle(task.completed ? .tertiary : .secondary)
-            Text(task.text)
-              .font(.subheadline)
-              .strikethrough(task.completed, color: .secondary)
-              .foregroundStyle(task.completed ? .secondary : .primary)
-              .multilineTextAlignment(.leading)
-            Spacer(minLength: 0)
-          }
-          .contentShape(Rectangle())
-          .padding(.vertical, 3)
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("\(task.completed ? "Completed" : "Open") task: \(task.text)")
         .accessibilityIdentifier("dashboardTask.\(task.lineNumber)")
       }
@@ -189,5 +168,83 @@ struct TasksView: View {
     }
     .padding(20)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+}
+
+private struct TaskColumnTab: View {
+  let title: String
+  let isSelected: Bool
+  let action: () -> Void
+
+  @State private var isHovered = false
+
+  var body: some View {
+    Button(action: action) {
+      Text(title)
+        .font(.caption.weight(isSelected ? .semibold : .regular))
+        .foregroundStyle(isSelected ? .primary : .secondary)
+        .lineLimit(1)
+        .padding(.horizontal, 11)
+        .frame(height: 28)
+        .background(tabBackground, in: Capsule())
+        .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .onHover { isHovered = $0 }
+  }
+
+  private var tabBackground: Color {
+    if isSelected {
+      return Color(nsColor: .selectedControlColor).opacity(0.16)
+    }
+    return isHovered ? Color(nsColor: .controlBackgroundColor) : .clear
+  }
+}
+
+private struct TaskRow: View {
+  let task: DashboardTask
+  let action: () -> Void
+
+  @State private var isHovered = false
+
+  var body: some View {
+    Button(action: action) {
+      HStack(alignment: .top, spacing: 10) {
+        Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
+          .font(.system(size: 15, weight: .medium))
+          .symbolRenderingMode(.hierarchical)
+          .foregroundStyle(task.completed ? .tertiary : .secondary)
+          .padding(.top, 1)
+        Text(task.text)
+          .font(.system(size: 13, weight: .regular))
+          .foregroundStyle(task.completed ? .secondary : .primary)
+          .multilineTextAlignment(.leading)
+          .fixedSize(horizontal: false, vertical: true)
+        Spacer(minLength: 0)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(TaskRowButtonStyle(isHovered: isHovered))
+    .onHover { isHovered = $0 }
+  }
+}
+
+private struct TaskRowButtonStyle: ButtonStyle {
+  let isHovered: Bool
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .padding(.horizontal, 10)
+      .padding(.vertical, 7)
+      .background(
+        (isHovered || configuration.isPressed)
+          ? Color(nsColor: .selectedContentBackgroundColor)
+            .opacity(configuration.isPressed ? 0.18 : 0.10)
+          : .clear,
+        in: RoundedRectangle(cornerRadius: 8)
+      )
+      .opacity(configuration.isPressed ? 0.72 : 1)
+      .animation(.easeOut(duration: 0.12), value: isHovered)
   }
 }

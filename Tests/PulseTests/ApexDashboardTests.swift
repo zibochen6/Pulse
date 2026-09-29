@@ -13,6 +13,7 @@ final class ApexDashboardTests: XCTestCase {
     XCTAssertEqual(dashboard.columns[0].cards.map(\.title), ["Sample checklist", "Spare notes"])
     XCTAssertEqual(dashboard.columns[0].cards[0].tasks.map(\.text), [
       "Draft a fictional outline", "Review a sample document",
+      "Prepare a deliberately long fictional task title that wraps across multiple lines in the compact Pulse menu bar task list",
     ])
     XCTAssertFalse(dashboard.columns[0].cards[0].tasks[0].completed)
     XCTAssertTrue(dashboard.columns[0].cards[0].tasks[1].completed)

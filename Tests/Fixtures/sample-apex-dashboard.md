@@ -22,6 +22,7 @@ id: card-sample-inbox
 type: task
 - [ ] Draft a fictional outline
 - [x] Review a sample document
+- [ ] Prepare a deliberately long fictional task title that wraps across multiple lines in the compact Pulse menu bar task list
 
 ### Spare notes
 id: card-sample-notes

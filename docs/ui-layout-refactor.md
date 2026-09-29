@@ -17,7 +17,7 @@ Clicking the status opens the Usage page. `UsageView` retains real Codex windows
 | Interactive | At the end of Opening, current button, content, and whole-window geometry is read again. A pointer over the status button or content keeps the panel open. |
 | PendingClose | Once tracked hover is absent, wait 400 ms, then verify actual pointer geometry. Re-entry cancels the task; window-only hover such as the arrow retries the check. |
 
-Every AppKit close callback resets hover and page state. The earlier hover controller scheduled a 400 ms close immediately after `show`; entry/exit events around the opening click could be stale or missing. The Opening boundary removes that premature decision. A separate same-click AppKit close/action sequence has not been observed here, so no speculative toggle suppression was added.
+Every AppKit close callback resets hover and page state. The earlier hover controller scheduled a 400 ms close immediately after `show`; entry/exit events around the opening click could be stale or missing. The Opening boundary removes that premature decision. While visible, the controller also compares its tracked regions to the current pointer geometry. This repairs a missed AppKit exit after a SwiftUI layout change without restarting a close timer that is already running. A separate same-click AppKit close/action sequence has not been observed here, so no speculative toggle suppression was added.
 
 ## Verification
 
