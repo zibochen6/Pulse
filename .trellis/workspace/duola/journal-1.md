@@ -276,3 +276,35 @@ Polished the Apex task list and made hover dismissal recover from missed AppKit 
 ### Next Steps
 
 - Run the documented live menu-bar checklist before publishing this local commit.
+
+
+## Session 12: Polish Pulse task-first UI
+<!-- trellis-session: v=2 fp=0da4eeeefdf67a07 -->
+
+**Date**: 2026-09-29
+**Task**: Polish Pulse task-first UI
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Refined the compact Pulse header and status summaries, tightened Apex task tabs and rows, added light task interaction feedback, and documented the visual design.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `650650d` | refactor: polish task first ui design |
+
+### Testing
+
+- [OK] xcodebuild Debug build passed
+- [OK] xcodebuild test passed: 52 tests
+- [OK] Trellis task context and diff checks passed
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Perform a desktop visual pass of the running menu-bar popover; no code behavior changes are pending.
