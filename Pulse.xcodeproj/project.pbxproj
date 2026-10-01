@@ -12,6 +12,7 @@
 		0D76F3E584FFBF0E12B1AAD2 /* ApexDashboardParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC89F07DD7D9AD92476F82EF /* ApexDashboardParser.swift */; };
 		1B3A9C5B59FAFE1527DD6128 /* UsageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5763D22FF29A87447FD82E62 /* UsageController.swift */; };
 		1BE60A027FF7E01300C38221 /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = 2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */; };
+		241F449A4B4B746B86FCA9FA /* DashboardFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCFDCEFE7C9B8218250C23AE /* DashboardFileStore.swift */; };
 		24E16A2A520AF859941E39E8 /* PopoverPageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D4C870D63B26C2433BCB4 /* PopoverPageController.swift */; };
 		3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D1390EE653F2D9B57F24AA /* HomeView.swift */; };
 		3D9C0BCC1DB625541F7AB8CC /* ObsidianURLOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D388DA8F4C4E03EDD8317B8 /* ObsidianURLOpener.swift */; };
@@ -26,7 +27,9 @@
 		740B0BDB4D56172573B7C6D6 /* UsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */; };
 		77505DE63A22592DA6B881BC /* PulseMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBA39302CF835124B8AEF19 /* PulseMain.swift */; };
 		78C6122344747E555A5DF17A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AE5E25194558D68B33915D /* SettingsView.swift */; };
+		8B6C60E115FC6943A6F22970 /* sample-apex-writeback.md in Resources */ = {isa = PBXBuildFile; fileRef = 4597FACD62406C35E158D20E /* sample-apex-writeback.md */; };
 		94B880F789FC10F3C8FD7AE2 /* PopoverPageControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */; };
+		9652B6C5489AD28AC6D58CEB /* DashboardTaskRowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A347C83B35040DDBB86F14D /* DashboardTaskRowTests.swift */; };
 		9BC3BCEEE74FBA45F80F421B /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B0B70F343CCFB86ABADB8C9 /* TasksView.swift */; };
 		9D9FE44395812CDEE6AFDBBA /* CodexColorIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = F2A0A8DFBF3B7B1C314D8AEB /* CodexColorIcon.png */; };
 		A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */; };
@@ -38,11 +41,14 @@
 		B86308E401912B97D7DC7580 /* VIPStatusSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF50DC8A711AB126591F56DA /* VIPStatusSummary.swift */; };
 		BD5820F58346DFA449BA0B40 /* DashboardConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846A5B65A68152F8BA16A0EA /* DashboardConfiguration.swift */; };
 		C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */; };
+		C71DA3A7F25F49DAFA337192 /* DashboardSourceDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = C38533C9AF3FAFDABCC8EFE9 /* DashboardSourceDocument.swift */; };
+		D3978C281A22CF592E332D7D /* DashboardTaskControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B923DE04A3CBA16BF03E57E /* DashboardTaskControllerTests.swift */; };
 		D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */; };
 		DB042EEBE631A96D5A209658 /* CodexProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F293341995B6DF958E21987 /* CodexProviderIcon.swift */; };
 		DD5BE2D9B0E33D90B86563C2 /* Dashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D542992BA19E48BE5D4BAD11 /* Dashboard.swift */; };
 		DEB5B3FDB91867F1AC2C3E70 /* PopoverHoverControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042EECB94368AEA980440D75 /* PopoverHoverControllerTests.swift */; };
 		E5B660D86EEEF1430F2CE278 /* DashboardTaskController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86289849745CB3C7DE902B3E /* DashboardTaskController.swift */; };
+		F03D47ECF6B9C04761EA83E5 /* DashboardWritebackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62182B378C8D7C3F360002E1 /* DashboardWritebackTests.swift */; };
 		F15FF9063E32D8024DD410D8 /* ApexDashboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E271CEA373E40EDA8325DEA4 /* ApexDashboardTests.swift */; };
 		FAA3C692F56898992578FFF8 /* VIPProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FB59F65E0164FAEC859576B /* VIPProviderIcon.swift */; };
 /* End PBXBuildFile section */
@@ -65,19 +71,23 @@
 		2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
 		30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = CodexMenuIcon.png; sourceTree = "<group>"; };
 		34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemService.swift; sourceTree = "<group>"; };
+		4597FACD62406C35E158D20E /* sample-apex-writeback.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "sample-apex-writeback.md"; sourceTree = "<group>"; };
 		46F164972943AB9CCA0C495A /* SecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretStore.swift; sourceTree = "<group>"; };
+		4A347C83B35040DDBB86F14D /* DashboardTaskRowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskRowTests.swift; sourceTree = "<group>"; };
 		4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseAppDelegate.swift; sourceTree = "<group>"; };
 		4FBA30D234A433E58E16508B /* PulseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5763D22FF29A87447FD82E62 /* UsageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageController.swift; sourceTree = "<group>"; };
 		5823C23B8E4F0D4F7DA8E7A9 /* VIPConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPConfiguration.swift; sourceTree = "<group>"; };
 		5F293341995B6DF958E21987 /* CodexProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProviderIcon.swift; sourceTree = "<group>"; };
 		5FB59F65E0164FAEC859576B /* VIPProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPProviderIcon.swift; sourceTree = "<group>"; };
+		62182B378C8D7C3F360002E1 /* DashboardWritebackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWritebackTests.swift; sourceTree = "<group>"; };
 		6B0B70F343CCFB86ABADB8C9 /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
 		6CBA39302CF835124B8AEF19 /* PulseMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseMain.swift; sourceTree = "<group>"; };
 		713E8909A7BD912071712C5E /* AIStatusSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStatusSummary.swift; sourceTree = "<group>"; };
 		846A5B65A68152F8BA16A0EA /* DashboardConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardConfiguration.swift; sourceTree = "<group>"; };
 		84E9A7F3F6DE36F13930B307 /* VIPProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPProvider.swift; sourceTree = "<group>"; };
 		86289849745CB3C7DE902B3E /* DashboardTaskController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskController.swift; sourceTree = "<group>"; };
+		8B923DE04A3CBA16BF03E57E /* DashboardTaskControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskControllerTests.swift; sourceTree = "<group>"; };
 		8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexUsageTests.swift; sourceTree = "<group>"; };
 		9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverPageControllerTests.swift; sourceTree = "<group>"; };
 		9D388DA8F4C4E03EDD8317B8 /* ObsidianURLOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObsidianURLOpener.swift; sourceTree = "<group>"; };
@@ -86,6 +96,8 @@
 		BC89F07DD7D9AD92476F82EF /* ApexDashboardParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApexDashboardParser.swift; sourceTree = "<group>"; };
 		C0D1390EE653F2D9B57F24AA /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		C278C9EFD158EEE6E7C50B92 /* CodexAppServerTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAppServerTransport.swift; sourceTree = "<group>"; };
+		C38533C9AF3FAFDABCC8EFE9 /* DashboardSourceDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSourceDocument.swift; sourceTree = "<group>"; };
+		CCFDCEFE7C9B8218250C23AE /* DashboardFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardFileStore.swift; sourceTree = "<group>"; };
 		CF50DC8A711AB126591F56DA /* VIPStatusSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPStatusSummary.swift; sourceTree = "<group>"; };
 		D0AE5E25194558D68B33915D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D3D6D74D06E7A1FA2711BE28 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
@@ -105,6 +117,7 @@
 			isa = PBXGroup;
 			children = (
 				BC89F07DD7D9AD92476F82EF /* ApexDashboardParser.swift */,
+				C38533C9AF3FAFDABCC8EFE9 /* DashboardSourceDocument.swift */,
 			);
 			path = Parser;
 			sourceTree = "<group>";
@@ -187,6 +200,7 @@
 			isa = PBXGroup;
 			children = (
 				FE634AFDAC3E2B16AF7D5589 /* sample-apex-dashboard.md */,
+				4597FACD62406C35E158D20E /* sample-apex-writeback.md */,
 			);
 			name = Fixtures;
 			path = Tests/Fixtures;
@@ -243,6 +257,7 @@
 			isa = PBXGroup;
 			children = (
 				846A5B65A68152F8BA16A0EA /* DashboardConfiguration.swift */,
+				CCFDCEFE7C9B8218250C23AE /* DashboardFileStore.swift */,
 				86289849745CB3C7DE902B3E /* DashboardTaskController.swift */,
 				9D388DA8F4C4E03EDD8317B8 /* ObsidianURLOpener.swift */,
 			);
@@ -274,6 +289,9 @@
 				E271CEA373E40EDA8325DEA4 /* ApexDashboardTests.swift */,
 				DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */,
 				8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */,
+				8B923DE04A3CBA16BF03E57E /* DashboardTaskControllerTests.swift */,
+				4A347C83B35040DDBB86F14D /* DashboardTaskRowTests.swift */,
+				62182B378C8D7C3F360002E1 /* DashboardWritebackTests.swift */,
 				F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */,
 				042EECB94368AEA980440D75 /* PopoverHoverControllerTests.swift */,
 				9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */,
@@ -383,6 +401,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3DB52E68CA6794F2F1C56BBB /* sample-apex-dashboard.md in Resources */,
+				8B6C60E115FC6943A6F22970 /* sample-apex-writeback.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -396,6 +415,9 @@
 				F15FF9063E32D8024DD410D8 /* ApexDashboardTests.swift in Sources */,
 				D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */,
 				A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */,
+				D3978C281A22CF592E332D7D /* DashboardTaskControllerTests.swift in Sources */,
+				9652B6C5489AD28AC6D58CEB /* DashboardTaskRowTests.swift in Sources */,
+				F03D47ECF6B9C04761EA83E5 /* DashboardWritebackTests.swift in Sources */,
 				0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */,
 				DEB5B3FDB91867F1AC2C3E70 /* PopoverHoverControllerTests.swift in Sources */,
 				94B880F789FC10F3C8FD7AE2 /* PopoverPageControllerTests.swift in Sources */,
@@ -415,6 +437,8 @@
 				DB042EEBE631A96D5A209658 /* CodexProviderIcon.swift in Sources */,
 				DD5BE2D9B0E33D90B86563C2 /* Dashboard.swift in Sources */,
 				BD5820F58346DFA449BA0B40 /* DashboardConfiguration.swift in Sources */,
+				241F449A4B4B746B86FCA9FA /* DashboardFileStore.swift in Sources */,
+				C71DA3A7F25F49DAFA337192 /* DashboardSourceDocument.swift in Sources */,
 				E5B660D86EEEF1430F2CE278 /* DashboardTaskController.swift in Sources */,
 				3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */,
 				05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */,

@@ -31,7 +31,7 @@ enum DashboardParseError: LocalizedError, Equatable, Sendable {
     case .taskOutsideCard(let line):
       "A task appears outside a card on line \(line)."
     case .unsupportedTaskStructure(let line):
-      "The task structure on line \(line) is not supported by Apex read-only view."
+      "The task structure on line \(line) is not supported by Pulse."
     case .emptyTask(let line):
       "The task on line \(line) has no text."
     }
@@ -41,7 +41,12 @@ enum DashboardParseError: LocalizedError, Equatable, Sendable {
 /// Parses only the Apex Dashboard structure verified by Pulse's research.
 struct ApexDashboardParser: Sendable {
   func parse(contents: String, fileURL: URL, loadedAt: Date = Date()) throws -> Dashboard {
-    let lines = contents.components(separatedBy: .newlines)
+    try parse(data: Data(contents.utf8), fileURL: fileURL, loadedAt: loadedAt)
+  }
+
+  func parse(data: Data, fileURL: URL, loadedAt: Date = Date()) throws -> Dashboard {
+    let document = try DashboardSourceDocument(data: data)
+    let lines = document.lines.map(\.text)
     let frontmatterEnd = try frontmatterEnd(in: lines)
     let declarations = try parseDeclarations(Array(lines[1..<frontmatterEnd]))
     let columns = try parseBody(
@@ -50,7 +55,8 @@ struct ApexDashboardParser: Sendable {
       declarations: declarations,
       fileURL: fileURL
     )
-    return Dashboard(fileURL: fileURL, columns: columns, loadedAt: loadedAt)
+    return document.attachingSources(
+      to: Dashboard(fileURL: fileURL, columns: columns, loadedAt: loadedAt))
   }
 
   private func frontmatterEnd(in lines: [String]) throws -> Int {
@@ -97,7 +103,8 @@ struct ApexDashboardParser: Sendable {
         declaration.type = try frontmatterValue(line, prefix: "    type: ", field: "type")
         current = declaration
       } else if line.hasPrefix("    ") || line.hasPrefix("  - ") {
-        throw DashboardParseError.unsupportedFrontmatter("only name, color, and type are supported for columns")
+        throw DashboardParseError.unsupportedFrontmatter(
+          "only name, color, and type are supported for columns")
       } else if !line.trimmingCharacters(in: .whitespaces).isEmpty {
         // The known `banner` block precedes columns. A top-level field after
         // columns would make the simple reader ambiguous, so reject it.
@@ -141,12 +148,15 @@ struct ApexDashboardParser: Sendable {
   private func parseBody(
     _ lines: [String], lineOffset: Int, declarations: [ColumnDeclaration], fileURL: URL
   ) throws -> [DashboardColumn] {
-    var cardsByColumn = Dictionary(uniqueKeysWithValues: declarations.map { ($0.name, [DashboardCard]()) })
+    var cardsByColumn = Dictionary(
+      uniqueKeysWithValues: declarations.map { ($0.name, [DashboardCard]()) })
     let declaredOrder = declarations.map(\.name)
     var seenColumns = Set<String>()
     var currentColumn: String?
     var currentCard: MutableCard?
     var taskOrder = 0
+    var fence: (character: Character, count: Int)?
+    var taskIndentations: [Int] = []
 
     func finishCard() {
       guard let currentCard, let column = currentColumn else { return }
@@ -155,33 +165,66 @@ struct ApexDashboardParser: Sendable {
 
     for (offset, line) in lines.enumerated() {
       let lineNumber = lineOffset + offset + 1
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      if let activeFence = fence {
+        let count = trimmed.prefix(while: { $0 == activeFence.character }).count
+        if count >= activeFence.count,
+          trimmed.dropFirst(count).trimmingCharacters(in: .whitespaces).isEmpty
+        {
+          fence = nil
+        }
+        continue
+      }
+      if let first = trimmed.first, first == "`" || first == "~" {
+        let count = trimmed.prefix(while: { $0 == first }).count
+        if count >= 3 {
+          fence = (first, count)
+          continue
+        }
+      }
       if line.hasPrefix("## ") {
         finishCard()
         currentCard = nil
+        taskIndentations = []
         let title = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
         guard declarations.contains(where: { $0.name == title }) else {
           throw DashboardParseError.undeclaredColumn(title)
         }
         guard !seenColumns.contains(title) else {
-          throw DashboardParseError.invalidFrontmatter("column heading \"\(title)\" appears more than once")
+          throw DashboardParseError.invalidFrontmatter(
+            "column heading \"\(title)\" appears more than once")
         }
         seenColumns.insert(title)
         currentColumn = title
       } else if line.hasPrefix("### ") {
-        guard let column = currentColumn else { throw DashboardParseError.cardOutsideColumn(line: lineNumber) }
+        guard let column = currentColumn else {
+          throw DashboardParseError.cardOutsideColumn(line: lineNumber)
+        }
         finishCard()
+        taskIndentations = []
         currentCard = MutableCard(
           title: String(line.dropFirst(4)).trimmingCharacters(in: .whitespaces),
           sourceOrder: cardsByColumn[column, default: []].count
         )
-      } else if let checkbox = checkbox(in: line) {
-        guard currentColumn != nil else { throw DashboardParseError.taskOutsideCard(line: lineNumber) }
-        guard var card = currentCard else { throw DashboardParseError.taskOutsideCard(line: lineNumber) }
+      } else if let checkbox = DashboardSourceDocument.checkbox(line) {
+        guard currentColumn != nil else {
+          throw DashboardParseError.taskOutsideCard(line: lineNumber)
+        }
+        guard var card = currentCard else {
+          throw DashboardParseError.taskOutsideCard(line: lineNumber)
+        }
+        while let last = taskIndentations.last, last >= checkbox.indentation {
+          taskIndentations.removeLast()
+        }
+        if checkbox.indentation > 0, taskIndentations.last != checkbox.indentation - 4 {
+          throw DashboardParseError.unsupportedTaskStructure(line: lineNumber)
+        }
+        taskIndentations.append(checkbox.indentation)
         let parsed = try taskTextAndBlockIdentifier(checkbox.text, line: lineNumber)
         card.tasks.append(
           DashboardTask(
             text: parsed.text,
-            completed: checkbox.completed,
+            completed: checkbox.marker == 120 || checkbox.marker == 88,
             sourceFileURL: fileURL,
             lineNumber: lineNumber,
             blockIdentifier: parsed.blockIdentifier,
@@ -190,7 +233,7 @@ struct ApexDashboardParser: Sendable {
         )
         taskOrder += 1
         currentCard = card
-      } else if line.trimmingCharacters(in: .whitespaces).hasPrefix("- [") {
+      } else if DashboardSourceDocument.isUnsupportedCheckbox(line) {
         throw DashboardParseError.unsupportedTaskStructure(line: lineNumber)
       } else if line.hasPrefix("#") && !line.trimmingCharacters(in: .whitespaces).isEmpty {
         throw DashboardParseError.unsupportedTaskStructure(line: lineNumber)
@@ -202,6 +245,9 @@ struct ApexDashboardParser: Sendable {
         }
         currentCard = card
       }
+    }
+    if fence != nil {
+      throw DashboardParseError.unsupportedTaskStructure(line: lineOffset + lines.count)
     }
     finishCard()
 
@@ -226,15 +272,9 @@ struct ApexDashboardParser: Sendable {
     return columns
   }
 
-  private func checkbox(in line: String) -> (completed: Bool, text: String)? {
-    if line.hasPrefix("- [ ] ") { return (false, String(line.dropFirst(6))) }
-    if line.hasPrefix("- [x] ") || line.hasPrefix("- [X] ") {
-      return (true, String(line.dropFirst(6)))
-    }
-    return nil
-  }
-
-  private func taskTextAndBlockIdentifier(_ raw: String, line: Int) throws -> (text: String, blockIdentifier: String?) {
+  private func taskTextAndBlockIdentifier(_ raw: String, line: Int) throws -> (
+    text: String, blockIdentifier: String?
+  ) {
     let trimmed = raw.trimmingCharacters(in: .whitespaces)
     guard !trimmed.isEmpty else { throw DashboardParseError.emptyTask(line: line) }
     guard let marker = trimmed.range(of: " ^", options: .backwards) else { return (trimmed, nil) }
@@ -269,6 +309,7 @@ private struct MutableCard {
   let sourceOrder: Int
 
   var value: DashboardCard {
-    DashboardCard(identifier: identifier, title: title, type: type, tasks: tasks, sourceOrder: sourceOrder)
+    DashboardCard(
+      identifier: identifier, title: title, type: type, tasks: tasks, sourceOrder: sourceOrder)
   }
 }

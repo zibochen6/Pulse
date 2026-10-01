@@ -195,7 +195,7 @@ struct SettingsView: View {
           .foregroundStyle(.secondary)
       }
 
-      Text("Pulse reads one selected Apex Dashboard file. Tasks remain read-only and open in Obsidian.")
+      Text("Checkboxes save completion to the selected Dashboard. Click task text to open it in Obsidian.")
         .font(.caption)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -209,6 +209,11 @@ struct SettingsView: View {
         .accessibilityIdentifier("selectDashboardFileButton")
 
         if tasks.configuration.hasDashboardSelection {
+          Button("Refresh") { tasks.requestRefresh() }
+            .disabled(tasks.isRefreshing)
+            .buttonStyle(.borderless)
+            .font(.caption.weight(.medium))
+            .accessibilityIdentifier("refreshDashboardButton")
           Button("Remove", role: .destructive) {
             tasks.removeDashboard()
           }

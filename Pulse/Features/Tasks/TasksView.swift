@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The compact, read-only task surface for an already configured Apex Dashboard.
+/// The compact task surface. Views dispatch intents; the file service owns writes.
 struct TasksView: View {
   @ObservedObject var tasks: DashboardTaskController
   let onConfigure: () -> Void
@@ -10,7 +10,34 @@ struct TasksView: View {
   @State private var openErrorMessage: String?
 
   var body: some View {
-    content
+    VStack(spacing: 0) {
+      if let failure = tasks.saveFailure {
+        VStack(alignment: .leading, spacing: 4) {
+          Text(failure.message)
+            .font(.caption)
+            .foregroundStyle(.red)
+            .fixedSize(horizontal: false, vertical: true)
+          HStack {
+            if failure.needsReselection {
+              Button("Choose file in Settings", action: onConfigure)
+            } else {
+              Button("Retry save") { tasks.retrySave() }
+                .disabled(tasks.pendingTaskIDs.contains(failure.task.id))
+              Button("Refresh") { tasks.requestRefresh() }
+            }
+            Spacer()
+            Button("Dismiss") { tasks.dismissSaveFailure() }
+          }
+          .buttonStyle(.borderless)
+          .font(.caption)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .accessibilityIdentifier("dashboardSaveError")
+        Divider()
+      }
+      content
+    }
   }
 
   @ViewBuilder
@@ -114,11 +141,15 @@ struct TasksView: View {
         .foregroundStyle(.secondary)
         .padding(.leading, 1)
       ForEach(card.tasks) { task in
-        TaskRow(task: task) {
-          openErrorMessage = onOpenTask(task) ? nil : "Obsidian could not open this Dashboard file."
-        }
-        .accessibilityLabel("\(task.completed ? "Completed" : "Open") task: \(task.text)")
-        .accessibilityIdentifier("dashboardTask.\(task.lineNumber)")
+        DashboardTaskRow(
+          task: task,
+          isPending: tasks.pendingTaskIDs.contains(task.id),
+          onToggle: { tasks.setCompleted(!task.completed, task: task) },
+          onOpen: {
+            openErrorMessage =
+              onOpenTask(task) ? nil : "Obsidian could not open this Dashboard file."
+          }
+        )
       }
     }
   }
@@ -176,24 +207,57 @@ private struct TaskColumnTab: View {
   }
 }
 
-private struct TaskRow: View {
+struct DashboardTaskRow: View {
   let task: DashboardTask
-  let action: () -> Void
+  let isPending: Bool
+  let onToggle: () -> Void
+  let onOpen: () -> Void
 
   @State private var isHovered = false
 
   var body: some View {
-    Button(action: action) {
-      HStack(alignment: .top, spacing: 8) {
-        Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
-          .font(.system(size: 15, weight: .medium))
-          .symbolRenderingMode(.hierarchical)
-          .foregroundStyle(
-            task.completed
-              ? Color(nsColor: .tertiaryLabelColor)
-              : Color(nsColor: .secondaryLabelColor).opacity(0.8)
-          )
-          .padding(.top, 2)
+    HStack(alignment: .top, spacing: 2) {
+      Button(action: onToggle) {
+        Group {
+          if isPending {
+            ProgressView().controlSize(.mini)
+          } else {
+            Image(
+              systemName: task.canToggle
+                ? (task.completed ? "checkmark.circle.fill" : "circle") : "minus.circle"
+            )
+            .font(.system(size: 15, weight: .medium))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(
+              task.completed
+                ? Color(nsColor: .secondaryLabelColor)
+                : Color(nsColor: .secondaryLabelColor).opacity(0.8)
+            )
+          }
+        }
+        .padding(.top, 2)
+        .frame(width: 28, height: 30, alignment: .top)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(TaskRowButtonStyle(isHovered: isHovered))
+      .disabled(isPending || !task.canToggle)
+      .help(
+        task.canToggle
+          ? (task.completed ? "Mark incomplete" : "Mark complete")
+          : "Special task state; edit in Obsidian"
+      )
+      .accessibilityLabel(
+        "\(task.canToggle ? (task.completed ? "Mark incomplete" : "Mark complete") : "Read-only task"): \(task.text)"
+      )
+      .accessibilityValue(
+        isPending
+          ? "Saving"
+          : (task.canToggle
+            ? (task.completed ? "Completed" : "Not completed") : "Read-only special state")
+      )
+      .accessibilityIdentifier("dashboardCheckbox.\(task.lineNumber)")
+
+      Button(action: onOpen) {
         Text(task.text)
           .font(.system(size: 15, weight: .regular))
           .foregroundStyle(
@@ -201,15 +265,19 @@ private struct TaskRow: View {
               ? Color(nsColor: .secondaryLabelColor).opacity(0.7)
               : Color.primary
           )
+          .strikethrough(
+            task.completed, pattern: .solid, color: Color(nsColor: .tertiaryLabelColor)
+          )
           .multilineTextAlignment(.leading)
           .fixedSize(horizontal: false, vertical: true)
-        Spacer(minLength: 0)
+          .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
+          .contentShape(Rectangle())
       }
-      .frame(minHeight: 30)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .contentShape(Rectangle())
+      .buttonStyle(TaskRowButtonStyle(isHovered: isHovered))
+      .accessibilityLabel("Open in Obsidian: \(task.text)")
+      .accessibilityIdentifier("dashboardTask.\(task.lineNumber)")
     }
-    .buttonStyle(TaskRowButtonStyle(isHovered: isHovered))
+    .padding(.leading, CGFloat((task.source?.indentation ?? 0) / 4) * 10)
     .onHover { isHovered = $0 }
   }
 }
@@ -219,7 +287,7 @@ private struct TaskRowButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .padding(.horizontal, 8)
+      .padding(.horizontal, 2)
       .padding(.vertical, 3)
       .background(
         (isHovered || configuration.isPressed)

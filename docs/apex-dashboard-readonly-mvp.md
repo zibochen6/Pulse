@@ -1,5 +1,8 @@
 # Apex Dashboard Read-only MVP
 
+> Historical read-only foundation. Checkbox completion is now implemented; see
+> [task persistence](apex-task-writeback.md) for the current behavior and limits.
+
 ## Purpose
 
 Pulse gives a compact menu-bar view of one user-selected Apex Dashboard file.

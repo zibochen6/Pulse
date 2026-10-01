@@ -166,16 +166,18 @@ func popoverDidClose(_ notification: Notification) {
 }
 ```
 
-## Apex Dashboard read-only task state
+## Apex Dashboard task state and checkbox persistence
 
-`PulseAppDelegate` owns one `DashboardTaskController` and refreshes it before
-showing the popover. The controller resolves a UserDefaults bookmark, reads the
-selected file, and publishes one of `notConfigured`, `loading`, `fileMissing`,
-`permissionDenied`, `readError`, `parseError`, or `loaded`. `TasksView` only
-renders this state and delegates Dashboard selection to the app delegate; it
-does not read Markdown, invoke `NSOpenPanel`, or write source files. A task row
-may call the injected Obsidian opener, but never toggles task completion.
+`PulseAppDelegate` owns one `DashboardTaskController`. `TasksView` renders its
+connection state and dispatches intents; it never performs file I/O. The left
+checkbox and text opener are sibling buttons. Text opens Obsidian; checkbox
+completion calls `setCompleted(_:task:)`, never the opener. Pending IDs are
+registered synchronously; completion is confirmed from a verified disk snapshot.
+Special markers are read-only. Source order, typography and hover behavior stay
+unchanged. A loaded list remains mounted during refresh/save, preserving matched
+row IDs and selection. Inline failures offer explicit retry or re-selection.
 
-The current build is non-sandboxed, so it uses an ordinary Foundation bookmark
-only for relocation. Treat a sandboxed release as a distinct integration that
-adds security-scoped access rather than changing the existing read path.
+Ordinary bookmarks remain in use in the non-sandboxed build. Selection generation
+prevents late replies and not-yet-started writes from using a later selection.
+See [the persistence contract](../backend/apex-task-writeback.md) for source
+locators, byte patches, serialization, conflict handling and test assertions.

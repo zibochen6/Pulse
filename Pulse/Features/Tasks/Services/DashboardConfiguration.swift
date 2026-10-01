@@ -5,6 +5,8 @@ enum DashboardConfigurationError: LocalizedError, Equatable {
   case noSelection
   case couldNotSaveBookmark
   case couldNotResolveBookmark
+  case fileMissing
+  case permissionDenied
 
   var errorDescription: String? {
     switch self {
@@ -14,6 +16,10 @@ enum DashboardConfigurationError: LocalizedError, Equatable {
       "Pulse could not remember the selected Dashboard file."
     case .couldNotResolveBookmark:
       "Pulse could not locate the selected Dashboard file."
+    case .fileMissing:
+      "The selected Dashboard file was moved or deleted."
+    case .permissionDenied:
+      "Pulse no longer has permission to access the selected Dashboard file."
     }
   }
 }
@@ -60,6 +66,16 @@ final class DashboardConfiguration: ObservableObject {
         bookmarkDataIsStale: &isStale
       )
     } catch {
+      let underlying = error as NSError
+      if underlying.domain == NSCocoaErrorDomain {
+        if underlying.code == NSFileNoSuchFileError || underlying.code == NSFileReadNoSuchFileError
+        {
+          throw DashboardConfigurationError.fileMissing
+        }
+        if underlying.code == NSFileReadNoPermissionError {
+          throw DashboardConfigurationError.permissionDenied
+        }
+      }
       throw DashboardConfigurationError.couldNotResolveBookmark
     }
     if isStale {

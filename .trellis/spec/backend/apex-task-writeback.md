@@ -1,0 +1,90 @@
+# Apex checkbox write-back contract
+
+## 1. Scope / Trigger
+
+Only completion/uncompletion of ordinary checkboxes in the verified Apex file.
+Views do not read or write Markdown. No task creation, reordering, parent cascade,
+plugin dates, Vault scanning, database or watcher.
+
+## 2. Signatures
+
+```swift
+protocol DashboardFileStoring: Sendable {
+  func load(fileURL: URL) async throws -> Dashboard
+  func setCompleted(_ completed: Bool, task: DashboardTask,
+                    snapshot: Dashboard, fileURL: URL) async throws -> Dashboard
+}
+// @MainActor controller; nil means rejected/duplicate intent.
+func setCompleted(_ completed: Bool, task: DashboardTask) -> Task<Void, Never>?
+```
+
+## 3. Contracts
+
+- Task source retains raw line, one-based line, byte offset, marker, column/card
+  anchors, ancestors and neighbors. File URL/block ID remain available.
+- UUID presentation identity is independent of completion/line changes; only
+  unambiguous one-to-one source matches preserve it. Duplicate IDs are not keys.
+- Snapshot bytes stay in memory. No private content, paths or locators in logs.
+- The shared background serial queue owns coordinated read/patch/verification.
+  Do not rely on actor isolation across awaits to serialize a file transaction.
+- Reread the latest file; compare the whole document with ordinary state bytes
+  normalized, or relocate via unique validated anchors/context. Never guess.
+- Patch one ASCII byte with `pwrite`, flush, then reread and parse. No truncation,
+  regenerated Markdown or stale full-file rollback. Preserve BOM/newlines.
+- Explicit desired state is idempotent. A special marker never becomes ordinary.
+- Ordinary bookmarks remain appropriate for the non-sandboxed app; balance any
+  available scoped access, and handle actual permission errors. Sandbox migration
+  needs its own read/write entitlement and file-only access validation.
+- Selection generations and actual monotonic file observations reject stale
+  replies. Refresh must not unmount a loaded list; errors must not fake success.
+- Coordination/advisory locks cannot guarantee exclusion of uncooperative editors.
+
+## 4. Validation & Error Matrix
+
+| Input / condition | Result |
+| --- | --- |
+| `[ ]`, `[x]`, `[X]` | Change only state byte to explicit target. |
+| Special marker | `unsupportedState`, no write. |
+| Whole document differs but unique raw/structural/block anchors match | Relocate, validate current revision. |
+| Repeated candidates, changed text, removed target | `conflict`, reload and explain. |
+| Target already matches intent | Success without write. |
+| Read-only, ACL denied, missing file, invalid bookmark | Error/reselection; no fake completion. |
+| Write/flush/verification failure | Reload actual file; retain error and explicit retry intent. |
+| Concurrent app saves | Shared serial queue retains every successful byte patch. |
+| Repeated click while pending | Controller returns nil. |
+
+## 5. Good / Base / Bad Cases
+
+Good: one selected duplicate changes; all other bytes remain identical.
+Base: a stale completed request meets `[X]` on disk and succeeds without writing.
+Bad: adjacent edits make a duplicate ambiguous; saving stops and refreshes.
+
+## 6. Tests Required
+
+Assert exact-byte LF/CRLF/BOM/final-newline round trips, nested Unicode tasks,
+metadata and special-state protection; duplicate text/block/card IDs; external
+insertion/deletion/changed task conflicts; idempotence; concurrent same-file saves;
+read-only/missing files; failed writes and post-write verification. Controller
+checks pending deduplication, explicit retries, recovery, selection changes and
+observation ordering. Keep parser, preferences, provider and hover regressions.
+Accessibility action tests skip explicitly when the unit host exposes no buttons;
+rendering never substitutes for actual desktop clicks, focus or pointer timing.
+
+## 7. Wrong vs Correct
+
+```swift
+// Wrong: replace matching text or blindly toggle whatever is now at the old line.
+// contents.replacingOccurrences(of: task.text, with: checkedText)
+// Correct: explicit intent + original snapshot + uniquely validated source.
+let verified = try await store.setCompleted(true, task: task,
+                                           snapshot: snapshot, fileURL: url)
+// Publish the verified snapshot, or reload reality on failure.
+```
+
+## Note-card bracket regression
+
+A `- [` prefix alone does not identify a task. Notes may use `- [[Example]]`
+or `- [label](url)`. `isUnsupportedCheckbox` excludes these note forms, while
+actual malformed checkbox syntax still produces a parse error. A normal note
+link must never blank an otherwise valid Dashboard or become writable. Include
+non-checkbox note list items in parser/write-back fixtures, not just empty cards.

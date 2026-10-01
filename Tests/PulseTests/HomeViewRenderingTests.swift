@@ -61,7 +61,8 @@ final class HomeViewRenderingTests: XCTestCase {
             usage: usage,
             vipUsage: vipUsage,
             vipConfiguration: vipConfiguration,
-            tasks: DashboardTaskController(configuration: DashboardConfiguration(defaults: defaults)),
+            tasks: DashboardTaskController(
+              configuration: DashboardConfiguration(defaults: defaults)),
             pages: pages,
             onVIPCredentialsChanged: {},
             onSelectDashboardFile: {},
@@ -126,7 +127,8 @@ final class HomeViewRenderingTests: XCTestCase {
               usage: usage,
               vipUsage: vipUsage,
               vipConfiguration: vipConfiguration,
-              tasks: DashboardTaskController(configuration: DashboardConfiguration(defaults: defaults)),
+              tasks: DashboardTaskController(
+                configuration: DashboardConfiguration(defaults: defaults)),
               pages: pages,
               onVIPCredentialsChanged: {},
               onSelectDashboardFile: {},
@@ -184,7 +186,8 @@ final class HomeViewRenderingTests: XCTestCase {
             usage: codexUsage,
             vipUsage: vipUsage,
             vipConfiguration: vipConfiguration,
-            tasks: DashboardTaskController(configuration: DashboardConfiguration(defaults: defaults)),
+            tasks: DashboardTaskController(
+              configuration: DashboardConfiguration(defaults: defaults)),
             pages: pages,
             onVIPCredentialsChanged: {},
             onSelectDashboardFile: {},
@@ -216,7 +219,10 @@ final class HomeViewRenderingTests: XCTestCase {
       return XCTFail("Could not create isolated defaults")
     }
     defer { defaults.removePersistentDomain(forName: suiteName) }
-    guard let fixtureURL = Bundle(for: Self.self).url(forResource: "sample-apex-dashboard", withExtension: "md") else {
+    guard
+      let fixtureURL = Bundle(for: Self.self).url(
+        forResource: "sample-apex-dashboard", withExtension: "md")
+    else {
       return XCTFail("Could not load the Apex fixture")
     }
 
@@ -266,6 +272,12 @@ final class HomeViewRenderingTests: XCTestCase {
       }
       XCTAssertEqual(topLeft.alphaComponent, 1, accuracy: 0.01)
       XCTAssertEqual(bottomRight.alphaComponent, 1, accuracy: 0.01)
+      let renderDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "PulseTaskWritebackRender")
+      try FileManager.default.createDirectory(
+        at: renderDirectory, withIntermediateDirectories: true)
+      let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+      try png.write(to: renderDirectory.appendingPathComponent("\(appearanceName.rawValue).png"))
     }
   }
 }
@@ -343,7 +355,8 @@ private struct VIPUnavailableUsageProvider: UsageProviding {
 
 private struct VIPFailedUsageProvider: UsageProviding {
   func fetch() async throws -> UsageSnapshot {
-    throw PreviewUsageError(isUnavailable: false, userMessage: "88VIP is rate-limiting balance requests.")
+    throw PreviewUsageError(
+      isUnavailable: false, userMessage: "88VIP is rate-limiting balance requests.")
   }
 }
 

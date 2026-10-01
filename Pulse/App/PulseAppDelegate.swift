@@ -192,7 +192,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private func chooseDashboardFile() {
     let panel = NSOpenPanel()
     panel.title = "Select Apex Dashboard"
-    panel.message = "Choose the Apex Dashboard Markdown file Pulse should read."
+    panel.message = "Choose the Apex Dashboard Markdown file. Pulse can save checkbox completion to this file."
     panel.prompt = "Select Dashboard"
     panel.canChooseFiles = true
     panel.canChooseDirectories = false

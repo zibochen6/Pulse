@@ -2,7 +2,7 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services and Obsidian every day. The intended product brings AI usage status and Markdown tasks into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP balance integrations, and a read-only Apex Dashboard task view. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query a user-configured 88VIP account balance. The menu bar remains Codex-only; the popover header shows both compact statuses. Click either status for Usage details; Settings is another page in the same popover. This repository is not a downloadable MVP release yet.
+**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP balance integrations, and an Apex Dashboard task view with checkbox completion saved to Markdown. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query a user-configured 88VIP account balance. The menu bar remains Codex-only; the popover header shows both compact statuses. Click either status for Usage details; Settings is another page in the same popover. This repository is not a downloadable MVP release yet.
 
 ## Build and run
 
@@ -43,24 +43,38 @@ Open **Settings → Providers**, enter your 88VIP API key, and select **Save key
 
 Open **Settings → Tasks** and select one Apex Dashboard Markdown file. Pulse
 reads the verified Apex structure—frontmatter columns, `##` columns, `###`
-cards, and ordinary Markdown checkbox rows—and shows it in the Home task area.
-Use the column tabs to browse and click a row to open the Dashboard file in
-Obsidian. Pulse only reads the selected file: it does not scan a Vault, edit
-tasks, watch for file changes, or infer due dates. It rereads the file when the
-popover opens and when you press Refresh. See [the read-only MVP details](docs/apex-dashboard-readonly-mvp.md).
+cards, and Markdown checkbox rows—and shows it in the Home task area.
+Use column tabs to browse. **Click the checkbox to complete or undo completion;
+click task text to open the source file in Obsidian.** Completion is confirmed
+after saving and rereading the original Markdown; it stays in the same position.
+
+Only the selected checkbox state character is changed. UTF-8 BOM, LF/CRLF,
+metadata, indentation and the rest of the file are retained. Nested checkboxes
+use four-space/tab indentation; special task states remain read-only. Ambiguous
+external edits produce an inline error instead of a guessed update. Saving is
+local, asynchronous, and serialized; duplicate clicks on a pending task are
+ignored. File permissions still apply; choose the file again if access is lost.
+
+Pulse rereads the file on popover open, after saves, and through
+**Settings → Tasks → Refresh**. It does not scan a Vault, watch files, infer due
+dates, add/reorder tasks, or cascade completion to children. File coordination
+cannot fully prevent noncooperating external editors from racing with a save.
+See [task write-back and manual acceptance](docs/apex-task-writeback.md); the
+[read-only MVP document](docs/apex-dashboard-readonly-mvp.md) records the earlier
+foundation.
 
 ## Direction
 
 - **AI status:** Codex and 88VIP are connected. Provider-specific capabilities for OpenAI API, DeepSeek, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window are displayed as different kinds of information.
 - **Obsidian tasks:** Pulse can read one selected Apex Dashboard in the verified
-  format. General Vault scanning and task write-back remain future work.
+  format. Checkbox completion writes back to the selected Markdown; general Vault scanning and other task editing remain future work.
 - **Privacy:** the app runs locally. 88VIP API keys are stored in macOS Keychain; ordinary preferences use UserDefaults. Pulse stores no Vault data and has no analytics.
 
 See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
 
 ## 中文简介
 
-Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额，以及只读 Apex Dashboard 任务展示：菜单栏只显示 Codex，弹窗可显示额度与选定 Dashboard 的任务；任务写回、通用 Vault 扫描和其他 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
+Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额，以及 Apex Dashboard 任务展示和完成状态写回：菜单栏只显示 Codex；在弹窗点击复选框可完成／取消任务并保存到原 Markdown，点击正文打开 Obsidian。通用 Vault 扫描、其他任务编辑和更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
 
 ## License
 
