@@ -6,6 +6,18 @@ import XCTest
 
 @MainActor
 final class HomeViewRenderingTests: XCTestCase {
+  private func isolatedLocalTasks() -> LocalTaskController {
+    LocalTaskController(
+      store: LocalTaskStore(
+        fileURL:
+          FileManager.default.temporaryDirectory.appendingPathComponent(
+            "PulseRender-\(UUID()).json")))
+  }
+
+  private func inactiveDashboardPicker() -> DashboardFilePicker {
+    DashboardFilePicker(closePopover: { false }, onSelection: { _ in }, onFinish: {})
+  }
+
   func testCodexMenuIconIsBundled() {
     XCTAssertNotNil(Bundle.main.url(forResource: "CodexMenuIcon", withExtension: "png"))
   }
@@ -63,6 +75,9 @@ final class HomeViewRenderingTests: XCTestCase {
             vipConfiguration: vipConfiguration,
             tasks: DashboardTaskController(
               configuration: DashboardConfiguration(defaults: defaults)),
+            localTasks: isolatedLocalTasks(),
+            taskSource: TaskSourceConfiguration(defaults: defaults),
+            dashboardPicker: inactiveDashboardPicker(),
             pages: pages,
             onVIPCredentialsChanged: {},
             onSelectDashboardFile: {},
@@ -129,6 +144,9 @@ final class HomeViewRenderingTests: XCTestCase {
               vipConfiguration: vipConfiguration,
               tasks: DashboardTaskController(
                 configuration: DashboardConfiguration(defaults: defaults)),
+              localTasks: isolatedLocalTasks(),
+              taskSource: TaskSourceConfiguration(defaults: defaults),
+              dashboardPicker: inactiveDashboardPicker(),
               pages: pages,
               onVIPCredentialsChanged: {},
               onSelectDashboardFile: {},
@@ -188,6 +206,9 @@ final class HomeViewRenderingTests: XCTestCase {
             vipConfiguration: vipConfiguration,
             tasks: DashboardTaskController(
               configuration: DashboardConfiguration(defaults: defaults)),
+            localTasks: isolatedLocalTasks(),
+            taskSource: TaskSourceConfiguration(defaults: defaults),
+            dashboardPicker: inactiveDashboardPicker(),
             pages: pages,
             onVIPCredentialsChanged: {},
             onSelectDashboardFile: {},
@@ -209,6 +230,65 @@ final class HomeViewRenderingTests: XCTestCase {
         }
         XCTAssertEqual(topLeft.alphaComponent, 1, accuracy: 0.01)
         XCTAssertEqual(bottomRight.alphaComponent, 1, accuracy: 0.01)
+      }
+    }
+  }
+
+  func testBuiltInHomeAndTagSettingsRenderInBothAppearances() async throws {
+    let suiteName = "PulseBuiltInHomeRender.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "PulseBuiltInHome-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let localTasks = LocalTaskController(
+      store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
+    await localTasks.refresh()
+    let added = await localTasks.saveTask(
+      id: nil,
+      text:
+        "Prepare a fictional demo 📝 with a deliberately long task title that wraps in the compact task list",
+      tagIDs: [], newTagNames: ["Work", "写作"])
+    XCTAssertTrue(added)
+    let first = try XCTUnwrap(localTasks.document?.tasks.first)
+    await localTasks.setCompleted(true, taskID: first.id)?.value
+    let secondAdded = await localTasks.saveTask(
+      id: nil, text: "Check a sample document", tagIDs: [], newTagNames: [])
+    XCTAssertTrue(secondAdded)
+    let usage = UsageController(provider: PreviewUsageProvider())
+    let vipUsage = UsageController(provider: PreviewVIPUsageProvider())
+    await usage.refresh()
+    await vipUsage.refresh()
+    let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
+    let vipConfiguration = VIPConfiguration(secretStore: PreviewSecretStore())
+    let renderDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "PulseBuiltinTaskRender")
+    try FileManager.default.createDirectory(at: renderDirectory, withIntermediateDirectories: true)
+    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+      for settings in [false, true] {
+        let pages = PopoverPageController()
+        if settings { pages.showSettings(.tasks) }
+        let host = NSHostingView(
+          rootView: HomeView(
+            config: config, usage: usage, vipUsage: vipUsage,
+            vipConfiguration: vipConfiguration,
+            tasks: DashboardTaskController(
+              configuration: DashboardConfiguration(defaults: defaults)),
+            localTasks: localTasks, taskSource: TaskSourceConfiguration(defaults: defaults),
+            dashboardPicker: inactiveDashboardPicker(),
+            pages: pages,
+            onVIPCredentialsChanged: {}, onSelectDashboardFile: {},
+            onOpenDashboardFile: { _ in true }, onQuit: {}))
+        host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
+        host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        try png.write(
+          to: renderDirectory.appendingPathComponent(
+            "\(appearanceName.rawValue)-\(settings ? "settings" : "home").png"))
       }
     }
   }
@@ -250,6 +330,9 @@ final class HomeViewRenderingTests: XCTestCase {
           vipUsage: vipUsage,
           vipConfiguration: vipConfiguration,
           tasks: tasks,
+          localTasks: isolatedLocalTasks(),
+          taskSource: TaskSourceConfiguration(defaults: defaults),
+          dashboardPicker: inactiveDashboardPicker(),
           pages: PopoverPageController(),
           onVIPCredentialsChanged: {},
           onSelectDashboardFile: {},
@@ -278,6 +361,72 @@ final class HomeViewRenderingTests: XCTestCase {
         at: renderDirectory, withIntermediateDirectories: true)
       let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
       try png.write(to: renderDirectory.appendingPathComponent("\(appearanceName.rawValue).png"))
+    }
+  }
+
+  func testVisibleSettingsActionsRenderInBothAppearances() async throws {
+    let suite = "PulseSettingsButtons.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let fixture = try XCTUnwrap(
+      Bundle(for: Self.self).url(forResource: "sample-apex-dashboard", withExtension: "md"))
+    let configuration = DashboardConfiguration(defaults: defaults)
+    try configuration.saveDashboard(url: fixture)
+    let tasks = DashboardTaskController(configuration: configuration)
+    await tasks.refresh()
+    let source = TaskSourceConfiguration(defaults: defaults)
+    source.setSource(.apex)
+    let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
+    let usage = UsageController(provider: PreviewUsageProvider())
+    let vipUsage = UsageController(provider: PreviewVIPUsageProvider())
+    await usage.refresh()
+    await vipUsage.refresh()
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "PulseSettingsActionRender")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+      for destination in [SettingsDestination.general, .providers, .tasks] {
+        let pages = PopoverPageController()
+        pages.showSettings(destination)
+        let host = NSHostingView(
+          rootView: HomeView(
+            config: config, usage: usage, vipUsage: vipUsage,
+            vipConfiguration: VIPConfiguration(secretStore: PreviewConnectedSecretStore()),
+            tasks: tasks, localTasks: isolatedLocalTasks(), taskSource: source,
+            dashboardPicker: inactiveDashboardPicker(), pages: pages,
+            onVIPCredentialsChanged: {}, onSelectDashboardFile: {},
+            onOpenDashboardFile: { _ in true }, onQuit: {}))
+        host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
+        host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        try png.write(
+          to: directory.appendingPathComponent("\(appearanceName.rawValue)-\(destination).png"))
+      }
+      // Off-window hosts do not reliably execute ScrollViewReader's onAppear.
+      // Also inspect all actual settings controls at the product's 360pt width;
+      // this taller evidence image does not alter the 360x510 application.
+      let fullSettings = NSHostingView(
+        rootView: SettingsView(
+          config: config,
+          vipConfiguration: VIPConfiguration(secretStore: PreviewConnectedSecretStore()),
+          tasks: tasks, localTasks: isolatedLocalTasks(), taskSource: source,
+          dashboardPicker: inactiveDashboardPicker(), destination: .general,
+          onBack: {}, onVIPCredentialsChanged: {}, onSelectDashboardFile: {}, onQuit: {}
+        )
+        .background(Color(nsColor: .windowBackgroundColor)))
+      fullSettings.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
+      fullSettings.frame = NSRect(x: 0, y: 0, width: 360, height: 1000)
+      fullSettings.layoutSubtreeIfNeeded()
+      let fullBitmap = try XCTUnwrap(
+        fullSettings.bitmapImageRepForCachingDisplay(in: fullSettings.bounds))
+      fullSettings.cacheDisplay(in: fullSettings.bounds, to: fullBitmap)
+      let fullPNG = try XCTUnwrap(fullBitmap.representation(using: .png, properties: [:]))
+      try fullPNG.write(
+        to: directory.appendingPathComponent("\(appearanceName.rawValue)-all-controls.png"))
     }
   }
 }
@@ -362,6 +511,12 @@ private struct VIPFailedUsageProvider: UsageProviding {
 
 private final class PreviewSecretStore: SecretStoring, @unchecked Sendable {
   func read(account: String) throws -> String? { nil }
+  func save(_ secret: String, account: String) throws {}
+  func delete(account: String) throws {}
+}
+
+private struct PreviewConnectedSecretStore: SecretStoring {
+  func read(account: String) throws -> String? { "fictional-render-only-key" }
   func save(_ secret: String, account: String) throws {}
   func delete(account: String) throws {}
 }

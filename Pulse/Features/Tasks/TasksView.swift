@@ -3,13 +3,38 @@ import SwiftUI
 /// The compact task surface. Views dispatch intents; the file service owns writes.
 struct TasksView: View {
   @ObservedObject var tasks: DashboardTaskController
+  @ObservedObject var presentation: DashboardTaskPresentation
   let onConfigure: () -> Void
   let onOpenTask: (DashboardTask) -> Bool
+  var onUseBuiltInTasks: (() -> Void)?
+  var onEditingChanged: (Bool) -> Void = { _ in }
 
-  @State private var selectedColumnTitle: String?
   @State private var openErrorMessage: String?
 
   var body: some View {
+    taskSurface
+      .onAppear {
+        presentation.reconcileSelection(tasks.selectionGeneration)
+        if case .loaded(let dashboard) = tasks.state {
+          presentation.reconcileFile(dashboard.fileURL)
+        } else if case .notConfigured = tasks.state {
+          presentation.draft = nil
+        }
+        onEditingChanged(presentation.isEditing)
+      }
+      .onChange(of: presentation.isEditing) { onEditingChanged($0) }
+      .onDisappear { onEditingChanged(false) }
+      .onChange(of: tasks.selectionGeneration) { presentation.reconcileSelection($0) }
+      .onChange(of: tasks.state) { state in
+        if case .loaded(let dashboard) = state {
+          presentation.reconcileFile(dashboard.fileURL)
+        } else if case .notConfigured = state {
+          presentation.draft = nil
+        }
+      }
+  }
+
+  private var taskSurface: some View {
     VStack(spacing: 0) {
       if let failure = tasks.saveFailure {
         VStack(alignment: .leading, spacing: 4) {
@@ -50,6 +75,14 @@ struct TasksView: View {
         actionTitle: "Connect in Settings",
         action: onConfigure
       )
+      if let onUseBuiltInTasks {
+        Button("Use built-in tasks", action: onUseBuiltInTasks)
+          .buttonStyle(.borderless)
+          .font(.subheadline.weight(.medium))
+          .accessibilityIdentifier("useBuiltInTasksButton")
+          .padding(.horizontal, 20)
+          .padding(.bottom, 16)
+      }
     case .loading:
       VStack(spacing: 10) {
         ProgressView()
@@ -94,7 +127,7 @@ struct TasksView: View {
               title: column.title,
               isSelected: selectedColumn(dashboard)?.title == column.title
             ) {
-              selectedColumnTitle = column.title
+              presentation.selectedColumnTitle = column.title
             }
             .accessibilityIdentifier("dashboardColumnTab.\(column.sourceOrder)")
           }
@@ -129,9 +162,31 @@ struct TasksView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
       }
+      Divider()
+      if let draft = presentation.draft {
+        DashboardTaskEditor(
+          controller: tasks, presentation: presentation,
+          draft: Binding(get: { presentation.draft ?? draft }, set: { presentation.draft = $0 }),
+          onConfigure: onConfigure)
+      } else {
+        Button {
+          tasks.dismissAddFailure()
+          presentation.beginAdding(in: dashboard)
+        } label: {
+          HStack(spacing: 8) {
+            Image(systemName: "plus.circle.fill")
+            Text("Add task")
+            Spacer()
+          }
+          .frame(maxWidth: .infinity, minHeight: 22)
+        }
+        .buttonStyle(PulseActionButtonStyle())
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .accessibilityIdentifier("addDashboardTaskButton")
+      }
     }
-    .onAppear { selectedColumnTitle = nil }
-    .onChange(of: dashboard.fileURL) { _ in selectedColumnTitle = nil }
+    .onChange(of: dashboard.fileURL) { _ in presentation.selectedColumnTitle = nil }
   }
 
   private func cardContent(_ card: DashboardCard) -> some View {
@@ -155,7 +210,8 @@ struct TasksView: View {
   }
 
   private func selectedColumn(_ dashboard: Dashboard) -> DashboardColumn? {
-    dashboard.columns.first(where: { $0.title == selectedColumnTitle }) ?? dashboard.columns.first
+    dashboard.columns.first(where: { $0.title == presentation.selectedColumnTitle })
+      ?? dashboard.columns.first
   }
 
   private func statusContent(

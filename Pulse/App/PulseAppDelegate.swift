@@ -1,20 +1,45 @@
 import AppKit
 import Combine
 import SwiftUI
-import UniformTypeIdentifiers
 
 @MainActor
 final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
   private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-  private let config = AppConfig()
+  // The XCTest host must not migrate the real user's source preference or use
+  // their local task file. Production always uses the normal preferences.
+  private static let runtimeDefaults: UserDefaults = {
+    guard ProcessInfo.processInfo.environment["PULSE_DISABLE_LIVE_USAGE"] == "1" else {
+      return .standard
+    }
+    guard
+      let defaults = UserDefaults(
+        suiteName: "Pulse.TestHost.\(ProcessInfo.processInfo.processIdentifier)")
+    else {
+      preconditionFailure("Could not create isolated test-host preferences")
+    }
+    return defaults
+  }()
+
+  private let config = AppConfig(defaults: PulseAppDelegate.runtimeDefaults)
   private let usage = UsageController(provider: CodexProvider())
   private let vipConfiguration = VIPConfiguration()
   private let vipUsage = UsageController(provider: VIPProvider(), refreshInterval: .seconds(600))
-  private let tasks = DashboardTaskController()
+  private let tasks = DashboardTaskController(
+    configuration: DashboardConfiguration(defaults: PulseAppDelegate.runtimeDefaults))
+  private let localTasks = LocalTaskController(
+    store: LocalTaskStore(
+      fileURL:
+        ProcessInfo.processInfo.environment["PULSE_DISABLE_LIVE_USAGE"] == "1"
+        ? FileManager.default.temporaryDirectory.appendingPathComponent(
+          "PulseTestHost-\(ProcessInfo.processInfo.processIdentifier)/tasks.json")
+        : LocalTaskStore.defaultFileURL))
+  private let taskSource = TaskSourceConfiguration(defaults: PulseAppDelegate.runtimeDefaults)
+  private var taskEditorActive = false
   private let pages = PopoverPageController()
   private let popover = NSPopover()
   private var preferencesSubscription: AnyCancellable?
   private var usageSubscription: AnyCancellable?
+  private var motionPreferencesSubscription: AnyCancellable?
   private lazy var hoverController = PopoverHoverController(
     pointerPresence: { [weak self] in
       self?.pointerPresence()
@@ -22,6 +47,34 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     },
     close: { [weak self] in self?.popover.performClose(nil) }
   )
+  private lazy var dashboardPicker = DashboardFilePicker(
+    closePopover: { [weak self] in
+      guard let self else { return false }
+      guard self.popover.isShown || self.isPopoverWindowVisible else { return false }
+      // File selection is an explicit action. Ask AppKit directly rather than
+      // depending on the hover controller's potentially stale presentation state.
+      self.popover.performClose(nil)
+      return true
+    },
+    isPopoverVisible: { [weak self] in
+      guard let self else { return false }
+      return self.popover.isShown || self.isPopoverWindowVisible
+    },
+    onSelection: { [weak self] url in await self?.tasks.saveDashboard(url: url) },
+    onFinish: { [weak self] in
+      guard let self else { return }
+      self.pages.showSettings(.tasks)
+      // A failed handoff can leave the original popover visible. Do not begin
+      // another Opening cycle: an already-shown popover may not send didShow.
+      guard !self.popover.isShown && !self.isPopoverWindowVisible else { return }
+      self.hoverController.reset()
+      self.showPopover(settings: .tasks)
+    }
+  )
+
+  private var isPopoverWindowVisible: Bool {
+    popover.contentViewController?.view.window?.isVisible == true
+  }
   private lazy var statusTrackingOwner = PopoverPointerTrackingOwner(
     onEnter: { [weak self] in
       guard let self, self.popover.isShown else { return }
@@ -48,6 +101,11 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     configureStatusItem()
     configurePopover()
 
+    motionPreferencesSubscription = NSWorkspace.shared.notificationCenter
+      .publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
+      .receive(on: RunLoop.main)
+      .sink { [weak self] _ in self?.updatePopoverMotion() }
+
     preferencesSubscription = config.$showMenuBarLabel
       .sink { [weak self] showName in
         guard let self else { return }
@@ -70,6 +128,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   func applicationWillTerminate(_ notification: Notification) {
+    hoverController.reset()
     usage.stop()
     vipUsage.stop()
   }
@@ -103,9 +162,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private func configurePopover() {
     popover.behavior = .transient
     popover.delegate = self
-    // A frequently opened menu bar panel should appear immediately. The default
-    // popover fade exposed the desktop through SwiftUI's former clear background.
-    popover.animates = false
+    // Native motion is safe with HomeView's opaque adaptive background.
+    updatePopoverMotion()
     popover.contentSize = HomeView.popoverSize
     let hostingController = NSHostingController(
       rootView: HomeView(
@@ -114,11 +172,20 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         vipUsage: vipUsage,
         vipConfiguration: vipConfiguration,
         tasks: tasks,
+        localTasks: localTasks,
+        taskSource: taskSource,
+        dashboardPicker: dashboardPicker,
         pages: pages,
         onVIPCredentialsChanged: { [weak self] in self?.vipUsage.requestRefresh() },
-        onSelectDashboardFile: { [weak self] in self?.chooseDashboardFile() },
-        onOpenDashboardFile: { [weak self] task in self?.openDashboardFileInObsidian(task) ?? false },
-        onQuit: { NSApp.terminate(nil) }
+        onSelectDashboardFile: { [weak self] in self?.dashboardPicker.requestSelection() },
+        onOpenDashboardFile: { [weak self] task in self?.openDashboardFileInObsidian(task) ?? false
+        },
+        onQuit: { NSApp.terminate(nil) },
+        onTaskEditingChanged: { [weak self] active in
+          guard let self else { return }
+          self.taskEditorActive = active
+          self.hoverController.setDismissalSuspended(active)
+        }
       )
     )
     popover.contentViewController = hostingController
@@ -169,45 +236,60 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   @objc private func togglePopover() {
-    guard let button = statusItem.button else { return }
-    if popover.isShown {
-      popover.performClose(nil)
-    } else {
-      config.refreshLoginItemStatus()
-      vipUsage.refreshIfStale(maxAge: 600)
-      tasks.requestRefresh()
-      pages.reset()
-      hoverController.beginOpening()
-      popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-      let presence = pointerPresence()
-      hoverController.synchronize(statusButton: presence.statusButton, content: presence.content)
+    if dashboardPicker.isSelecting {
+      dashboardPicker.requestSelection()
+      return
     }
+    guard hoverController.state != .closing else { return }
+    if popover.isShown {
+      hoverController.requestClose()
+    } else {
+      showPopover()
+    }
+  }
+
+  private func showPopover(settings: SettingsDestination? = nil) {
+    guard let button = statusItem.button, hoverController.state != .closing else { return }
+    config.refreshLoginItemStatus()
+    vipUsage.refreshIfStale(maxAge: 600)
+    if taskSource.source == .apex { tasks.requestRefresh() }
+    Task { [weak self] in await self?.localTasks.refresh() }
+    if let settings { pages.showSettings(settings) } else { pages.reset() }
+    hoverController.beginOpening()
+    hoverController.setDismissalSuspended(taskEditorActive)
+    updatePopoverMotion()
+    popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    guard popover.isShown else {
+      hoverController.reset()
+      return
+    }
+    let presence = pointerPresence()
+    hoverController.synchronize(
+      statusButton: presence.statusButton, content: presence.content,
+      popoverWindow: presence.popoverWindow)
+  }
+
+  private func updatePopoverMotion() {
+    popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+  }
+
+  func popoverDidShow(_ notification: Notification) {
+    hoverController.presentationDidShow()
+  }
+
+  func popoverShouldClose(_ popover: NSPopover) -> Bool {
+    updatePopoverMotion()
+    return true
+  }
+
+  func popoverWillClose(_ notification: Notification) {
+    hoverController.beginClosing()
   }
 
   func popoverDidClose(_ notification: Notification) {
     hoverController.reset()
     pages.reset()
-  }
-
-  private func chooseDashboardFile() {
-    let panel = NSOpenPanel()
-    panel.title = "Select Apex Dashboard"
-    panel.message = "Choose the Apex Dashboard Markdown file. Pulse can save checkbox completion to this file."
-    panel.prompt = "Select Dashboard"
-    panel.canChooseFiles = true
-    panel.canChooseDirectories = false
-    panel.allowsMultipleSelection = false
-    if let markdownType = UTType(filenameExtension: "md") {
-      panel.allowedContentTypes = [markdownType]
-    }
-    // A transient popover is not a reliable sheet parent. Presenting the
-    // document picker independently keeps dashboard selection available even
-    // if AppKit closes the popover while it changes focus.
-    guard panel.runModal() == .OK, let url = panel.url else { return }
-
-    Task { [weak self] in
-      await self?.tasks.saveDashboard(url: url)
-    }
+    dashboardPicker.popoverDidClose()
   }
 
   private func openDashboardFileInObsidian(_ task: DashboardTask) -> Bool {

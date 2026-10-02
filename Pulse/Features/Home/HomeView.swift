@@ -9,11 +9,17 @@ struct HomeView: View {
   @ObservedObject var vipUsage: UsageController
   @ObservedObject var vipConfiguration: VIPConfiguration
   @ObservedObject var tasks: DashboardTaskController
+  @ObservedObject var localTasks: LocalTaskController
+  @ObservedObject var taskSource: TaskSourceConfiguration
+  @ObservedObject var dashboardPicker: DashboardFilePicker
+  @StateObject private var localPresentation = LocalTaskPresentation()
+  @StateObject private var dashboardPresentation = DashboardTaskPresentation()
   @ObservedObject var pages: PopoverPageController
   let onVIPCredentialsChanged: () -> Void
   let onSelectDashboardFile: () -> Void
   let onOpenDashboardFile: (DashboardTask) -> Bool
   let onQuit: () -> Void
+  var onTaskEditingChanged: (Bool) -> Void = { _ in }
 
   var body: some View {
     Group {
@@ -27,17 +33,30 @@ struct HomeView: View {
           config: config,
           vipConfiguration: vipConfiguration,
           tasks: tasks,
+          localTasks: localTasks,
+          taskSource: taskSource,
+          dashboardPicker: dashboardPicker,
           destination: destination,
           onBack: { pages.showHome() },
           onVIPCredentialsChanged: onVIPCredentialsChanged,
           onSelectDashboardFile: onSelectDashboardFile,
-          onQuit: onQuit
+          onQuit: onQuit,
+          onTaskEditingChanged: onTaskEditingChanged
         )
       }
     }
     .frame(width: Self.popoverSize.width, height: Self.popoverSize.height)
     // Cover the entire hosting surface with an adaptive opaque color.
     .background(Color(nsColor: .windowBackgroundColor))
+    .onAppear { dashboardPresentation.reconcileSelection(tasks.selectionGeneration) }
+    .onChange(of: tasks.selectionGeneration) { generation in
+      // Settings and the native picker can reselect a file while TasksView is
+      // absent. Clear its old draft even if the new file cannot be read/parsed.
+      dashboardPresentation.reconcileSelection(generation)
+    }
+    .onChange(of: taskSource.source) { source in
+      if source == .apex { tasks.requestRefresh() }
+    }
   }
 
   private var homeContent: some View {
@@ -66,13 +85,25 @@ struct HomeView: View {
 
       Divider()
 
-      TasksView(
-        tasks: tasks,
-        onConfigure: { pages.showSettings(.tasks) },
-        onOpenTask: onOpenDashboardFile
-      )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityIdentifier("tasksRegion")
+      Group {
+        switch taskSource.source {
+        case .local:
+          LocalTasksView(
+            controller: localTasks, presentation: localPresentation,
+            onEditingChanged: onTaskEditingChanged)
+        case .apex:
+          TasksView(
+            tasks: tasks,
+            presentation: dashboardPresentation,
+            onConfigure: { pages.showSettings(.tasks) },
+            onOpenTask: onOpenDashboardFile,
+            onUseBuiltInTasks: { taskSource.setSource(.local) },
+            onEditingChanged: onTaskEditingChanged
+          )
+        }
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .accessibilityIdentifier("tasksRegion")
     }
   }
 
@@ -106,7 +137,7 @@ struct HomeView: View {
           vipUsage: vipUsage,
           onAddProvider: { pages.showSettings(.providers) }
         )
-          .padding(16)
+        .padding(16)
       }
       .accessibilityIdentifier("usageDetailRegion")
     }

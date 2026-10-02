@@ -19,16 +19,27 @@ struct DashboardTaskSaveFailure: Equatable {
   let snapshot: Dashboard
 }
 
+struct DashboardTaskAddFailure: Equatable {
+  let message: String
+  let needsReselection: Bool
+  let request: DashboardTaskCreationRequest
+}
+
 @MainActor
 final class DashboardTaskController: ObservableObject {
   @Published private(set) var state: DashboardConnectionState
   @Published private(set) var isRefreshing = false
   @Published private(set) var pendingTaskIDs = Set<UUID>()
   @Published private(set) var saveFailure: DashboardTaskSaveFailure?
+  @Published private(set) var isAddingTask = false
+  @Published private(set) var addFailure: DashboardTaskAddFailure?
+  /// Changes only for an explicit selection/removal, including failed reads.
+  /// Presentation owners above navigation can invalidate drafts independently
+  /// of whether the newly selected file ever reaches the loaded state.
+  @Published private(set) var selectionGeneration = 0
 
   let configuration: DashboardConfiguration
   private let fileStore: any DashboardFileStoring
-  private var selectionGeneration = 0
   private var issuedRevision = 0
   private var appliedRevision = 0
   private var appliedObservation: ContinuousClock.Instant?
@@ -88,6 +99,63 @@ final class DashboardTaskController: ObservableObject {
   }
 
   func dismissSaveFailure() { saveFailure = nil }
+
+  /// The view retains its draft and stable request ID until this returns true.
+  /// One add intent at a time; completion of other rows remains available.
+  @discardableResult
+  func addTask(request: DashboardTaskCreationRequest) -> Task<Bool, Never>? {
+    guard !isAddingTask, configuration.hasDashboardSelection else { return nil }
+    let generation = selectionGeneration
+    let revision = nextRevision()
+    isAddingTask = true
+    addFailure = nil
+    return Task {
+      defer { if generation == selectionGeneration { isAddingTask = false } }
+      guard generation == selectionGeneration else { return false }
+      do {
+        let url = try configuration.resolveDashboardURL()
+        guard url.standardizedFileURL == request.snapshot.fileURL.standardizedFileURL else {
+          throw DashboardWriteError.conflict
+        }
+        let dashboard = try await fileStore.addTask(request: request, fileURL: url)
+        guard generation == selectionGeneration else { return false }
+        apply(dashboard, generation: generation, revision: revision)
+        addFailure = nil
+        return true
+      } catch {
+        guard generation == selectionGeneration else { return false }
+        let failure = error as? DashboardWriteError
+        addFailure = DashboardTaskAddFailure(
+          message: failure?.localizedDescription
+            ?? (error as? DashboardParseError)?.localizedDescription
+            ?? "Pulse could not add the task. Refresh or choose the Dashboard again in Settings.",
+          needsReselection: failure == .permissionDenied || failure == .fileMissing
+            || error is DashboardConfigurationError,
+          request: request
+        )
+        // The replacement may already have persisted before an uncertain flush.
+        // Keep the request ID and refresh reality; never overwrite external edits
+        // with the original snapshot and never optimistically invent a new row.
+        let recoveryRevision = nextRevision()
+        do {
+          let url = try configuration.resolveDashboardURL()
+          let dashboard = try await fileStore.load(fileURL: url)
+          apply(dashboard, generation: generation, revision: recoveryRevision)
+        } catch {
+          applyReadError(error, generation: generation, revision: recoveryRevision)
+        }
+        return false
+      }
+    }
+  }
+
+  @discardableResult
+  func retryAddTask() -> Task<Bool, Never>? {
+    guard let request = addFailure?.request else { return nil }
+    return addTask(request: request)
+  }
+
+  func dismissAddFailure() { addFailure = nil }
 
   private func startSave(_ completed: Bool, task: DashboardTask, snapshot: Dashboard) -> Task<
     Void, Never
@@ -200,6 +268,8 @@ final class DashboardTaskController: ObservableObject {
     appliedObservation = nil
     pendingTaskIDs = []
     saveFailure = nil
+    isAddingTask = false
+    addFailure = nil
     isRefreshing = false
   }
 }

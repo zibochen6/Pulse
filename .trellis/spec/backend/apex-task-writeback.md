@@ -2,9 +2,26 @@
 
 ## 1. Scope / Trigger
 
-Only completion/uncompletion of ordinary checkboxes in the verified Apex file.
-Views do not read or write Markdown. No task creation, reordering, parent cascade,
+Completion/uncompletion of ordinary checkboxes and creation in an existing group
+in the verified Apex file. Views do not read or write Markdown. No reordering, parent cascade,
 plugin dates, Vault scanning, database or watcher.
+
+Creation receives a typed `DashboardTaskCreationRequest` with original snapshot,
+unique request UUID and `DashboardTaskDestination(column:card:)`. Insert a new
+unchecked line with its generated `^pulse-UUID` block ID; this permits strict
+idempotent retries after an uncertain save, without modifying old block IDs.
+Resolve the original destination in latest bytes, allowing only a uniquely
+validated group after external changes. Preserve every existing byte via a splice,
+then coordinated atomic replacement with revision check and post-save parse.
+Parent-directory permission is required for the sibling temporary file; fail
+instead of truncating the original. Preserve POSIX mode/owner, ACL and xattrs.
+Creation and checkbox operations use the same serial worker; keep the existing
+strict external-edit locator rules. Source generations reject old UI responses.
+Old checkbox requests across the app's own verified insertions may translate
+byte offsets only through an exact same-file insertion proof. Bound this history
+to 16 revisions/8 MiB; eviction or any unrelated external edit returns to strict
+relocation/conflict rules. It is not a cache of arbitrary external revisions.
+See [creation design and limits](../../../docs/apex-task-creation.md).
 
 ## 2. Signatures
 

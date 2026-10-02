@@ -11,6 +11,7 @@ enum DashboardWriteError: LocalizedError, Equatable, Sendable {
   case readFailed
   case saveFailed
   case verificationFailed
+  case invalidTaskText
 
   var errorDescription: String? {
     switch self {
@@ -27,6 +28,8 @@ enum DashboardWriteError: LocalizedError, Equatable, Sendable {
     case .saveFailed: "Pulse could not confirm the save. Review the file and try again."
     case .verificationFailed:
       "The file changed during saving. Pulse could not confirm the result; review the refreshed list."
+    case .invalidTaskText:
+      "Enter a task on a single line before saving."
     }
   }
 }
@@ -35,6 +38,14 @@ protocol DashboardFileStoring: Sendable {
   func load(fileURL: URL) async throws -> Dashboard
   func setCompleted(_ completed: Bool, task: DashboardTask, snapshot: Dashboard, fileURL: URL)
     async throws -> Dashboard
+  func addTask(request: DashboardTaskCreationRequest, fileURL: URL) async throws -> Dashboard
+}
+
+extension DashboardFileStoring {
+  // Existing completion-only test stores can keep their narrow behavior.
+  func addTask(request: DashboardTaskCreationRequest, fileURL: URL) async throws -> Dashboard {
+    throw DashboardWriteError.saveFailed
+  }
 }
 
 /// Small injectable I/O boundary for deterministic save/flush failure tests.
@@ -61,15 +72,19 @@ struct DashboardPOSIXByteWriter: DashboardByteWriting {
 final class DashboardFileStore: DashboardFileStoring, Sendable {
   private static let queue = DispatchQueue(
     label: "dev.zibochen.Pulse.dashboard-files", qos: .userInitiated)
+  private static let insertionHistory = DashboardInsertionHistory()
   private let parser: ApexDashboardParser
   private let writer: any DashboardByteWriting
+  private let replacer: any DashboardDocumentReplacing
 
   init(
     parser: ApexDashboardParser = ApexDashboardParser(),
-    writer: any DashboardByteWriting = DashboardPOSIXByteWriter()
+    writer: any DashboardByteWriting = DashboardPOSIXByteWriter(),
+    replacer: any DashboardDocumentReplacing = DashboardAtomicDocumentReplacer()
   ) {
     self.parser = parser
     self.writer = writer
+    self.replacer = replacer
   }
 
   func load(fileURL: URL) async throws -> Dashboard {
@@ -92,6 +107,20 @@ final class DashboardFileStore: DashboardFileStoring, Sendable {
       return try withAccess(fileURL) {
         try coordinated(fileURL, writing: true) { url in
           try patch(completed: completed, task: task, snapshot: snapshot, fileURL: url)
+        }
+      }
+    }
+  }
+
+  func addTask(request: DashboardTaskCreationRequest, fileURL: URL) async throws -> Dashboard {
+    try await enqueue { [self] in
+      _ = try request.validatedText()
+      guard request.snapshot.fileURL.standardizedFileURL == fileURL.standardizedFileURL else {
+        throw DashboardWriteError.conflict
+      }
+      return try withAccess(fileURL) {
+        try coordinated(fileURL, writing: true, replacing: true) { url in
+          try insert(request: request, fileURL: url)
         }
       }
     }
@@ -120,12 +149,17 @@ final class DashboardFileStore: DashboardFileStoring, Sendable {
     return try operation()
   }
 
-  private func coordinated<T>(_ url: URL, writing: Bool, operation: (URL) throws -> T) throws -> T {
+  private func coordinated<T>(
+    _ url: URL, writing: Bool, replacing: Bool = false, operation: (URL) throws -> T
+  ) throws -> T {
     let coordinator = NSFileCoordinator(filePresenter: nil)
     var coordinationError: NSError?
     var result: Result<T, Error>?
     if writing {
-      coordinator.coordinate(writingItemAt: url, options: .forMerging, error: &coordinationError) {
+      coordinator.coordinate(
+        writingItemAt: url, options: replacing ? .forReplacing : .forMerging,
+        error: &coordinationError
+      ) {
         coordinatedURL in
         result = Result { try operation(coordinatedURL) }
       }
@@ -159,7 +193,17 @@ final class DashboardFileStore: DashboardFileStoring, Sendable {
     guard (initial.st_mode & 0o222) != 0 else { throw DashboardWriteError.permissionDenied }
     let bytes = try read(fileURL)
     let latest = try parser.parse(data: bytes, fileURL: fileURL)
-    let target = try DashboardTaskLocator.locate(task, from: snapshot, in: latest)
+    let target: DashboardTask
+    do {
+      target = try DashboardTaskLocator.locate(task, from: snapshot, in: latest)
+    } catch DashboardWriteError.conflict {
+      // Only our exact, verified insertion chain may explain a changed neighbor.
+      // External edits still use the strict ordinary task locator or fail closed.
+      guard let relocated = Self.insertionHistory.locate(task, from: snapshot, in: latest) else {
+        throw DashboardWriteError.conflict
+      }
+      target = relocated
+    }
     guard let source = target.source, source.isOrdinaryCheckbox else {
       throw DashboardWriteError.unsupportedState
     }
@@ -208,7 +252,49 @@ final class DashboardFileStore: DashboardFileStoring, Sendable {
     else { throw DashboardWriteError.conflict }
   }
 
-  private static func fileError(_ error: Error, saving: Bool) -> DashboardWriteError {
+  private func insert(request: DashboardTaskCreationRequest, fileURL: URL) throws -> Dashboard {
+    let descriptor = open(fileURL.path, O_RDWR | O_NOFOLLOW | O_CLOEXEC)
+    guard descriptor >= 0 else { throw Self.posixError(errno, saving: true) }
+    defer { close(descriptor) }
+    guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { throw DashboardWriteError.busy }
+    defer { flock(descriptor, LOCK_UN) }
+    var initial = stat()
+    guard fstat(descriptor, &initial) == 0, (initial.st_mode & S_IFMT) == S_IFREG else {
+      throw DashboardWriteError.readFailed
+    }
+    let bytes = try read(fileURL)
+    let latest = try parser.parse(data: bytes, fileURL: fileURL)
+      .preservingIdentities(from: request.snapshot)
+    // A retry after a failed fsync/verification must never add a second row.
+    try DashboardTaskInsertion.validateOriginal(request)
+    if try DashboardTaskInsertion.existingTask(for: request, in: latest) != nil {
+      try verifyRevision(fileURL, descriptor: descriptor, expected: bytes, initial: initial)
+      return latest
+    }
+    guard initial.st_mode & 0o222 != 0 else { throw DashboardWriteError.permissionDenied }
+    let patch = try DashboardTaskInsertion.makePatch(for: request, in: latest)
+    let proposed = try parser.parse(data: patch.data, fileURL: fileURL)
+    guard proposed.allTasks.count == latest.allTasks.count + 1,
+      try DashboardTaskInsertion.existingTask(for: request, in: proposed) != nil
+    else { throw DashboardWriteError.verificationFailed }
+    try replacer.replace(data: patch.data, fileURL: fileURL) {
+      try verifyRevision(fileURL, descriptor: descriptor, expected: bytes, initial: initial)
+    }
+    do {
+      let persisted = try read(fileURL)
+      guard persisted == patch.data else { throw DashboardWriteError.verificationFailed }
+      let verified = try parser.parse(data: persisted, fileURL: fileURL)
+      guard try DashboardTaskInsertion.existingTask(for: request, in: verified) != nil else {
+        throw DashboardWriteError.verificationFailed
+      }
+      let result = DashboardTaskInsertion.preservingIdentities(
+        in: verified, from: latest, patch: patch)
+      Self.insertionHistory.record(before: latest, after: result, patch: patch)
+      return result
+    } catch { throw DashboardWriteError.verificationFailed }
+  }
+
+  static func fileError(_ error: Error, saving: Bool) -> DashboardWriteError {
     let error = error as NSError
     if error.domain == NSPOSIXErrorDomain { return posixError(Int32(error.code), saving: saving) }
     if error.domain == NSCocoaErrorDomain {
@@ -221,11 +307,70 @@ final class DashboardFileStore: DashboardFileStoring, Sendable {
     return saving ? .saveFailed : .readFailed
   }
 
-  private static func posixError(_ code: Int32, saving: Bool) -> DashboardWriteError {
+  static func posixError(_ code: Int32, saving: Bool) -> DashboardWriteError {
     switch code {
     case ENOENT: .fileMissing
     case EACCES, EPERM, EROFS: .permissionDenied
     default: saving ? .saveFailed : .readFailed
     }
+  }
+}
+
+/// Accessed exclusively by DashboardFileStore's shared serial worker. This is a
+/// bounded in-memory proof of Pulse's own byte insertions, not a file index or a
+/// relaxed locator. It makes a queued checkbox intent safe after an adjacent add.
+private final class DashboardInsertionHistory: @unchecked Sendable {
+  private struct Revision {
+    let before: Dashboard
+    let after: Dashboard
+    let patch: DashboardTaskInsertion.Patch
+  }
+  private var revisions: [Revision] = []
+  private let maxRevisions = 16
+  private let maxBytes = 8 * 1024 * 1024
+
+  func record(before: Dashboard, after: Dashboard, patch: DashboardTaskInsertion.Patch) {
+    revisions.append(Revision(before: before, after: after, patch: patch))
+    while revisions.count > maxRevisions
+      || revisions.reduce(0, { $0 + $1.before.sourceData.count + $1.after.sourceData.count })
+        > maxBytes
+    {
+      revisions.removeFirst()
+    }
+  }
+
+  func locate(_ task: DashboardTask, from snapshot: Dashboard, in latest: Dashboard)
+    -> DashboardTask?
+  {
+    let path = snapshot.fileURL.standardizedFileURL
+    guard latest.fileURL.standardizedFileURL == path, let source = task.source else { return nil }
+    let chain = revisions.filter { $0.before.fileURL.standardizedFileURL == path }
+    let originalData = DashboardTaskLocator.normalizedData(snapshot)
+    let latestData = DashboardTaskLocator.normalizedData(latest)
+    for (index, revision) in chain.enumerated()
+    where DashboardTaskLocator.normalizedData(revision.before) == originalData {
+      guard
+        let initial = try? DashboardTaskLocator.locate(task, from: snapshot, in: revision.before),
+        var offset = initial.source?.stateByteOffset
+      else { continue }
+      var previousData = originalData
+      for change in chain.dropFirst(index) {
+        guard DashboardTaskLocator.normalizedData(change.before) == previousData else { break }
+        if offset >= change.patch.byteOffset { offset += change.patch.byteCount }
+        previousData = DashboardTaskLocator.normalizedData(change.after)
+        if previousData == latestData,
+          let candidate = latest.allTasks.first(where: { $0.source?.stateByteOffset == offset }),
+          let current = candidate.source,
+          current.columnTitle == source.columnTitle, current.cardTitle == source.cardTitle,
+          current.cardIdentifier == source.cardIdentifier,
+          current.indentation == source.indentation, current.ancestors == source.ancestors,
+          DashboardSourceDocument.normalizedLine(current.rawLine)
+            == DashboardSourceDocument.normalizedLine(source.rawLine)
+        {
+          return candidate
+        }
+      }
+    }
+    return nil
   }
 }

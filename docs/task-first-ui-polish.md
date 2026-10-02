@@ -21,18 +21,19 @@ task still opens its source Dashboard file in Obsidian.
 
 ## Popover hover lifecycle
 
-`PopoverHoverController` owns all hover dismissal state. It protects the first
-second after opening because the pointer normally remains on the status item.
-After that, departure from both the status item and popover content starts a
-400 ms close delay. Returning to either region cancels the delay.
+`PopoverHoverController` owns hover dismissal and close-request state. Opening
+requires a minimum 300 ms click guard and AppKit's presentation-complete signal.
+After that, departure from the status item and entire popover starts one 180 ms
+close delay. Returning to either region cancels the delay.
 
 AppKit tracking events can be absent when SwiftUI changes the hosted view
 hierarchy. While the popover is shown, the controller periodically compares
-tracked regions with current screen geometry. A mismatch updates the state once
-and then uses the normal delay, so a missed exit cannot keep the popover open
-forever and the comparison cannot perpetually restart the close timer. Native
-transient outside-click behavior remains responsible for immediate system
-dismissal.
+tracked regions with current screen geometry every 50 ms, including the arrow.
+A mismatch updates state without extending an existing close deadline. Native
+show/dismiss animation respects Reduce Motion and retains opaque content.
+Outside clicks and status-item toggles request close without a hover delay.
+Closing cancels timers and ignores re-entry; pages reset after dismissal completes.
+See [motion and response](popover-motion.md) for the current lifecycle and checks.
 
 ## Validation
 
