@@ -339,3 +339,25 @@ Reduced Home header, tab strip, task row, and spacing dimensions while preservin
 ### Next Steps
 
 - Review the compact menu-bar popover during normal desktop use.
+
+
+## Session 14: Inline task creation and settings delivery
+<!-- trellis-session: v=2 fp=311290f95d4454dd -->
+
+**Date**: 2026-10-02
+**Task**: Inline task creation and settings delivery
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Committed built-in tasks and tags, inline creation for local and Apex sources, safe Markdown insertion, Settings feedback, Dashboard picker recovery, and native popover motion. Build and 160 regression tests passed; 2 existing off-window accessibility tests skipped. Light/dark synthetic renders inspected; Computer Use timed out so live clicks remain unverified. Independent feasibility report excluded and preserved. Local commit only; no push.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6bf6873` | feat: add built-in tasks and inline Apex task creation |
+
+### Status
+
+[OK] **Completed**
