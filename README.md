@@ -37,7 +37,7 @@ If the app cannot find Codex, install or launch Codex and check that its CLI wor
 
 Open **Settings → Providers**, enter your 88VIP API key, and select **Save key**. Pulse stores the key only in your macOS Keychain. It queries 88API's documented billing subscription and usage endpoints, calculates the remaining balance in USD, and shows it beside Codex in the popover. The full Usage page includes the limit, used amount, remaining amount, available expiry, update time, and a manual refresh action.
 
-88VIP refreshes at launch and every ten minutes. Opening the popover refreshes it only after the last result becomes stale. Missing keys, invalid keys, rate limits, unsupported billing endpoints, network problems, and malformed responses are shown as clear states; Pulse never converts a USD value to another currency or fabricates a remaining balance.
+88VIP refreshes at launch and every ten minutes. Opening the popover refreshes a reading older than 60 seconds; selecting the compact status or the Usage page's refresh control requests it immediately. Network requests time out instead of leaving refresh controls busy indefinitely. Missing keys and other unavailable/error states show an error marker in the compact status, with the detailed reason on the Usage page. Partial responses are retried on a later popover open after a 60-second cooldown. Pulse never converts a USD value to another currency or fabricates a remaining balance. Clicking the Codex status likewise requests a fresh reading.
 
 ## Built-in tasks
 

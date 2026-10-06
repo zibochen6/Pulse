@@ -7,12 +7,16 @@ final class VIPUsageTests: XCTestCase {
   func testProviderCalculatesUSDRemainingFromCents() async throws {
     let store = MemorySecretStore(value: "test-key")
     let client = QueueVIPHTTPClient(responses: [
-      .success(response("""
-        {"hard_limit_usd":100,"soft_limit_usd":90,"access_until":1780000000}
-        """)),
-      .success(response("""
-        {"total_usage":1234}
-        """)),
+      .success(
+        response(
+          """
+          {"hard_limit_usd":100,"soft_limit_usd":90,"access_until":1780000000}
+          """)),
+      .success(
+        response(
+          """
+          {"total_usage":1234}
+          """)),
     ])
     let snapshot = try await VIPProvider(secretStore: store, httpClient: client).fetch()
 
@@ -22,6 +26,14 @@ final class VIPUsageTests: XCTestCase {
     XCTAssertEqual(amount(.balance, in: snapshot), 87.66)
     XCTAssertEqual(VIPUsageFormatter.title(for: .success(snapshot)), "$87.66")
     XCTAssertEqual(expiry(in: snapshot), Date(timeIntervalSince1970: 1_780_000_000))
+
+    let requests = await client.requestsMade()
+    XCTAssertEqual(
+      requests.map { $0.url?.path },
+      [
+        "/v1/dashboard/billing/subscription", "/v1/dashboard/billing/usage",
+      ])
+    XCTAssertTrue(requests.allSatisfy { $0.timeoutInterval == 20 })
   }
 
   func testProviderUsesFallbackLimitAndDoesNotInventMissingRemaining() async throws {
@@ -34,8 +46,14 @@ final class VIPUsageTests: XCTestCase {
 
     XCTAssertEqual(amount(.allowance, in: snapshot), 25)
     XCTAssertNil(amount(.balance, in: snapshot))
-    XCTAssertEqual(VIPUsageFormatter.title(for: .success(snapshot)), "--")
+    XCTAssertEqual(VIPUsageFormatter.title(for: .success(snapshot)), "!")
     XCTAssertTrue(unavailableMessages(in: snapshot).contains { $0.contains("rate-limiting") })
+    XCTAssertTrue(snapshot.hasPartialDataFailure)
+  }
+
+  func testCompactSummaryMarksUnavailableStateAsNeedsAttention() {
+    XCTAssertEqual(
+      VIPUsageFormatter.title(for: .unavailable(VIPUsageError.missingAPIKey.userMessage)), "!")
   }
 
   func testProviderReportsUnlimitedWithoutFabricatingMoney() async throws {
@@ -48,8 +66,9 @@ final class VIPUsageTests: XCTestCase {
   }
 
   func testMissingKeyAndHTTPFailuresAreClassified() async throws {
-    let noKeyProvider = VIPProvider(secretStore: MemorySecretStore(), httpClient: QueueVIPHTTPClient(responses: []))
-    await XCTAssertThrowsErrorAsync(try await noKeyProvider.fetch()) { error in
+    let noKeyProvider = VIPProvider(
+      secretStore: MemorySecretStore(), httpClient: QueueVIPHTTPClient(responses: []))
+    await assertThrowsErrorAsync(try await noKeyProvider.fetch()) { error in
       XCTAssertEqual(error as? VIPUsageError, .missingAPIKey)
     }
 
@@ -57,7 +76,7 @@ final class VIPUsageTests: XCTestCase {
       secretStore: MemorySecretStore(value: "   "),
       httpClient: QueueVIPHTTPClient(responses: [])
     )
-    await XCTAssertThrowsErrorAsync(try await whitespaceKeyProvider.fetch()) { error in
+    await assertThrowsErrorAsync(try await whitespaceKeyProvider.fetch()) { error in
       XCTAssertEqual(error as? VIPUsageError, .missingAPIKey)
     }
 
@@ -65,7 +84,7 @@ final class VIPUsageTests: XCTestCase {
       secretStore: MemorySecretStore(value: "test-key"),
       httpClient: QueueVIPHTTPClient(responses: [.success(response("{}", status: 401))])
     )
-    await XCTAssertThrowsErrorAsync(try await invalidKeyProvider.fetch()) { error in
+    await assertThrowsErrorAsync(try await invalidKeyProvider.fetch()) { error in
       XCTAssertEqual(error as? VIPUsageError, .invalidCredentials)
     }
 
@@ -73,7 +92,7 @@ final class VIPUsageTests: XCTestCase {
       secretStore: MemorySecretStore(value: "test-key"),
       httpClient: QueueVIPHTTPClient(responses: [.success(response("not json"))])
     )
-    await XCTAssertThrowsErrorAsync(try await malformedProvider.fetch()) { error in
+    await assertThrowsErrorAsync(try await malformedProvider.fetch()) { error in
       XCTAssertEqual(error as? VIPUsageError, .invalidResponse)
     }
 
@@ -81,7 +100,7 @@ final class VIPUsageTests: XCTestCase {
       secretStore: MemorySecretStore(value: "test-key"),
       httpClient: QueueVIPHTTPClient(responses: [.success(response("{}", status: 404))])
     )
-    await XCTAssertThrowsErrorAsync(try await endpointProvider.fetch()) { error in
+    await assertThrowsErrorAsync(try await endpointProvider.fetch()) { error in
       XCTAssertEqual(error as? VIPUsageError, .billingUnavailable)
     }
 
@@ -89,7 +108,7 @@ final class VIPUsageTests: XCTestCase {
       secretStore: MemorySecretStore(value: "test-key"),
       httpClient: QueueVIPHTTPClient(responses: [.failure(VIPUsageError.networkUnavailable)])
     )
-    await XCTAssertThrowsErrorAsync(try await networkProvider.fetch()) { error in
+    await assertThrowsErrorAsync(try await networkProvider.fetch()) { error in
       XCTAssertEqual(error as? VIPUsageError, .networkUnavailable)
     }
   }
@@ -136,7 +155,10 @@ final class VIPUsageTests: XCTestCase {
 
   private func response(_ body: String, status: Int = 200) -> (Data, HTTPURLResponse) {
     let url = URL(string: "https://88api.ai/v1/dashboard/billing/subscription")!
-    return (Data(body.utf8), HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
+    return (
+      Data(body.utf8),
+      HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!
+    )
   }
 
   private enum AmountKind {
@@ -195,18 +217,22 @@ private final class MemorySecretStore: SecretStoring, @unchecked Sendable {
 
 private actor QueueVIPHTTPClient: VIPHTTPClient {
   private var responses: [Result<(Data, HTTPURLResponse), Error>]
+  private var requests: [URLRequest] = []
 
   init(responses: [Result<(Data, HTTPURLResponse), Error>]) {
     self.responses = responses
   }
 
   func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    requests.append(request)
     guard !responses.isEmpty else { throw VIPUsageError.networkUnavailable }
     return try responses.removeFirst().get()
   }
+
+  func requestsMade() -> [URLRequest] { requests }
 }
 
-private func XCTAssertThrowsErrorAsync<T>(
+private func assertThrowsErrorAsync<T>(
   _ expression: @autoclosure () async throws -> T,
   _ errorHandler: (Error) -> Void
 ) async {

@@ -6,6 +6,13 @@ struct UsageSnapshot: Equatable, Sendable {
   let fetchedAt: Date
   let metrics: [UsageMetric]
 
+  var hasPartialDataFailure: Bool {
+    metrics.contains {
+      if case .unavailable = $0 { return true }
+      return false
+    }
+  }
+
   var quotaWindows: [QuotaWindow] {
     metrics.compactMap {
       if case .quota(let window) = $0 { return window }

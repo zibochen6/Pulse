@@ -30,7 +30,9 @@ struct VIPProvider: UsageProviding {
 - Read the first positive value among `hard_limit_usd`, `soft_limit_usd`, and `system_hard_limit_usd` as the USD allowance. `access_until`, when positive, is a Unix timestamp in seconds.
 - `total_usage` is USD cents. Normalize it exactly once: `usedUSD = total_usage / 100`; normalize `remainingUSD = max(0, allowanceUSD - usedUSD)`. Money stays a `UsageMetric` allowance, usage, or balance; never reuse a percentage quota window for a money value.
 - A subscription with no positive limit produces `.unlimited`, optionally with `.expiresAt`. If the subscription works but Usage fails, return a partial snapshot with the allowance and `.unavailable(reason:)`; do not fabricate a remaining amount.
-- The app delegate owns a separate 88VIP `UsageController`, starts it at launch, refreshes it every ten minutes, and calls `refreshIfStale(maxAge: 600)` when showing the popover. Its failures must not change the Codex controller or the system status item.
+- The app delegate owns a separate 88VIP `UsageController`, starts it at launch, and refreshes it every ten minutes. Showing the popover calls `refreshIfStale(maxAge: 60)`; a partial snapshot is considered stale after at most 60 seconds even when a caller supplies a longer max age. Clicking the compact status or the Usage page's refresh control requests an immediate refresh. Its failures must not change the Codex controller or the system status item.
+- Bound each 88API request with a finite timeout so unavailable network paths cannot leave refresh UI busy indefinitely. Record `fetchedAt` after the response processing completes, not before the network requests.
+- A partial snapshot's compact summary must remain an error marker until a complete balance is available; never show the previous or incomplete numeric balance as current.
 - API keys live only in the macOS Keychain. Never put a key in UserDefaults, a snapshot, an error message, a log, a fixture, or documentation. The Settings form clears its in-memory text after a successful save or remove.
 
 ## 4. Validation & Error Matrix

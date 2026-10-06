@@ -98,12 +98,11 @@ struct VIPProvider: UsageProviding {
 
     let subscriptionData = try await request(path: "dashboard/billing/subscription", apiKey: apiKey)
     let subscription = try VIPUsageDecoder.decodeSubscription(subscriptionData)
-    let fetchedAt = Date()
 
     guard let allowance = subscription.allowance else {
       var metrics: [UsageMetric] = [.unlimited]
       if let expiry = subscription.accessExpiry { metrics.append(.expiresAt(expiry)) }
-      return UsageSnapshot(providerID: Self.providerID, fetchedAt: fetchedAt, metrics: metrics)
+      return UsageSnapshot(providerID: Self.providerID, fetchedAt: Date(), metrics: metrics)
     }
 
     var metrics: [UsageMetric] = [.allowance(amount: allowance, currency: "USD")]
@@ -122,13 +121,14 @@ struct VIPProvider: UsageProviding {
       metrics.append(.unavailable(reason: VIPUsageError.networkUnavailable.userMessage))
     }
 
-    return UsageSnapshot(providerID: Self.providerID, fetchedAt: fetchedAt, metrics: metrics)
+    return UsageSnapshot(providerID: Self.providerID, fetchedAt: Date(), metrics: metrics)
   }
 
   private func request(path: String, apiKey: String) async throws -> Data {
     let url = Self.baseURL.appending(path: path)
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
+    request.timeoutInterval = 20
     request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     let (data, response) = try await httpClient.data(for: request)
@@ -213,8 +213,8 @@ private struct VIPUsage: Decodable {
   }
 }
 
-private extension KeyedDecodingContainer {
-  func lossyDecimal(forKey key: Key) throws -> Decimal? {
+extension KeyedDecodingContainer {
+  fileprivate func lossyDecimal(forKey key: Key) throws -> Decimal? {
     guard contains(key), try !decodeNil(forKey: key) else { return nil }
     if let decimal = try? decode(Decimal.self, forKey: key) { return decimal }
     if let string = try? decode(String.self, forKey: key),
@@ -222,6 +222,7 @@ private extension KeyedDecodingContainer {
     {
       return decimal
     }
-    throw DecodingError.dataCorruptedError(forKey: key, in: self, debugDescription: "Expected a number")
+    throw DecodingError.dataCorruptedError(
+      forKey: key, in: self, debugDescription: "Expected a number")
   }
 }

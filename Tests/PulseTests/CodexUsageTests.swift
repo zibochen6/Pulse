@@ -221,6 +221,57 @@ final class UsageControllerTests: XCTestCase {
     await refreshTask?.value
     XCTAssertEqual(oldController.state, .success(recent))
   }
+
+  func testPartialSnapshotRetriesAfterShortCooldown() async {
+    let partial = UsageSnapshot(
+      providerID: "88vip",
+      fetchedAt: Date(timeIntervalSince1970: 100),
+      metrics: [
+        .allowance(amount: 25, currency: "USD"),
+        .unavailable(reason: "Usage endpoint unavailable."),
+      ]
+    )
+    let refreshed = UsageSnapshot(
+      providerID: "88vip",
+      fetchedAt: Date(timeIntervalSince1970: 160),
+      metrics: [
+        .allowance(amount: 25, currency: "USD"),
+        .usage(amount: 5, currency: "USD"),
+        .balance(amount: 20, currency: "USD"),
+      ]
+    )
+    let controller = UsageController(
+      provider: QueueUsageProvider(results: [.success(partial), .success(refreshed)]))
+
+    await controller.refresh()
+    XCTAssertNil(controller.refreshIfStale(maxAge: 600, now: Date(timeIntervalSince1970: 130)))
+
+    let retry = controller.refreshIfStale(maxAge: 600, now: Date(timeIntervalSince1970: 161))
+    XCTAssertNotNil(retry)
+    await retry?.value
+    XCTAssertEqual(controller.state, .success(refreshed))
+  }
+
+  func testStartRefreshesPeriodicallyAndStopCancelsFutureRefreshes() async {
+    let snapshot = UsageSnapshot(
+      providerID: "codex",
+      fetchedAt: Date(),
+      metrics: [.quota(QuotaWindow(durationMinutes: 300, remainingPercent: 75, resetsAt: nil))]
+    )
+    let provider = CountingUsageProvider(snapshot: snapshot)
+    let controller = UsageController(provider: provider, refreshInterval: .milliseconds(50))
+
+    controller.start()
+    try? await Task.sleep(for: .milliseconds(250))
+    let callsBeforeStop = await provider.fetchCount()
+    XCTAssertGreaterThanOrEqual(callsBeforeStop, 2)
+
+    controller.stop()
+    let callsAfterStop = await provider.fetchCount()
+    try? await Task.sleep(for: .milliseconds(120))
+    let callsAfterWait = await provider.fetchCount()
+    XCTAssertEqual(callsAfterWait, callsAfterStop)
+  }
 }
 
 private struct StubAppServer: CodexAppServerReading {
@@ -238,6 +289,20 @@ private actor QueueUsageProvider: UsageProviding {
     guard !results.isEmpty else { throw CodexUsageError.noQuota }
     return try results.removeFirst().get()
   }
+}
+
+private actor CountingUsageProvider: UsageProviding {
+  private let snapshot: UsageSnapshot
+  private var calls = 0
+
+  init(snapshot: UsageSnapshot) { self.snapshot = snapshot }
+
+  func fetch() async throws -> UsageSnapshot {
+    calls += 1
+    return snapshot
+  }
+
+  func fetchCount() -> Int { calls }
 }
 
 private actor PausedUsageProvider: UsageProviding {

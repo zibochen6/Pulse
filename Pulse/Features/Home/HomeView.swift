@@ -157,8 +157,18 @@ struct HomeView: View {
 
   private var statusSummaries: some View {
     HStack(spacing: 5) {
-      AIStatusSummary(state: usage.state, onOpenUsage: { pages.showUsage() })
-      VIPStatusSummary(state: vipUsage.state, onOpenUsage: { pages.showUsage() })
+      AIStatusSummary(
+        state: usage.state,
+        onOpenUsage: {
+          usage.requestRefresh()
+          pages.showUsage()
+        })
+      VIPStatusSummary(
+        state: vipUsage.state,
+        onOpenUsage: {
+          vipUsage.requestRefresh()
+          pages.showUsage()
+        })
     }
     .fixedSize(horizontal: true, vertical: false)
   }

@@ -49,7 +49,8 @@ final class UsageController: ObservableObject {
   func refreshIfStale(maxAge: TimeInterval, now: Date = Date()) -> Task<Void, Never>? {
     guard !isRefreshing else { return nil }
     if case .success(let snapshot) = state,
-      now.timeIntervalSince(snapshot.fetchedAt) < maxAge
+      now.timeIntervalSince(snapshot.fetchedAt)
+        < (snapshot.hasPartialDataFailure ? min(maxAge, 60) : maxAge)
     {
       return nil
     }

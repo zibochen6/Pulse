@@ -251,7 +251,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private func showPopover(settings: SettingsDestination? = nil) {
     guard let button = statusItem.button, hoverController.state != .closing else { return }
     config.refreshLoginItemStatus()
-    vipUsage.refreshIfStale(maxAge: 600)
+    vipUsage.refreshIfStale(maxAge: 60)
     if taskSource.source == .apex { tasks.requestRefresh() }
     Task { [weak self] in await self?.localTasks.refresh() }
     if let settings { pages.showSettings(settings) } else { pages.reset() }

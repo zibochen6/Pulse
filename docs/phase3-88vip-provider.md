@@ -12,7 +12,7 @@ Use **Remove key** to stop future 88VIP requests and remove the stored credentia
 
 The system menu bar remains Codex-only. Pulse shows a colored 88VIP mark and a compact USD value beside Codex inside the popover header. Selecting either value opens the Usage page, where 88VIP reports its limit, used amount, remaining balance, supplied access expiry, update time, and an independent refresh control.
 
-Pulse requests 88VIP at launch and every ten minutes. Opening the popover runs a refresh only when the previous snapshot is at least ten minutes old. A manual refresh does not overlap an active request.
+Pulse requests 88VIP at launch and every ten minutes. Opening the popover refreshes a reading older than 60 seconds; clicking the compact status or Usage refresh control requests an immediate reading. If the subscription loaded but usage did not, the compact status shows an error marker and later popover openings retry after a 60-second cooldown. Missing credentials and other unavailable states also show an error marker instead of looking like a numeric balance. Each HTTP request has a 20-second timeout. A manual refresh does not overlap an active request.
 
 ## Accuracy and failures
 

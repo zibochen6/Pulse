@@ -33,11 +33,12 @@ enum VIPUsageFormatter {
     case .loading:
       return "…"
     case .unavailable:
-      return "--"
+      return "!"
     case .failure:
       return "!"
     case .success(let snapshot):
       if snapshot.metrics.contains(.unlimited) { return "∞" }
+      if snapshot.hasPartialDataFailure { return "!" }
       guard let balance = snapshot.metrics.compactMap(balanceAmount).first else { return "--" }
       return money(balance.amount, currency: balance.currency)
     }
