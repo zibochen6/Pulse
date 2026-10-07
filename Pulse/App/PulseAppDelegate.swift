@@ -97,6 +97,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   )
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    NSApp.mainMenu = PulseApplicationMenu.makeMainMenu()
     NSApp.setActivationPolicy(.accessory)
     configureStatusItem()
     configurePopover()
