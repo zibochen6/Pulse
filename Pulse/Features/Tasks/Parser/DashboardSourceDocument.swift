@@ -152,6 +152,15 @@ struct DashboardTaskLocator {
       return candidate
     }
 
+    if let creationID = task.pulseCreationIdentifier {
+      let originalMatches = original.allTasks.filter { $0.pulseCreationIdentifier == creationID }
+      let candidates = tasks.filter { $0.pulseCreationIdentifier == creationID }
+      guard originalMatches.count == 1, candidates.count == 1, let candidate = candidates.first,
+        matches(source, candidate.source)
+      else { throw DashboardWriteError.conflict }
+      return candidate
+    }
+
     if let blockID = task.blockIdentifier {
       let originalMatches = original.allTasks.filter { $0.blockIdentifier == blockID }
       let candidates = tasks.filter { $0.blockIdentifier == blockID }

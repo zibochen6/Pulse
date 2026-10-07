@@ -216,7 +216,7 @@ final class DashboardTaskCreationControllerTests: XCTestCase {
       return XCTFail("Bookmark lost replacement")
     }
     XCTAssertEqual(actual.allTasks.count, 3)
-    XCTAssertEqual(actual.allTasks[2].blockIdentifier, intent.blockIdentifier)
+    XCTAssertEqual(actual.allTasks[2].pulseCreationIdentifier, intent.creationIdentifier)
   }
 }
 

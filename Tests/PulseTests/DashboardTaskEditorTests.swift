@@ -126,7 +126,7 @@ final class DashboardTaskEditorTests: XCTestCase {
       saved.columns.first(where: { $0.title == "Workstreams" })?.cards.first)
     let newTask = try XCTUnwrap(target.tasks.last)
     XCTAssertEqual(newTask.text, "新增虚构任务 📝 #sample/read")
-    XCTAssertEqual(newTask.blockIdentifier, "pulse-\(creationID.uuidString.lowercased())")
+    XCTAssertEqual(newTask.pulseCreationIdentifier, "pulse-\(creationID.uuidString.lowercased())")
     XCTAssertFalse(newTask.completed)
     XCTAssertEqual(saved.allTasks.count, snapshot.allTasks.count + 1)
     let reloaded = try String(contentsOf: file, encoding: .utf8)

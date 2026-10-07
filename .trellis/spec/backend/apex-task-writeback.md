@@ -8,8 +8,11 @@ plugin dates, Vault scanning, database or watcher.
 
 Creation receives a typed `DashboardTaskCreationRequest` with original snapshot,
 unique request UUID and `DashboardTaskDestination(column:card:)`. Insert a new
-unchecked line with its generated `^pulse-UUID` block ID; this permits strict
-idempotent retries after an uncertain save, without modifying old block IDs.
+unchecked task line followed by the exact adjacent comment
+`<!-- pulse-task-id: pulse-UUID -->`. Keep this Pulse creation marker outside
+the checkbox text and separate from a task's actual Obsidian `^block-id`; it
+permits strict idempotent retries after an uncertain save without changing the
+label that Apex displays.
 Resolve the original destination in latest bytes, allowing only a uniquely
 validated group after external changes. Preserve every existing byte via a splice,
 then coordinated atomic replacement with revision check and post-save parse.
@@ -37,8 +40,13 @@ func setCompleted(_ completed: Bool, task: DashboardTask) -> Task<Void, Never>?
 
 ## 3. Contracts
 
-- Task source retains raw line, one-based line, byte offset, marker, column/card
-  anchors, ancestors and neighbors. File URL/block ID remain available.
+- Task source retains raw line, one-based line, byte offset, checkbox marker,
+  column/card anchors, ancestors and neighbors. File URL and genuine Obsidian
+  block ID remain available; `pulseCreationIdentifier` is separate metadata.
+- Only the exact Pulse creation comment immediately after a checkbox row is
+  associated with that task. Malformed or detached Pulse marker comments fail
+  parsing; duplicate identifiers make uncertain-save retry ambiguous and are
+  rejected. Do not add the Pulse ID to task text or treat it as a block ID.
 - UUID presentation identity is independent of completion/line changes; only
   unambiguous one-to-one source matches preserve it. Duplicate IDs are not keys.
 - Snapshot bytes stay in memory. No private content, paths or locators in logs.

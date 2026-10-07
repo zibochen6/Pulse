@@ -12,7 +12,9 @@ struct DashboardTaskInsertion {
   static func validateOriginal(_ request: DashboardTaskCreationRequest) throws {
     let original = request.snapshot
     guard !original.sourceData.isEmpty,
-      !original.allTasks.contains(where: { $0.blockIdentifier == request.blockIdentifier }),
+      !original.allTasks.contains(where: {
+        $0.pulseCreationIdentifier == request.creationIdentifier
+      }),
       let column = original.columns.first(where: {
         $0.sourceOrder == request.destination.columnOrder
       }),
@@ -25,7 +27,9 @@ struct DashboardTaskInsertion {
     throws -> DashboardTask?
   {
     let text = try request.validatedText()
-    let candidates = dashboard.allTasks.filter { $0.blockIdentifier == request.blockIdentifier }
+    let candidates = dashboard.allTasks.filter {
+      $0.pulseCreationIdentifier == request.creationIdentifier
+    }
     guard !candidates.isEmpty else { return nil }
     guard candidates.count == 1, let candidate = candidates.first,
       candidate.text == text, let source = candidate.source,
@@ -37,7 +41,7 @@ struct DashboardTaskInsertion {
       let card = column.cards.first(where: { $0.tasks.contains(where: { $0.id == candidate.id }) }),
       card.type == request.destination.cardType,
       DashboardSourceDocument.normalizedLine(source.rawLine)
-        == "- [ ] \(text) ^\(request.blockIdentifier)"
+        == "- [ ] \(text)"
     else { throw DashboardWriteError.conflict }
     return candidate
   }
@@ -107,7 +111,8 @@ struct DashboardTaskInsertion {
     let trailingNewline = offset < bytes.count || hasFinalNewline ? separator : Data()
     let inserted =
       (needsLeadingNewline ? separator : Data())
-      + Data("- [ ] \(text) ^\(request.blockIdentifier)".utf8) + trailingNewline
+      + Data("- [ ] \(text)".utf8) + separator
+      + Data("<!-- pulse-task-id: \(request.creationIdentifier) -->".utf8) + trailingNewline
     var expected = document.data
     expected.insert(contentsOf: inserted, at: offset)
     return Patch(data: expected, byteOffset: offset, byteCount: inserted.count)

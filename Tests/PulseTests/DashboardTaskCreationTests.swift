@@ -72,15 +72,22 @@ final class DashboardTaskCreationTests: XCTestCase {
           let snapshot = try await store.load(fileURL: url)
           let intent = request(snapshot, column: 1)
           let result = try await store.addTask(request: intent, fileURL: url)
-          let newRow = "- [ ] \(intent.text) ^\(intent.blockIdentifier)"
+          let newRow =
+            "- [ ] \(intent.text)\(newline)<!-- pulse-task-id: \(intent.creationIdentifier) -->"
           let expectedText =
             text + (finalNewline ? "" : newline) + newRow
             + (finalNewline ? newline : "")
           let expected = (bom ? Data([0xEF, 0xBB, 0xBF]) : Data()) + Data(expectedText.utf8)
           XCTAssertEqual(try Data(contentsOf: url), expected)
+          let storedLines = String(decoding: try Data(contentsOf: url), as: UTF8.self)
+            .components(separatedBy: newline)
+          let checkboxLine = try XCTUnwrap(
+            storedLines.first(where: { $0 == "- [ ] \(intent.text)" }))
+          XCTAssertFalse(checkboxLine.contains("pulse-task-id"))
           XCTAssertEqual(result.allTasks.count, 2)
           XCTAssertFalse(result.allTasks[1].completed)
-          XCTAssertEqual(result.allTasks[1].blockIdentifier, intent.blockIdentifier)
+          XCTAssertNil(result.allTasks[1].blockIdentifier)
+          XCTAssertEqual(result.allTasks[1].pulseCreationIdentifier, intent.creationIdentifier)
           XCTAssertEqual(result.allTasks[0].id, snapshot.allTasks[0].id)
           let restored = try await DashboardFileStore().load(fileURL: url)
           XCTAssertEqual(restored.allTasks[1].text, intent.text)
@@ -98,7 +105,7 @@ final class DashboardTaskCreationTests: XCTestCase {
     let result = try await store.addTask(request: intent, fileURL: url)
     XCTAssertEqual(result.columns[0].cards.map { $0.tasks.count }, [3, 1])
     XCTAssertEqual(
-      result.allTasks.filter { $0.blockIdentifier != intent.blockIdentifier }.map(\.id),
+      result.allTasks.filter { $0.pulseCreationIdentifier != intent.creationIdentifier }.map(\.id),
       snapshot.allTasks.map(\.id))
     XCTAssertEqual(result.columns[0].cards[1].tasks[0].text, "Same")
     let repeated = try await store.addTask(request: intent, fileURL: url)
@@ -121,7 +128,9 @@ final class DashboardTaskCreationTests: XCTestCase {
       try String(contentsOf: url, encoding: .utf8),
       text.replacingOccurrences(
         of: "```\n\n## Notes",
-        with: "```\n- [ ] \(intent.text) ^\(intent.blockIdentifier)\n\n## Notes"))
+        with:
+          "```\n- [ ] \(intent.text)\n<!-- pulse-task-id: \(intent.creationIdentifier) -->\n\n## Notes"
+      ))
   }
 
   func testUniqueDestinationRelocatesAndPreservesExternalEdits() async throws {
@@ -140,7 +149,9 @@ final class DashboardTaskCreationTests: XCTestCase {
       try String(contentsOf: url, encoding: .utf8),
       changed.replacingOccurrences(
         of: "### New other card",
-        with: "- [ ] \(intent.text) ^\(intent.blockIdentifier)\n### New other card"))
+        with:
+          "- [ ] \(intent.text)\n<!-- pulse-task-id: \(intent.creationIdentifier) -->\n### New other card"
+      ))
   }
 
   func testChangedDuplicateDeletedOrRenamedCardRefusesWithoutWriting() async throws {
@@ -183,6 +194,30 @@ final class DashboardTaskCreationTests: XCTestCase {
       id: intent.id, text: "Changed draft", destination: intent.destination, snapshot: snapshot)
     await expectError(.conflict) { _ = try await normal.addTask(request: changed, fileURL: url) }
     XCTAssertEqual(try Data(contentsOf: url), persisted)
+  }
+
+  func testCreatedTaskCanBeRelocatedAfterExternalLineInsertion() async throws {
+    let url = try temporaryFile(Data(document("### Card\n- [ ] Existing\n## Notes").utf8))
+    let store = DashboardFileStore()
+    let original = try await store.load(fileURL: url)
+    let intent = request(original)
+    let created = try await store.addTask(request: intent, fileURL: url)
+    let beforeExternalEdit = try String(contentsOf: url, encoding: .utf8)
+    let withInsertedLine = beforeExternalEdit.replacingOccurrences(
+      of: "### Card\n", with: "### Card\nExternal note\n")
+    try Data(withInsertedLine.utf8).write(to: url)
+
+    let target = try XCTUnwrap(
+      created.allTasks.first(where: { $0.pulseCreationIdentifier == intent.creationIdentifier }))
+    let completed = try await store.setCompleted(
+      true, task: target, snapshot: created, fileURL: url)
+    XCTAssertTrue(
+      try XCTUnwrap(
+        completed.allTasks.first(where: { $0.pulseCreationIdentifier == intent.creationIdentifier })
+      ).completed)
+    XCTAssertTrue(
+      try String(contentsOf: url, encoding: .utf8).contains(
+        "<!-- pulse-task-id: \(intent.creationIdentifier) -->"))
   }
 
   func testExternalChangeDuringStagingIsNotOverwritten() async throws {
@@ -252,12 +287,12 @@ final class DashboardTaskCreationTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: moved), original)
   }
 
-  func testDuplicateCreationBlockIdentifierDoesNotPickOneTask() async throws {
+  func testDuplicatePulseCreationIdentifierDoesNotPickOneTask() async throws {
     let url = try temporaryFile(Data(document("### Card\n## Notes").utf8))
     let store = DashboardFileStore()
     let snapshot = try await store.load(fileURL: url)
     let intent = request(snapshot)
-    let repeated = "- [ ] \(intent.text) ^\(intent.blockIdentifier)"
+    let repeated = "- [ ] \(intent.text)\n<!-- pulse-task-id: \(intent.creationIdentifier) -->"
     let changed = Data(document("### Card\n\(repeated)\n\(repeated)\n## Notes").utf8)
     try changed.write(to: url)
     await expectError(.conflict) { _ = try await store.addTask(request: intent, fileURL: url) }
@@ -276,8 +311,8 @@ final class DashboardTaskCreationTests: XCTestCase {
     let result = try await store.load(fileURL: url)
     XCTAssertEqual(Set(result.allTasks.map(\.text)), ["Old", "One", "Two"])
     XCTAssertEqual(
-      Set(result.allTasks.compactMap(\.blockIdentifier)),
-      [one.blockIdentifier, two.blockIdentifier])
+      Set(result.allTasks.compactMap(\.pulseCreationIdentifier)),
+      [one.creationIdentifier, two.creationIdentifier])
   }
 
   func testOwnVerifiedInsertionChainKeepsQueuedLastDuplicateCheckboxSafe() async throws {
@@ -290,7 +325,7 @@ final class DashboardTaskCreationTests: XCTestCase {
     let result = try await store.setCompleted(
       true, task: snapshot.allTasks[1], snapshot: snapshot, fileURL: url)
     XCTAssertEqual(result.allTasks.map(\.completed), [false, true, false])
-    XCTAssertEqual(result.allTasks[2].blockIdentifier, intent.blockIdentifier)
+    XCTAssertEqual(result.allTasks[2].pulseCreationIdentifier, intent.creationIdentifier)
     _ = try await store.addTask(request: request(snapshot, text: "Next"), fileURL: url)
     let second = try await store.setCompleted(
       false, task: snapshot.allTasks[1], snapshot: snapshot, fileURL: url)

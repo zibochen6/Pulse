@@ -91,7 +91,10 @@ use four-space/tab indentation; special task states remain read-only. Ambiguous
 external edits produce an inline error instead of a guessed update. Saving is
 local, asynchronous, and serialized; duplicate clicks on a pending task are
 ignored. New tasks are inserted into the selected group while retaining every
-existing byte, and receive a hidden Obsidian block identifier for safe retries.
+existing byte. A separate hidden HTML comment carries Pulse's retry identifier,
+so Apex displays only the task text; genuine Obsidian block IDs remain separate.
+Tasks created by older Pulse versions may still show their `^pulse-...` suffix;
+this update does not rewrite existing Dashboard rows.
 Insertion uses a coordinated atomic replacement, which also requires permission
 to create a temporary file in the Dashboard's directory. File permissions still
 apply; choose the file again if access is lost.

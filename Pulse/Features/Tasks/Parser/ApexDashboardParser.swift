@@ -10,6 +10,7 @@ enum DashboardParseError: LocalizedError, Equatable, Sendable {
   case cardOutsideColumn(line: Int)
   case taskOutsideCard(line: Int)
   case unsupportedTaskStructure(line: Int)
+  case invalidCreationMarker(line: Int)
   case emptyTask(line: Int)
 
   var errorDescription: String? {
@@ -32,6 +33,8 @@ enum DashboardParseError: LocalizedError, Equatable, Sendable {
       "A task appears outside a card on line \(line)."
     case .unsupportedTaskStructure(let line):
       "The task structure on line \(line) is not supported by Pulse."
+    case .invalidCreationMarker(let line):
+      "The Pulse task marker on line \(line) is invalid or detached from its task."
     case .emptyTask(let line):
       "The task on line \(line) has no text."
     }
@@ -157,6 +160,7 @@ struct ApexDashboardParser: Sendable {
     var taskOrder = 0
     var fence: (character: Character, count: Int)?
     var taskIndentations: [Int] = []
+    var immediatelyPreviousTaskIndex: Int?
 
     func finishCard() {
       guard let currentCard, let column = currentColumn else { return }
@@ -166,6 +170,8 @@ struct ApexDashboardParser: Sendable {
     for (offset, line) in lines.enumerated() {
       let lineNumber = lineOffset + offset + 1
       let trimmed = line.trimmingCharacters(in: .whitespaces)
+      let adjacentTaskIndex = immediatelyPreviousTaskIndex
+      immediatelyPreviousTaskIndex = nil
       if let activeFence = fence {
         let count = trimmed.prefix(while: { $0 == activeFence.character }).count
         if count >= activeFence.count,
@@ -181,6 +187,16 @@ struct ApexDashboardParser: Sendable {
           fence = (first, count)
           continue
         }
+      }
+      if trimmed.hasPrefix("<!--"), trimmed.contains("pulse-task-id") {
+        guard let adjacentTaskIndex, var card = currentCard,
+          card.tasks.indices.contains(adjacentTaskIndex),
+          card.tasks[adjacentTaskIndex].pulseCreationIdentifier == nil,
+          let creationIdentifier = pulseCreationIdentifier(in: line)
+        else { throw DashboardParseError.invalidCreationMarker(line: lineNumber) }
+        card.tasks[adjacentTaskIndex].pulseCreationIdentifier = creationIdentifier
+        currentCard = card
+        continue
       }
       if line.hasPrefix("## ") {
         finishCard()
@@ -231,6 +247,7 @@ struct ApexDashboardParser: Sendable {
             sourceOrder: taskOrder
           )
         )
+        immediatelyPreviousTaskIndex = card.tasks.count - 1
         taskOrder += 1
         currentCard = card
       } else if DashboardSourceDocument.isUnsupportedCheckbox(line) {
@@ -284,6 +301,20 @@ struct ApexDashboardParser: Sendable {
       identifier.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" })
     else { return (trimmed, nil) }
     return (text, identifier)
+  }
+
+  private func pulseCreationIdentifier(in line: String) -> String? {
+    let prefix = "<!-- pulse-task-id: "
+    let suffix = " -->"
+    guard line.hasPrefix(prefix), line.hasSuffix(suffix),
+      line.count > prefix.count + suffix.count
+    else { return nil }
+    let identifier = String(line.dropFirst(prefix.count).dropLast(suffix.count))
+    guard identifier.hasPrefix("pulse-"),
+      let uuid = UUID(uuidString: String(identifier.dropFirst("pulse-".count))),
+      identifier == "pulse-" + uuid.uuidString.lowercased()
+    else { return nil }
+    return identifier
   }
 
   private func cardMetadata(in line: String) -> (key: String, value: String)? {

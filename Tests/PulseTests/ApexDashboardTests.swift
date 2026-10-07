@@ -43,6 +43,57 @@ final class ApexDashboardTests: XCTestCase {
     XCTAssertEqual(task.blockIdentifier, "task-anchor")
   }
 
+  func testParserKeepsPulseRetryMarkerSeparateFromTaskTextAndBlockID() throws {
+    let creationID = "pulse-12345678-1234-1234-1234-123456789abc"
+    let contents = """
+      ---
+      dashboard: true
+      columns:
+        - name: Inbox
+          color: "#123456"
+          type: todo
+      ---
+      ## Inbox
+      ### Card
+      - [ ] Created by Pulse 🚀
+      <!-- pulse-task-id: \(creationID) -->
+      - [ ] Native block task ^native-anchor
+      """
+
+    let dashboard = try ApexDashboardParser().parse(
+      contents: contents, fileURL: URL(fileURLWithPath: "/tmp/example.md"))
+    XCTAssertEqual(dashboard.allTasks.map(\.text), ["Created by Pulse 🚀", "Native block task"])
+    XCTAssertEqual(dashboard.allTasks[0].pulseCreationIdentifier, creationID)
+    XCTAssertNil(dashboard.allTasks[0].blockIdentifier)
+    XCTAssertNil(dashboard.allTasks[1].pulseCreationIdentifier)
+    XCTAssertEqual(dashboard.allTasks[1].blockIdentifier, "native-anchor")
+  }
+
+  func testParserRejectsDetachedOrMalformedPulseCreationMarker() {
+    let header = """
+      ---
+      dashboard: true
+      columns:
+        - name: Inbox
+          color: "#123456"
+          type: todo
+      ---
+      ## Inbox
+      ### Card
+      """
+    let invalidBodies = [
+      "<!-- pulse-task-id: pulse-12345678-1234-1234-1234-123456789abc -->\n- [ ] Task",
+      "- [ ] Task\n<!-- pulse-task-id: not-a-pulse-id -->",
+      "- [ ] Task\n<!-- pulse-task-id: pulse-12345678-1234-1234-1234-123456789abc -->\n<!-- pulse-task-id: pulse-22345678-1234-1234-1234-123456789abc -->",
+    ]
+
+    for body in invalidBodies {
+      XCTAssertThrowsError(
+        try ApexDashboardParser().parse(
+          contents: header + "\n" + body, fileURL: URL(fileURLWithPath: "/tmp/example.md")))
+    }
+  }
+
   func testParserRejectsTaskOutsideCard() {
     let contents = """
     ---

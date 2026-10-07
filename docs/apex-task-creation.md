@@ -42,10 +42,19 @@ and inserts one unchecked line at the end of the chosen group before its blank
 separator. Original bytes remain unchanged: frontmatter, other tasks, metadata,
 indentation, BOM, nearby LF/CRLF style and the presence/absence of a final newline.
 Existing tasks and groups are not reordered or rewritten. Each new task receives
-a `^pulse-UUID` Obsidian block ID, hidden by Pulse's task text renderer. A retry
-accepts that unique task only when its content and destination match; conflicting
-or duplicate block IDs stop the save. This avoids duplicate tasks after a save
-whose flush or verification result is uncertain.
+a separate `<!-- pulse-task-id: pulse-UUID -->` HTML-comment marker on the line
+immediately after its checkbox. Apex reads the clean checkbox line as task text;
+Obsidian hides the comment in rendered Markdown. Pulse recognizes only this exact
+adjacent marker and keeps it distinct from genuine Obsidian `^block-id` anchors.
+A retry accepts the unique marked task only when its content and destination
+match; conflicting or duplicate markers stop the save. This avoids duplicate
+tasks after a save whose flush or verification result is uncertain.
+
+Tasks created by earlier Pulse versions may still have a visible `^pulse-UUID`
+suffix because the old marker was written on the checkbox line. Pulse continues
+to read those rows, but this change does not rewrite existing Dashboard content.
+Remove those old suffixes in Obsidian manually or use a separately reviewed
+migration; new tasks use the sidecar comment format.
 
 Checkbox intents queued around the app's own verified insertions can translate
 their original byte offsets through a bounded exact-proof history (16 revisions,

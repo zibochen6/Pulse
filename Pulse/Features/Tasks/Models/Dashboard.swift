@@ -38,6 +38,9 @@ struct DashboardTask: Equatable, Sendable, Identifiable {
   let sourceFileURL: URL
   let lineNumber: Int
   let blockIdentifier: String?
+  /// Pulse's retry identity, stored in its own adjacent HTML comment rather
+  /// than in visible task text or Obsidian's block-ID namespace.
+  var pulseCreationIdentifier: String? = nil
   let sourceOrder: Int
   var presentationID = UUID()
   var source: DashboardTaskSource?

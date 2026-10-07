@@ -24,8 +24,8 @@ struct DashboardTaskDestination: Equatable, Sendable {
   }
 }
 
-/// Keep the ID and original snapshot when retrying an uncertain save. The block
-/// identifier is added only to the new task, never to existing Markdown rows.
+/// Keep the ID and original snapshot when retrying an uncertain save. The
+/// creation identifier is persisted separately from the checkbox task text.
 struct DashboardTaskCreationRequest: Equatable, Sendable {
   let id: UUID
   let text: String
@@ -41,7 +41,7 @@ struct DashboardTaskCreationRequest: Equatable, Sendable {
     self.snapshot = snapshot
   }
 
-  var blockIdentifier: String { "pulse-" + id.uuidString.lowercased() }
+  var creationIdentifier: String { "pulse-" + id.uuidString.lowercased() }
 
   func validatedText() throws -> String {
     let value = text.trimmingCharacters(in: .whitespaces)
