@@ -361,3 +361,25 @@ Committed built-in tasks and tags, inline creation for local and Apex sources, s
 ### Status
 
 [OK] **Completed**
+
+
+## Session 15: Hide Pulse metadata from Apex task labels
+<!-- trellis-session: v=2 fp=6421b276cd5d9330 -->
+
+**Date**: 2026-10-07
+**Task**: Hide Pulse metadata from Apex task labels
+**Branch**: `codex/pulse-task-first-home`
+
+### Summary
+
+Moved Pulse task retry IDs off checkbox text into adjacent HTML comments. Added parser, retry, relocation and compatibility coverage; debug build passed, 168 tests passed with 2 existing skips. Committed fix without pushing and preserved unrelated Cmd+V edits/report.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ab1ee24` | fix: keep Pulse task IDs out of Apex task text |
+
+### Status
+
+[OK] **Completed**
