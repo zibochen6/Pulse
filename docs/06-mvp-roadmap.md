@@ -13,6 +13,11 @@ Phases are ordered by risk and user value. Each phase has a concrete gate; a pub
 
 ## Public MVP gate
 
-Before publishing a GitHub release: Phase 1A–3 acceptance passes; a fresh-machine install is signed with Developer ID and notarized; privacy/key handling is reviewed; documentation includes screenshots, an accurate feature matrix, installation instructions, known limits, and a way to report issues. The current foundation is source code only and makes no release claim.
+Before a broader public MVP: Phase 1A–3 acceptance passes; a fresh-machine install
+is signed with Developer ID and notarized; privacy/key handling is reviewed;
+documentation includes screenshots, an accurate feature matrix, installation
+instructions, known limits, and a way to report issues. GitHub currently offers
+development-signed previews with DMG checksums and release notes; they do not
+claim notarization or completion of these wider acceptance gates.
 
 The user's menu bar display requirements and the lessons from the local reference iteration are recorded in [menu bar status requirements](08-menu-bar-status-requirements.md).

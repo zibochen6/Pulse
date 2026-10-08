@@ -2,7 +2,23 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services and Obsidian every day. The intended product brings AI usage status and Markdown tasks into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP balance integrations, built-in tasks with multiple tags, and optional Apex Dashboard tasks with creation and checkbox completion saved to Markdown. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query a user-configured 88VIP account balance. The menu bar remains Codex-only; the popover header shows both compact statuses. Click either status for Usage details; Settings is another page in the same popover. This repository is not a downloadable MVP release yet.
+**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP balance integrations, built-in tasks with multiple tags, and optional Apex Dashboard tasks with creation and checkbox completion saved to Markdown. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query a user-configured 88VIP account balance. The menu bar remains Codex-only; the popover header shows both compact statuses. Click either status for Usage details; Settings is another page in the same popover. A development-signed preview is available on GitHub.
+
+## Download and install
+
+Download [Pulse 0.1.1](https://github.com/zibochen6/Pulse/releases/tag/v0.1.1)
+for macOS 13 or newer (Apple Silicon and Intel). Open the DMG and drag Pulse
+to Applications. Quit the previous Pulse instance before replacing it, then
+launch `/Applications/Pulse.app`; its settings and task storage are retained.
+The release includes a SHA-256 checksum for verifying the downloaded DMG.
+
+This preview is signed with an Apple Development certificate, **not Developer ID
+signed or notarized**. macOS may block first launch. If you trust the downloaded
+build, use the available **Open Anyway** option in System Settings → Privacy &
+Security after attempting to launch; follow [Apple's guidance](https://support.apple.com/102445)
+and do not disable Gatekeeper. Source builds
+remain available below. See [0.1.1 release notes](docs/releases/0.1.1.md) for
+changes and current limits.
 
 ## Build and run
 

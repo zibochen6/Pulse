@@ -9,7 +9,11 @@ Pulse aims to be a calm macOS menu bar entry point for people who work across AI
 1. Finish the public MVP gate in [the roadmap](06-mvp-roadmap.md). Capture a reproducible demo with a real Codex rate window, at least one verified API balance/spend metric, and ordinary Vault task viewing/adding/completing. Use demo accounts and synthetic notes, never personal Vault text or keys.
 2. Prepare a short GIF (open menu, refresh, complete a task), two screenshots (normal status and understandable error/permission state), an architecture diagram, and a 60–90 second walkthrough. Show freshness and provider capability labels so visuals do not suggest unsupported data.
 3. Make README the trust landing page: exact supported macOS versions and providers, key scopes, local file access, whether anything leaves the machine, limitations, build/run steps, and privacy policy. Keep a concise Chinese summary while providing English issue templates and main documentation for broad reach.
-4. Before downloadable builds, complete Developer ID signing/notarization, clean install testing, release checksums, versioned changelog, and a direct feedback path. Test onboarding on a machine with no configured Codex or Vault.
+4. Development-signed previews may be downloaded with explicit trust limits,
+   release checksums and a versioned changelog. Before broader launch, complete
+   Developer ID signing/notarization and clean install testing. Test onboarding
+   on a machine with no configured Codex or Vault and provide a direct feedback
+   path.
 
 ## Community rollout after a working MVP
 

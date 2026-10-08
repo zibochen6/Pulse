@@ -14,7 +14,11 @@ Vault Markdown will be the source of truth for tasks. A SQLite cache is unnecess
 
 ## Release and trust
 
-The first channel is a GitHub downloadable app. A useful release needs a working MVP, Developer ID signing, notarization, installation instructions, and a privacy review. Those are future gates, not claims about the current shell. No telemetry or update service is present.
+The first channel is a GitHub downloadable app. Development-signed universal
+DMG previews are available with versioned release notes and SHA-256 checksums.
+They are not Developer ID signed or notarized. Developer ID signing,
+notarization, fresh-machine acceptance and privacy review remain gates for a
+broader public MVP. No telemetry or update service is present.
 
 ## Open questions for implementation phases
 
