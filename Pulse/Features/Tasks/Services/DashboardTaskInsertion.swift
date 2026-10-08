@@ -12,6 +12,7 @@ struct DashboardTaskInsertion {
   static func validateOriginal(_ request: DashboardTaskCreationRequest) throws {
     let original = request.snapshot
     guard !original.sourceData.isEmpty,
+      rawCreationIdentifierCount(request.creationIdentifier, in: original) == 0,
       !original.allTasks.contains(where: {
         $0.pulseCreationIdentifier == request.creationIdentifier
       }),
@@ -30,8 +31,15 @@ struct DashboardTaskInsertion {
     let candidates = dashboard.allTasks.filter {
       $0.pulseCreationIdentifier == request.creationIdentifier
     }
-    guard !candidates.isEmpty else { return nil }
-    guard candidates.count == 1, let candidate = candidates.first,
+    let occurrences = rawCreationIdentifierCount(request.creationIdentifier, in: dashboard)
+    if occurrences == 0 {
+      guard candidates.isEmpty else { throw DashboardWriteError.conflict }
+      return nil
+    }
+    // Optional comments may be detached or malformed after external edits. The
+    // reader can still show tasks, but an uncertain-save retry must not create
+    // another row when any evidence of this request remains in the document.
+    guard occurrences == 1, candidates.count == 1, let candidate = candidates.first,
       candidate.text == text, let source = candidate.source,
       source.indentation == 0, source.isOrdinaryCheckbox,
       source.columnTitle == request.destination.columnTitle,
@@ -43,7 +51,36 @@ struct DashboardTaskInsertion {
       DashboardSourceDocument.normalizedLine(source.rawLine)
         == "- [ ] \(text)"
     else { throw DashboardWriteError.conflict }
+
+    let originalMatches = request.snapshot.allTasks.filter { oldTask in
+      guard let oldSource = oldTask.source else { return false }
+      return oldSource.columnTitle == request.destination.columnTitle
+        && oldSource.cardTitle == request.destination.cardTitle
+        && oldSource.cardIdentifier == request.destination.cardIdentifier
+        && DashboardSourceDocument.normalizedLine(oldSource.rawLine) == "- [ ] \(text)"
+    }
+    if !originalMatches.isEmpty {
+      // A deleted new row can leave its comment next to an identical old row.
+      // Only the exact insertion into the original snapshot proves that the
+      // additional duplicate persisted; a comment alone cannot prove ownership.
+      let expected = try ApexDashboardParser().parse(
+        data: makePatch(for: request, in: request.snapshot).data,
+        fileURL: request.snapshot.fileURL)
+      guard
+        DashboardTaskLocator.normalizedData(expected)
+          == DashboardTaskLocator.normalizedData(dashboard)
+      else { throw DashboardWriteError.conflict }
+    }
     return candidate
+  }
+
+  private static func rawCreationIdentifierCount(_ identifier: String, in dashboard: Dashboard)
+    -> Int
+  {
+    // Count the ASCII UUID even in malformed comments, fenced examples or old
+    // visible block markers. A collision is safer to refuse than to duplicate.
+    String(decoding: dashboard.sourceData, as: UTF8.self).lowercased()
+      .components(separatedBy: identifier.lowercased()).count - 1
   }
 
   static func makePatch(for request: DashboardTaskCreationRequest, in latest: Dashboard) throws

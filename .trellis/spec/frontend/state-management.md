@@ -187,6 +187,17 @@ Special markers are read-only. Source order, typography and hover behavior stay
 unchanged. A loaded list remains mounted during refresh/save, preserving matched
 row IDs and selection. Inline failures offer explicit retry or re-selection.
 
+Completed rows are directly hidden from Home in both Apex cards and the current
+built-in tag filter. Do not render a completed heading, count, disclosure or
+expansion control. Preserve incomplete source order and every task in the
+Dashboard/JSON model; this presentation never deletes or relocates data.
+Pending writes keep the current row visible. Hide it only after applying a
+verified saved/reread state; failed writes follow the reread source rather than
+optimistically hiding a task. An Obsidian undo becomes visible on the next
+refresh. Source changes, column/filter switches and reopen all use the same
+incomplete-only policy. This is presentation only, not a preference or a new
+persisted task classification.
+
 Ordinary bookmarks remain in use in the non-sandboxed build. Selection generation
 rejects undispatched intents and late UI replies after a new selection. A save
 already accepted by the file worker may finish against its original file; it
@@ -257,7 +268,8 @@ Source changes only choose a view and never convert, merge or delete data. Unit
 host initialization uses isolated defaults and a temporary task store.
 
 Local list rows use sibling completion/edit buttons, stable UUIDs and existing
-15/14/13-point task/tab/group typography. Completed tasks stay in place. Filters
+15/14/13-point task/tab/group typography. Completed tasks remain in storage and
+are hidden directly from Home without a completed section or count. Filters
 are All, Untagged and named tags. The task editor retains a draft in an observable
 presentation owner above page navigation; draft text is not cleared on dismissal.
 Deleted tag IDs and invalid filters are reconciled when the task surface returns.

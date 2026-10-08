@@ -10,7 +10,6 @@ enum DashboardParseError: LocalizedError, Equatable, Sendable {
   case cardOutsideColumn(line: Int)
   case taskOutsideCard(line: Int)
   case unsupportedTaskStructure(line: Int)
-  case invalidCreationMarker(line: Int)
   case emptyTask(line: Int)
 
   var errorDescription: String? {
@@ -33,8 +32,6 @@ enum DashboardParseError: LocalizedError, Equatable, Sendable {
       "A task appears outside a card on line \(line)."
     case .unsupportedTaskStructure(let line):
       "The task structure on line \(line) is not supported by Pulse."
-    case .invalidCreationMarker(let line):
-      "The Pulse task marker on line \(line) is invalid or detached from its task."
     case .emptyTask(let line):
       "The task on line \(line) has no text."
     }
@@ -161,6 +158,7 @@ struct ApexDashboardParser: Sendable {
     var fence: (character: Character, count: Int)?
     var taskIndentations: [Int] = []
     var immediatelyPreviousTaskIndex: Int?
+    var creationMarkerCounts: [String: Int] = [:]
 
     func finishCard() {
       guard let currentCard, let column = currentColumn else { return }
@@ -170,7 +168,7 @@ struct ApexDashboardParser: Sendable {
     for (offset, line) in lines.enumerated() {
       let lineNumber = lineOffset + offset + 1
       let trimmed = line.trimmingCharacters(in: .whitespaces)
-      let adjacentTaskIndex = immediatelyPreviousTaskIndex
+      let markerTaskIndex = immediatelyPreviousTaskIndex
       immediatelyPreviousTaskIndex = nil
       if let activeFence = fence {
         let count = trimmed.prefix(while: { $0 == activeFence.character }).count
@@ -189,12 +187,15 @@ struct ApexDashboardParser: Sendable {
         }
       }
       if trimmed.hasPrefix("<!--"), trimmed.contains("pulse-task-id") {
-        guard let adjacentTaskIndex, var card = currentCard,
-          card.tasks.indices.contains(adjacentTaskIndex),
-          card.tasks[adjacentTaskIndex].pulseCreationIdentifier == nil,
-          let creationIdentifier = pulseCreationIdentifier(in: line)
-        else { throw DashboardParseError.invalidCreationMarker(line: lineNumber) }
-        card.tasks[adjacentTaskIndex].pulseCreationIdentifier = creationIdentifier
+        // Retry metadata is optional. Apex can reformat or leave comments after
+        // deleting tasks; that must not hide an otherwise valid Dashboard.
+        guard let creationIdentifier = pulseCreationIdentifier(in: line) else { continue }
+        creationMarkerCounts[creationIdentifier, default: 0] += 1
+        guard let markerTaskIndex, var card = currentCard,
+          card.tasks.indices.contains(markerTaskIndex),
+          card.tasks[markerTaskIndex].pulseCreationIdentifier == nil
+        else { continue }
+        card.tasks[markerTaskIndex].pulseCreationIdentifier = creationIdentifier
         currentCard = card
         continue
       }
@@ -281,7 +282,20 @@ struct ApexDashboardParser: Sendable {
           title: declaration.name,
           color: color,
           type: type,
-          cards: cardsByColumn[declaration.name, default: []],
+          cards: cardsByColumn[declaration.name, default: []].map { card in
+            let tasks = card.tasks.map { task in
+              var task = task
+              if let identifier = task.pulseCreationIdentifier,
+                creationMarkerCounts[identifier] != 1
+              {
+                task.pulseCreationIdentifier = nil
+              }
+              return task
+            }
+            return DashboardCard(
+              identifier: card.identifier, title: card.title, type: card.type,
+              tasks: tasks, sourceOrder: card.sourceOrder)
+          },
           sourceOrder: index
         )
       )

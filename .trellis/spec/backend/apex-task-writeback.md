@@ -43,10 +43,15 @@ func setCompleted(_ completed: Bool, task: DashboardTask) -> Task<Void, Never>?
 - Task source retains raw line, one-based line, byte offset, checkbox marker,
   column/card anchors, ancestors and neighbors. File URL and genuine Obsidian
   block ID remain available; `pulseCreationIdentifier` is separate metadata.
-- Only the exact Pulse creation comment immediately after a checkbox row is
-  associated with that task. Malformed or detached Pulse marker comments fail
-  parsing; duplicate identifiers make uncertain-save retry ambiguous and are
-  rejected. Do not add the Pulse ID to task text or treat it as a block ID.
+- The writer places the exact Pulse creation comment immediately after a
+  checkbox row. Only a valid, immediately adjacent, unique identifier is attached
+  in the model. Detached, malformed or duplicate comments are optional metadata:
+  they must not blank the Dashboard or hide legitimate checkbox rows. Never
+  guess ownership across blank lines. Creation retries inspect raw request-ID
+  occurrences and refuse uncertain associations rather than insert duplicates.
+  Pulse retry IDs alone cannot authorize stale checkbox relocation; retain the
+  ordinary raw-line, structure and neighbor checks. Do not add the Pulse ID to
+  task text or treat it as a block ID.
 - UUID presentation identity is independent of completion/line changes; only
   unambiguous one-to-one source matches preserve it. Duplicate IDs are not keys.
 - Snapshot bytes stay in memory. No private content, paths or locators in logs.

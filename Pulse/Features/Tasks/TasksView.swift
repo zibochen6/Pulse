@@ -141,13 +141,16 @@ struct TasksView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 9) {
           if let column = selectedColumn(dashboard) {
-            if column.cards.isEmpty {
-              Text("No tasks")
+            let visibleCards = column.cards.filter { card in
+              card.tasks.contains { !$0.completed }
+            }
+            if visibleCards.isEmpty {
+              Text("No unfinished tasks")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
+                .padding(.vertical, 12)
             } else {
-              ForEach(column.cards) { card in
+              ForEach(visibleCards) { card in
                 cardContent(card)
               }
             }
@@ -186,7 +189,9 @@ struct TasksView: View {
         .accessibilityIdentifier("addDashboardTaskButton")
       }
     }
-    .onChange(of: dashboard.fileURL) { _ in presentation.selectedColumnTitle = nil }
+    .onChange(of: dashboard.fileURL) { _ in
+      presentation.selectedColumnTitle = nil
+    }
   }
 
   private func cardContent(_ card: DashboardCard) -> some View {
@@ -195,18 +200,20 @@ struct TasksView: View {
         .font(.system(size: 13, weight: .medium))
         .foregroundStyle(.secondary)
         .padding(.leading, 1)
-      ForEach(card.tasks) { task in
-        DashboardTaskRow(
-          task: task,
-          isPending: tasks.pendingTaskIDs.contains(task.id),
-          onToggle: { tasks.setCompleted(!task.completed, task: task) },
-          onOpen: {
-            openErrorMessage =
-              onOpenTask(task) ? nil : "Obsidian could not open this Dashboard file."
-          }
-        )
+      ForEach(card.tasks.filter { !$0.completed }) { task in
+        taskRow(task)
       }
     }
+  }
+
+  private func taskRow(_ task: DashboardTask) -> some View {
+    DashboardTaskRow(
+      task: task,
+      isPending: tasks.pendingTaskIDs.contains(task.id),
+      onToggle: { tasks.setCompleted(!task.completed, task: task) },
+      onOpen: {
+        openErrorMessage = onOpenTask(task) ? nil : "Obsidian could not open this Dashboard file."
+      })
   }
 
   private func selectedColumn(_ dashboard: Dashboard) -> DashboardColumn? {

@@ -30,7 +30,7 @@ final class LocalTasksRenderingTests: XCTestCase {
     try FileManager.default.createDirectory(at: renderDirectory, withIntermediateDirectories: true)
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
       let appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
-      for mode in ["list", "editor", "inline-add"] {
+      for mode in ["list-incomplete", "editor", "inline-add"] {
         let presentation = LocalTaskPresentation()
         if mode == "editor" {
           presentation.beginEditingTask(first)
@@ -46,13 +46,15 @@ final class LocalTasksRenderingTests: XCTestCase {
           XCTAssertEqual(controller.tasks(matching: presentation.selectedFilter).count, 2)
           XCTAssertNil(presentation.draft?.taskID)
         }
-        let host = NSHostingView(
-          rootView:
-            LocalTasksView(
-              controller: controller, presentation: presentation, onEditingChanged: { _ in }
-            )
-            .frame(width: 360, height: 455)
-            .background(Color(nsColor: .windowBackgroundColor)))
+        // The actual task surface receives both completed and incomplete rows.
+        // Home hides the completed one; storage still retains it for reload.
+        XCTAssertEqual(controller.document?.tasks.filter(\.completed).count, 1)
+        let rootView = LocalTasksView(
+          controller: controller, presentation: presentation, onEditingChanged: { _ in }
+        )
+        .frame(width: 360, height: 455)
+        .background(Color(nsColor: .windowBackgroundColor))
+        let host = NSHostingView(rootView: rootView)
         host.appearance = appearance
         host.frame = NSRect(x: 0, y: 0, width: 360, height: 455)
         host.layoutSubtreeIfNeeded()

@@ -7,14 +7,17 @@ import XCTest
 final class ApexDashboardTests: XCTestCase {
   func testParserReadsVerifiedApexStructureFromFixture() throws {
     let fileURL = try fixtureURL()
-    let dashboard = try ApexDashboardParser().parse(contents: String(contentsOf: fileURL), fileURL: fileURL)
+    let dashboard = try ApexDashboardParser().parse(
+      contents: String(contentsOf: fileURL), fileURL: fileURL)
 
     XCTAssertEqual(dashboard.columns.map(\.title), ["Inbox", "Workstreams", "参考"])
     XCTAssertEqual(dashboard.columns[0].cards.map(\.title), ["Sample checklist", "Spare notes"])
-    XCTAssertEqual(dashboard.columns[0].cards[0].tasks.map(\.text), [
-      "Draft a fictional outline", "Review a sample document",
-      "Prepare a deliberately long fictional task title that wraps across multiple lines in the compact Pulse menu bar task list",
-    ])
+    XCTAssertEqual(
+      dashboard.columns[0].cards[0].tasks.map(\.text),
+      [
+        "Draft a fictional outline", "Review a sample document",
+        "Prepare a deliberately long fictional task title that wraps across multiple lines in the compact Pulse menu bar task list",
+      ])
     XCTAssertFalse(dashboard.columns[0].cards[0].tasks[0].completed)
     XCTAssertTrue(dashboard.columns[0].cards[0].tasks[1].completed)
     XCTAssertEqual(dashboard.columns[0].cards[0].tasks[0].lineNumber, 23)
@@ -23,17 +26,17 @@ final class ApexDashboardTests: XCTestCase {
 
   func testParserPreservesExplicitBlockIdentifier() throws {
     let contents = """
-    ---
-    dashboard: true
-    columns:
-      - name: 收集
-        color: \"#123456\"
-        type: todo
-    ---
-    ## 收集
-    ### Card
-    - [ ] Keep a stable anchor ^task-anchor
-    """
+      ---
+      dashboard: true
+      columns:
+        - name: 收集
+          color: \"#123456\"
+          type: todo
+      ---
+      ## 收集
+      ### Card
+      - [ ] Keep a stable anchor ^task-anchor
+      """
 
     let dashboard = try ApexDashboardParser().parse(
       contents: contents, fileURL: URL(fileURLWithPath: "/tmp/example.md")
@@ -69,7 +72,34 @@ final class ApexDashboardTests: XCTestCase {
     XCTAssertEqual(dashboard.allTasks[1].blockIdentifier, "native-anchor")
   }
 
-  func testParserRejectsDetachedOrMalformedPulseCreationMarker() {
+  func testParserKeepsTasksVisibleWithoutTrustingBlankSeparatedRetryMarker() throws {
+    let creationID = "pulse-12345678-1234-1234-1234-123456789abc"
+    let contents = """
+      ---
+      dashboard: true
+      columns:
+        - name: Inbox
+          color: "#123456"
+          type: todo
+      ---
+      ## Inbox
+      ### Card
+      - [ ] Created from the menu bar 🚀
+
+      <!-- pulse-task-id: \(creationID) -->
+
+      ### Another card
+      """
+
+    let dashboard = try ApexDashboardParser().parse(
+      contents: contents, fileURL: URL(fileURLWithPath: "/tmp/example.md"))
+    let task = try XCTUnwrap(dashboard.allTasks.first)
+    XCTAssertEqual(task.text, "Created from the menu bar 🚀")
+    XCTAssertNil(task.pulseCreationIdentifier)
+    XCTAssertTrue(task.canToggle)
+  }
+
+  func testParserKeepsTasksVisibleWithDetachedOrMalformedPulseCreationMarkers() throws {
     let header = """
       ---
       dashboard: true
@@ -81,34 +111,61 @@ final class ApexDashboardTests: XCTestCase {
       ## Inbox
       ### Card
       """
-    let invalidBodies = [
+    let bodies = [
       "<!-- pulse-task-id: pulse-12345678-1234-1234-1234-123456789abc -->\n- [ ] Task",
       "- [ ] Task\n<!-- pulse-task-id: not-a-pulse-id -->",
-      "- [ ] Task\n<!-- pulse-task-id: pulse-12345678-1234-1234-1234-123456789abc -->\n<!-- pulse-task-id: pulse-22345678-1234-1234-1234-123456789abc -->",
+      "- [ ] Task\n\n\n<!-- pulse-task-id: pulse-12345678-1234-1234-1234-123456789abc -->",
     ]
 
-    for body in invalidBodies {
-      XCTAssertThrowsError(
-        try ApexDashboardParser().parse(
-          contents: header + "\n" + body, fileURL: URL(fileURLWithPath: "/tmp/example.md")))
+    for body in bodies {
+      let dashboard = try ApexDashboardParser().parse(
+        contents: header + "\n" + body, fileURL: URL(fileURLWithPath: "/tmp/example.md"))
+      XCTAssertEqual(dashboard.allTasks.map(\.text), ["Task"])
+      XCTAssertNil(dashboard.allTasks[0].pulseCreationIdentifier)
+      XCTAssertTrue(dashboard.allTasks[0].canToggle)
     }
+  }
+
+  func testParserDoesNotTrustDuplicateRetryIdentifiers() throws {
+    let identifier = "pulse-12345678-1234-1234-1234-123456789abc"
+    let contents = """
+      ---
+      dashboard: true
+      columns:
+        - name: Inbox
+          color: "#123456"
+          type: todo
+      ---
+      ## Inbox
+      ### Card
+      - [ ] First task
+      <!-- pulse-task-id: \(identifier) -->
+      - [x] Second task
+      <!-- pulse-task-id: \(identifier) -->
+      """
+    let dashboard = try ApexDashboardParser().parse(
+      contents: contents, fileURL: URL(fileURLWithPath: "/tmp/example.md"))
+    XCTAssertEqual(dashboard.allTasks.map(\.text), ["First task", "Second task"])
+    XCTAssertEqual(dashboard.allTasks.map(\.completed), [false, true])
+    XCTAssertTrue(dashboard.allTasks.allSatisfy { $0.pulseCreationIdentifier == nil })
   }
 
   func testParserRejectsTaskOutsideCard() {
     let contents = """
-    ---
-    dashboard: true
-    columns:
-      - name: Inbox
-        color: \"#123456\"
-        type: todo
-    ---
-    ## Inbox
-    - [ ] An ungrouped task
-    """
+      ---
+      dashboard: true
+      columns:
+        - name: Inbox
+          color: \"#123456\"
+          type: todo
+      ---
+      ## Inbox
+      - [ ] An ungrouped task
+      """
 
     XCTAssertThrowsError(
-      try ApexDashboardParser().parse(contents: contents, fileURL: URL(fileURLWithPath: "/tmp/example.md"))
+      try ApexDashboardParser().parse(
+        contents: contents, fileURL: URL(fileURLWithPath: "/tmp/example.md"))
     ) { error in
       XCTAssertEqual(error as? DashboardParseError, .taskOutsideCard(line: 9))
     }
@@ -116,18 +173,19 @@ final class ApexDashboardTests: XCTestCase {
 
   func testParserRejectsColumnHeadingMissingFromFrontmatter() {
     let contents = """
-    ---
-    dashboard: true
-    columns:
-      - name: Inbox
-        color: \"#123456\"
-        type: todo
-    ---
-    ## Other
-    """
+      ---
+      dashboard: true
+      columns:
+        - name: Inbox
+          color: \"#123456\"
+          type: todo
+      ---
+      ## Other
+      """
 
     XCTAssertThrowsError(
-      try ApexDashboardParser().parse(contents: contents, fileURL: URL(fileURLWithPath: "/tmp/example.md"))
+      try ApexDashboardParser().parse(
+        contents: contents, fileURL: URL(fileURLWithPath: "/tmp/example.md"))
     ) { error in
       XCTAssertEqual(error as? DashboardParseError, .undeclaredColumn("Other"))
     }
@@ -143,7 +201,8 @@ final class ApexDashboardTests: XCTestCase {
     let temporaryURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("pulse-apex-\(UUID().uuidString).md")
     defer { try? FileManager.default.removeItem(at: temporaryURL) }
-    try String(contentsOf: try fixtureURL()).write(to: temporaryURL, atomically: true, encoding: .utf8)
+    try String(contentsOf: try fixtureURL()).write(
+      to: temporaryURL, atomically: true, encoding: .utf8)
 
     let configuration = DashboardConfiguration(defaults: defaults)
     let controller = DashboardTaskController(configuration: configuration)
@@ -156,7 +215,9 @@ final class ApexDashboardTests: XCTestCase {
 
     let restoredConfiguration = DashboardConfiguration(defaults: defaults)
     XCTAssertTrue(restoredConfiguration.hasDashboardSelection)
-    XCTAssertEqual(try restoredConfiguration.resolveDashboardURL().standardizedFileURL, temporaryURL.standardizedFileURL)
+    XCTAssertEqual(
+      try restoredConfiguration.resolveDashboardURL().standardizedFileURL,
+      temporaryURL.standardizedFileURL)
 
     try "not an Apex Dashboard".write(to: temporaryURL, atomically: true, encoding: .utf8)
     await controller.refresh()
@@ -171,7 +232,9 @@ final class ApexDashboardTests: XCTestCase {
 
   func testObsidianURIOnlyOpensTheSourceFile() {
     let fileURL = URL(fileURLWithPath: "/tmp/Notes/Task list.md")
-    guard let url = ObsidianURLOpener.url(for: fileURL), let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+    guard let url = ObsidianURLOpener.url(for: fileURL),
+      let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    else {
       return XCTFail("Could not create Obsidian URI")
     }
     XCTAssertEqual(components.scheme, "obsidian")
@@ -181,7 +244,10 @@ final class ApexDashboardTests: XCTestCase {
   }
 
   private func fixtureURL() throws -> URL {
-    guard let url = Bundle(for: Self.self).url(forResource: "sample-apex-dashboard", withExtension: "md") else {
+    guard
+      let url = Bundle(for: Self.self).url(
+        forResource: "sample-apex-dashboard", withExtension: "md")
+    else {
       throw XCTSkip("Apex fixture is not bundled in this test target")
     }
     return url

@@ -44,11 +44,22 @@ indentation, BOM, nearby LF/CRLF style and the presence/absence of a final newli
 Existing tasks and groups are not reordered or rewritten. Each new task receives
 a separate `<!-- pulse-task-id: pulse-UUID -->` HTML-comment marker on the line
 immediately after its checkbox. Apex reads the clean checkbox line as task text;
-Obsidian hides the comment in rendered Markdown. Pulse recognizes only this exact
-adjacent marker and keeps it distinct from genuine Obsidian `^block-id` anchors.
+Obsidian hides the comment in rendered Markdown. Pulse keeps this marker
+separate from genuine Obsidian `^block-id` anchors and associates it with the
+preceding checkbox when no content intervenes.
 A retry accepts the unique marked task only when its content and destination
-match; conflicting or duplicate markers stop the save. This avoids duplicate
-tasks after a save whose flush or verification result is uncertain.
+match and the association can be verified. Raw occurrences of the same request
+ID prevent a retry from inserting a duplicate when the marker has been detached,
+damaged or copied. Ambiguous duplicate-text retries are refused unless the exact
+insertion can be proved. An auxiliary comment alone does not authorize a stale
+checkbox write to a different row.
+
+Pulse reads checkbox tasks even if Apex or a Markdown formatter separates,
+damages or leaves behind a retry comment. Only an exact, immediately adjacent,
+unique comment is attached to a task; separated or duplicate markers are ignored
+for display. This keeps the Dashboard usable without guessing which task owns
+an orphan comment. Genuine structure errors still have explicit parse errors.
+The original file is not cleaned up or rewritten during reading.
 
 Tasks created by earlier Pulse versions may still have a visible `^pulse-UUID`
 suffix because the old marker was written on the checkbox line. Pulse continues
@@ -156,3 +167,37 @@ PulseApexCreation process; executable path confirmed. Computer Use returned
 timeoutReached on the new build, so native menu clicks, keyboard focus and live
 scroll/hover interaction remain unverified. Automated checks did not alter the
 user's source preference, Dashboard bookmark or personal tasks. No commit/push.
+
+## Detached retry-marker recovery verified on 2026-10-08
+
+An auxiliary Pulse comment separated from its task by an empty line previously
+threw a parse error and hid every task. Task deletion or formatter changes could
+reproduce the same failure. Retry metadata is now optional for reading, while
+mutation still requires proven ownership. The reader does not attach separated
+comments to a guessed preceding task, or trust duplicated identifiers.
+
+The writer checks raw request-ID occurrences before retrying; damaged or detached
+markers cannot cause a second insertion. When the original group already has an
+identical task, retry requires proof of the exact additional insertion. Checkbox
+relocation no longer uses a Pulse comment as a stable task anchor.
+
+- Directed parser/creation/writeback suite: 47 passed, 0 failed.
+- Full regression: 178 collected, 176 passed, 2 existing off-window accessibility
+  checks skipped, 0 failed. Strict Swift format and diff checks passed.
+- A temporary harness compiled the current production sources and copied only
+  the selected bookmark into isolated defaults. The production file store,
+  controller and task view loaded and rendered the selected Dashboard in Aqua
+  and Dark Aqua. Source-file digest and real bookmark bytes remained unchanged.
+  This is full read-path/offscreen evidence, not actual popup visual acceptance.
+- A signed universal Release build was installed locally as version 0.1.0,
+  build 2, replacing the older installed build after a recoverable backup.
+  Installed executable bytes match the repaired build; only one installed Pulse
+  process remains. The previous mounted installer was ejected.
+- Computer Use still timed out when reading the installed app. Live popup
+  confirmation was subsequently supplied by a user screenshot showing the
+  restored column tabs and checkbox task list. Read-only inspection also found
+  the installed process in loaded state, with Apex selected on Home. No release,
+  commit or push was performed for this fix.
+
+All automated mutation regressions used temporary files; the personal Dashboard
+was read only. No cleanup of auxiliary comments or task text was applied.

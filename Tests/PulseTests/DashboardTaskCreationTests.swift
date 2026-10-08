@@ -299,6 +299,80 @@ final class DashboardTaskCreationTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: url), changed)
   }
 
+  func testUntrustedRequestMarkersKeepTasksVisibleButRefuseRetry() async throws {
+    let original = document("### Card\n- [ ] Old\n## Notes")
+    for variant in 0..<6 {
+      let url = try temporaryFile(Data(original.utf8))
+      let store = DashboardFileStore(replacer: NeverCreationReplacer())
+      let snapshot = try await store.load(fileURL: url)
+      let intent = request(snapshot)
+      let marker = "<!-- pulse-task-id: \(intent.creationIdentifier) -->"
+      let rows: String
+      switch variant {
+      case 0: rows = marker + "\n- [ ] \(intent.text)"
+      case 1: rows = "- [ ] \(intent.text)\n\n" + marker
+      case 2:
+        rows = "- [ ] \(intent.text)\n<!-- pulse-task-id: \(intent.creationIdentifier) extra -->"
+      case 3: rows = "- [ ] \(intent.text)\n" + marker + "\n- [ ] Other\n" + marker
+      case 4: rows = "- [ ] \(intent.text)\n" + marker.uppercased()
+      default: rows = "- [ ] \(intent.text)\n" + marker + "\n" + marker
+      }
+      let changed = Data(document("### Card\n\(rows)\n## Notes").utf8)
+      try changed.write(to: url)
+      let loaded = try await store.load(fileURL: url)
+      XCTAssertFalse(loaded.allTasks.isEmpty)
+      await expectError(.conflict) { _ = try await store.addTask(request: intent, fileURL: url) }
+      XCTAssertEqual(try Data(contentsOf: url), changed)
+    }
+  }
+
+  func testUnrelatedDetachedMarkerAllowsFreshCreation() async throws {
+    let text = document(
+      "### Card\n<!-- pulse-task-id: pulse-12345678-1234-1234-1234-123456789abc -->\n- [ ] Old\n## Notes"
+    )
+    let url = try temporaryFile(Data(text.utf8))
+    let store = DashboardFileStore()
+    let snapshot = try await store.load(fileURL: url)
+    let intent = request(snapshot)
+    let created = try await store.addTask(request: intent, fileURL: url)
+    XCTAssertEqual(created.allTasks.map(\.text), ["Old", intent.text])
+    let retried = try await store.addTask(request: intent, fileURL: url)
+    XCTAssertEqual(retried.allTasks.count, 2)
+  }
+
+  func testOriginalUntrustedRequestIDRefusesWithoutWriting() async throws {
+    let id = UUID()
+    let marker = "<!-- pulse-task-id: pulse-\(id.uuidString.lowercased()) -->"
+    let original = Data(document("### Card\n\(marker)\n- [ ] Old\n## Notes").utf8)
+    let url = try temporaryFile(original)
+    let store = DashboardFileStore(replacer: NeverCreationReplacer())
+    let snapshot = try await store.load(fileURL: url)
+    let intent = DashboardTaskCreationRequest(
+      id: id, text: "New", destination: request(snapshot).destination, snapshot: snapshot)
+    await expectError(.conflict) { _ = try await store.addTask(request: intent, fileURL: url) }
+    XCTAssertEqual(try Data(contentsOf: url), original)
+  }
+
+  func testIdenticalCreationRetriesNeedExactAdditionalRowProof() async throws {
+    let url = try temporaryFile(Data(document("### Card\n- [ ] Same\n## Notes").utf8))
+    let store = DashboardFileStore()
+    let original = try await store.load(fileURL: url)
+    let intent = request(original, text: "Same")
+    let created = try await store.addTask(request: intent, fileURL: url)
+    XCTAssertEqual(created.allTasks.map(\.text), ["Same", "Same"])
+    let retried = try await DashboardFileStore(replacer: NeverCreationReplacer())
+      .addTask(request: intent, fileURL: url)
+    XCTAssertEqual(retried.allTasks.count, 2)
+
+    let marker = "<!-- pulse-task-id: \(intent.creationIdentifier) -->"
+    let changed = Data(document("### Card\n- [ ] Same\n\(marker)\n## Notes").utf8)
+    try changed.write(to: url)
+    let reloaded = try await store.load(fileURL: url)
+    XCTAssertEqual(reloaded.allTasks.count, 1)
+    await expectError(.conflict) { _ = try await store.addTask(request: intent, fileURL: url) }
+    XCTAssertEqual(try Data(contentsOf: url), changed)
+  }
+
   func testDifferentConcurrentCreationRequestsPreserveBothRows() async throws {
     let url = try temporaryFile(Data(document("### Card\nid: unique\n- [ ] Old\n## Notes").utf8))
     let store = DashboardFileStore()

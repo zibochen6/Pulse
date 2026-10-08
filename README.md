@@ -44,8 +44,11 @@ Open **Settings → Providers**, enter your 88VIP API key, and select **Save key
 New users start with built-in tasks: no Obsidian setup is required. Use **Add Task**
 at the bottom of Home to expand an inline input under the list. Enter text,
 select multiple tags or create tags, and Save; the task list stays visible.
-Click a checkbox to complete or undo completion; click task text to edit it.
-Completed tasks stay in place. Deleting a task requires confirmation.
+Click a checkbox to complete a task; click task text to edit it.
+After persistence is confirmed, completed tasks disappear from Home. No
+completed section, count or expansion control is shown. Completed tasks remain
+in local storage; hiding them never deletes their data.
+Deleting a task requires confirmation.
 
 The compact filter row provides **All**, **Untagged**, and each named tag. Rename
 or remove tags through **Settings → Tasks**; deleting a tag never deletes its tasks.
@@ -81,9 +84,12 @@ ordinary `#tags`, then save directly to the Dashboard. No creation page is opene
 No local copy is created. A failed save keeps the draft for retry; opening and
 closing the popover keeps unsaved input during the same app session. A column
 without groups needs a group created in Obsidian first, or choose another column.
-After saving, Pulse returns to the chosen column. **Click the checkbox to complete or undo completion;
-click task text to open the source file in Obsidian.** Completion is confirmed
-after saving and rereading the original Markdown; it stays in the same position.
+After saving, Pulse returns to the chosen column. **Click the checkbox to complete
+a task; click task text to open the source file in Obsidian.** Completion is
+confirmed after saving and rereading the original Markdown, then the completed
+row disappears from Home. No completed section, count or expansion control is
+shown. Completed tasks and their file order remain unchanged in the Dashboard.
+To undo completion, change the checkbox in Obsidian and reopen or refresh Pulse.
 
 For completion, only the selected checkbox state character is changed. UTF-8 BOM, LF/CRLF,
 metadata, indentation and the rest of the file are retained. Nested checkboxes
@@ -93,6 +99,9 @@ local, asynchronous, and serialized; duplicate clicks on a pending task are
 ignored. New tasks are inserted into the selected group while retaining every
 existing byte. A separate hidden HTML comment carries Pulse's retry identifier,
 so Apex displays only the task text; genuine Obsidian block IDs remain separate.
+Detached or damaged retry comments do not hide the task list. If such a comment
+makes a save retry ambiguous, Pulse refuses that save instead of creating a
+duplicate or updating a guessed row.
 Tasks created by older Pulse versions may still show their `^pulse-...` suffix;
 this update does not rewrite existing Dashboard rows.
 Insertion uses a coordinated atomic replacement, which also requires permission
@@ -122,7 +131,7 @@ See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration]
 
 ## 中文简介
 
-Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额，以及 Apex Dashboard 任务展示和完成状态写回：菜单栏只显示 Codex；在弹窗点击复选框可完成／取消任务并保存到原 Markdown，点击正文打开 Obsidian。内置待办支持增删改、完成状态与多个标签，新用户无需 Obsidian 即可使用；两种任务来源在设置中切换，数据保持独立。通用 Vault 扫描和更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
+Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额，以及 Apex Dashboard 任务展示和完成状态写回：菜单栏只显示 Codex；在弹窗点击复选框可完成任务并保存到原 Markdown，点击正文打开 Obsidian。完成保存后任务直接从首页隐藏，不显示已完成分组或计数；原始文件和内置存储仍保留已完成任务。内置待办支持增删改、完成状态与多个标签，新用户无需 Obsidian 即可使用；两种任务来源在设置中切换，数据保持独立。通用 Vault 扫描和更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
 
 ## License
 

@@ -152,15 +152,9 @@ struct DashboardTaskLocator {
       return candidate
     }
 
-    if let creationID = task.pulseCreationIdentifier {
-      let originalMatches = original.allTasks.filter { $0.pulseCreationIdentifier == creationID }
-      let candidates = tasks.filter { $0.pulseCreationIdentifier == creationID }
-      guard originalMatches.count == 1, candidates.count == 1, let candidate = candidates.first,
-        matches(source, candidate.source)
-      else { throw DashboardWriteError.conflict }
-      return candidate
-    }
-
+    // Pulse's adjacent retry comments can become detached or move onto another
+    // identical row during an external rewrite. They are not task anchors;
+    // ordinary rows must pass the structural/context checks below.
     if let blockID = task.blockIdentifier {
       let originalMatches = original.allTasks.filter { $0.blockIdentifier == blockID }
       let candidates = tasks.filter { $0.blockIdentifier == blockID }

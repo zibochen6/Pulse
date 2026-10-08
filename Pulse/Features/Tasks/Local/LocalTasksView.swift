@@ -162,22 +162,20 @@ struct LocalTasksView: View {
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 2) {
             let tasks = controller.tasks(matching: presentation.selectedFilter)
-            if tasks.isEmpty {
+            let incompleteTasks = tasks.filter { !$0.completed }
+            if incompleteTasks.isEmpty {
               Text(
-                presentation.selectedFilter == .all ? "No tasks yet" : "No tasks in this category"
+                tasks.isEmpty
+                  ? (presentation.selectedFilter == .all
+                    ? "No tasks yet" : "No tasks in this category")
+                  : "No unfinished tasks"
               )
               .font(.system(size: 13))
               .foregroundStyle(.secondary)
               .padding(.vertical, 12)
             }
-            ForEach(tasks) { task in
-              LocalTaskRow(
-                task: task,
-                isPending: controller.pendingTaskIDs.contains(task.id),
-                isEditingEnabled: presentation.draft == nil,
-                onToggle: { controller.setCompleted(!task.completed, taskID: task.id) },
-                onEdit: { presentation.beginEditingTask(task) }
-              )
+            ForEach(incompleteTasks) { task in
+              taskRow(task)
             }
           }
           .padding(.horizontal, 14)
@@ -228,6 +226,16 @@ struct LocalTasksView: View {
         }
       }
     }
+  }
+
+  private func taskRow(_ task: LocalTask) -> some View {
+    LocalTaskRow(
+      task: task,
+      isPending: controller.pendingTaskIDs.contains(task.id),
+      isEditingEnabled: presentation.draft == nil,
+      onToggle: { controller.setCompleted(!task.completed, taskID: task.id) },
+      onEdit: { presentation.beginEditingTask(task) }
+    )
   }
 
   private func filters(_ tags: [TaskTag]) -> some View {

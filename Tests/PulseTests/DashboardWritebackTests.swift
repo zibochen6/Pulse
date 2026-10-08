@@ -180,6 +180,42 @@ final class DashboardWritebackTests: XCTestCase {
     XCTAssertTrue(result.allTasks[0].completed)
   }
 
+  func testMovedPulseRetryCommentCannotIdentifyAnOldDuplicate() async throws {
+    let marker = "<!-- pulse-task-id: pulse-12345678-1234-1234-1234-123456789abc -->"
+    let original = document("### Card\n- [ ] Same\n- [ ] Same\n\(marker)")
+    let url = try temporaryFile(Data(original.utf8))
+    let store = DashboardFileStore()
+    let snapshot = try await store.load(fileURL: url)
+    let selected = snapshot.allTasks[1]
+    XCTAssertNotNil(selected.pulseCreationIdentifier)
+    // Removing the new duplicate leaves its former comment after the old row.
+    let changed = Data(document("### Card\n- [ ] Same\n\(marker)").utf8)
+    try changed.write(to: url)
+    let current = try await store.load(fileURL: url)
+    XCTAssertEqual(current.allTasks.count, 1)
+    await expectError(.conflict) {
+      _ = try await store.setCompleted(true, task: selected, snapshot: snapshot, fileURL: url)
+    }
+    XCTAssertEqual(try Data(contentsOf: url), changed)
+  }
+
+  func testMalformedOrOrphanMarkersDoNotBlockOrdinaryCheckboxWrites() async throws {
+    let original = Data(
+      document(
+        "### Card\n<!-- pulse-task-id: malformed -->\n- [ ] Chosen\n\n<!-- pulse-task-id: pulse-12345678-1234-1234-1234-123456789abc -->"
+      ).utf8)
+    let url = try temporaryFile(original)
+    let store = DashboardFileStore()
+    let snapshot = try await store.load(fileURL: url)
+    let selected = try XCTUnwrap(snapshot.allTasks.first)
+    let result = try await store.setCompleted(
+      true, task: selected, snapshot: snapshot, fileURL: url)
+    XCTAssertTrue(result.allTasks[0].completed)
+    var expected = original
+    expected[try XCTUnwrap(selected.source?.stateByteOffset)] = 120
+    XCTAssertEqual(try Data(contentsOf: url), expected)
+  }
+
   func testExternalAmbiguityDeletionAndContentChangesNeverWrite() async throws {
     let cases: [(String, String)] = [
       ("### Card\n- [ ] Same\n- [ ] Same", "### Card\nextra\n- [ ] Same\n- [ ] Same"),
