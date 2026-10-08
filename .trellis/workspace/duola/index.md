@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
-- **Last Active**: 2026-10-07
+- **Total Sessions**: 16
+- **Last Active**: 2026-10-08
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~385 | Active |
+| `journal-1.md` | ~408 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-10-08 | Pulse 0.1.1 retry safety and preview release | `d986e9b`, `878ec52` | `main` |
 | 15 | 2026-10-07 | Hide Pulse metadata from Apex task labels | `ab1ee24` | `codex/pulse-task-first-home` |
 | 14 | 2026-10-02 | Inline task creation and settings delivery | `6bf6873` | `codex/pulse-task-first-home` |
 | 13 | 2026-09-29 | Adjust Pulse task UI density | `42e4793` | `codex/pulse-task-first-home` |

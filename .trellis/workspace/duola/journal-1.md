@@ -383,3 +383,26 @@ Moved Pulse task retry IDs off checkbox text into adjacent HTML comments. Added 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 16: Pulse 0.1.1 retry safety and preview release
+<!-- trellis-session: v=2 fp=8553ee1c7970cb26 -->
+
+**Date**: 2026-10-08
+**Task**: Pulse 0.1.1 retry safety and preview release
+**Branch**: `main`
+
+### Summary
+
+Hardened uncertain Apex creation retry ownership using complete normalized destination-card proof; fresh writes retain exact-patch validation. Preserved completed-task hiding and optional-marker loading recovery from the checkpoint. Creation tests 25 passed; full regression 178 passed, 2 existing AX skips, 0 failures. Universal Apple Development signed build 0.1.1 (5) and DMG verified; live native UI inspection remains unavailable. No private task content or credentials used in tests.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d986e9b` | fix: verify ownership of uncertain dashboard creation retries |
+| `878ec52` | release: prepare Pulse 0.1.1 |
+
+### Status
+
+[OK] **Completed**
