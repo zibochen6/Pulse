@@ -373,6 +373,53 @@ final class DashboardTaskCreationTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: url), changed)
   }
 
+  func testReformattedOldTaskCannotOwnADeletedCreationMarker() async throws {
+    for oldRows in [
+      "- [ ] Same  ",
+      "- [ ]  Same",
+      "- [X] Same   ",
+      "- [ ] Same ^native-anchor",
+      "- [ ] Parent\n    - [ ] Same",
+      "- [/] Same",
+      "- [ ] Previously different",
+      "* [ ] Same",
+    ] {
+      let url = try temporaryFile(Data(document("### Card\n\(oldRows)\n## Notes").utf8))
+      let store = DashboardFileStore()
+      let original = try await store.load(fileURL: url)
+      let intent = request(original, text: "Same")
+      let created = try await store.addTask(request: intent, fileURL: url)
+      XCTAssertEqual(created.allTasks.count, original.allTasks.count + 1)
+
+      // External rewriting deletes the new row but leaves its optional comment
+      // next to a pre-existing row, possibly after changing that row's format/text.
+      let marker = "<!-- pulse-task-id: \(intent.creationIdentifier) -->"
+      let changed = Data(document("### Card\n- [ ] Same\n\(marker)\n## Notes").utf8)
+      try changed.write(to: url)
+      let retry = DashboardFileStore(replacer: NeverCreationReplacer())
+      await expectError(.conflict) { _ = try await retry.addTask(request: intent, fileURL: url) }
+      XCTAssertEqual(try Data(contentsOf: url), changed, "Refusal must retain every external byte")
+    }
+  }
+
+  func testExactCreationRetryKeepsOldTaskFormattingAndDoesNotWriteAgain() async throws {
+    for oldRows in [
+      "- [ ] Same  ", "- [ ]  Same", "- [X] Same   ", "- [ ] Same ^native-anchor",
+      "- [ ] Parent\n    - [ ] Same", "- [/] Same", "* [ ] Same",
+    ] {
+      let url = try temporaryFile(Data(document("### Card\n\(oldRows)\n## Notes").utf8))
+      let store = DashboardFileStore()
+      let original = try await store.load(fileURL: url)
+      let intent = request(original, text: "Same")
+      let created = try await store.addTask(request: intent, fileURL: url)
+      let saved = try Data(contentsOf: url)
+      let retried = try await DashboardFileStore(replacer: NeverCreationReplacer())
+        .addTask(request: intent, fileURL: url)
+      XCTAssertEqual(retried.allTasks.count, created.allTasks.count)
+      XCTAssertEqual(try Data(contentsOf: url), saved)
+    }
+  }
+
   func testDifferentConcurrentCreationRequestsPreserveBothRows() async throws {
     let url = try temporaryFile(Data(document("### Card\nid: unique\n- [ ] Old\n## Notes").utf8))
     let store = DashboardFileStore()

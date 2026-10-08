@@ -52,6 +52,14 @@ func setCompleted(_ completed: Bool, task: DashboardTask) -> Task<Void, Never>?
   Pulse retry IDs alone cannot authorize stale checkbox relocation; retain the
   ordinary raw-line, structure and neighbor checks. Do not add the Pulse ID to
   task text or treat it as a block ID.
+- An uncertain creation retry needs proof of the exact insertion into its
+  original snapshot: either the complete document, or a uniquely anchored
+  destination card, must match byte-for-byte after ordinary checkbox state
+  normalization. Include whitespace, native block IDs, notes and fences. A
+  surviving marker/text pair cannot prove ownership after external rewriting.
+  Fresh proposed/persisted creation validation instead uses the current trusted
+  `Patch.data`; do not compare it against an older snapshot or reject legitimate
+  intervening edits and serialized app insertions.
 - UUID presentation identity is independent of completion/line changes; only
   unambiguous one-to-one source matches preserve it. Duplicate IDs are not keys.
 - Snapshot bytes stay in memory. No private content, paths or locators in logs.

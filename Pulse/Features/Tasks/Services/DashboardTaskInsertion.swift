@@ -27,6 +27,48 @@ struct DashboardTaskInsertion {
   static func existingTask(for request: DashboardTaskCreationRequest, in dashboard: Dashboard)
     throws -> DashboardTask?
   {
+    guard let candidate = try creationCandidate(for: request, in: dashboard) else { return nil }
+    guard request.snapshot.fileURL.standardizedFileURL == dashboard.fileURL.standardizedFileURL
+    else { throw DashboardWriteError.conflict }
+
+    // A comment can survive deletion or become attached to a reformatted old
+    // task. Prove that our insertion survived, rather than trusting its marker.
+    let expected = try ApexDashboardParser().parse(
+      data: makePatch(for: request, in: request.snapshot).data,
+      fileURL: request.snapshot.fileURL)
+    if DashboardTaskLocator.normalizedData(expected)
+      == DashboardTaskLocator.normalizedData(dashboard)
+    {
+      return candidate
+    }
+    // Allow edits elsewhere, but require the complete destination card to keep
+    // its original bytes plus our insertion. Duplicate anchors need the exact
+    // whole-document proof above. Ordinary checkbox state changes are harmless.
+    _ = try uniqueDestination(for: request, in: request.snapshot)
+    guard
+      try destinationBytes(for: request, in: expected)
+        == destinationBytes(for: request, in: dashboard)
+    else { throw DashboardWriteError.conflict }
+    return candidate
+  }
+
+  /// Fresh writes have a trusted patch based on the latest coordinated read.
+  /// They must not use the older snapshot's uncertain-retry ownership proof.
+  static func createdTask(
+    for request: DashboardTaskCreationRequest, in dashboard: Dashboard, patch: Patch
+  ) throws -> DashboardTask {
+    guard dashboard.sourceData == patch.data else { throw DashboardWriteError.verificationFailed }
+    do {
+      guard let candidate = try creationCandidate(for: request, in: dashboard) else {
+        throw DashboardWriteError.verificationFailed
+      }
+      return candidate
+    } catch { throw DashboardWriteError.verificationFailed }
+  }
+
+  private static func creationCandidate(
+    for request: DashboardTaskCreationRequest, in dashboard: Dashboard
+  ) throws -> DashboardTask? {
     let text = try request.validatedText()
     let candidates = dashboard.allTasks.filter {
       $0.pulseCreationIdentifier == request.creationIdentifier
@@ -45,33 +87,41 @@ struct DashboardTaskInsertion {
       source.columnTitle == request.destination.columnTitle,
       source.cardTitle == request.destination.cardTitle,
       source.cardIdentifier == request.destination.cardIdentifier,
-      let column = dashboard.columns.first(where: { $0.title == source.columnTitle }),
-      let card = column.cards.first(where: { $0.tasks.contains(where: { $0.id == candidate.id }) }),
-      card.type == request.destination.cardType,
+      let containingColumn = dashboard.columns.first(where: { column in
+        column.cards.contains(where: { $0.tasks.contains(where: { $0.id == candidate.id }) })
+      }),
+      let containingCard = containingColumn.cards.first(where: {
+        $0.tasks.contains(where: { $0.id == candidate.id })
+      }),
+      request.destination.matches(containingColumn, containingCard),
       DashboardSourceDocument.normalizedLine(source.rawLine)
         == "- [ ] \(text)"
     else { throw DashboardWriteError.conflict }
 
-    let originalMatches = request.snapshot.allTasks.filter { oldTask in
-      guard let oldSource = oldTask.source else { return false }
-      return oldSource.columnTitle == request.destination.columnTitle
-        && oldSource.cardTitle == request.destination.cardTitle
-        && oldSource.cardIdentifier == request.destination.cardIdentifier
-        && DashboardSourceDocument.normalizedLine(oldSource.rawLine) == "- [ ] \(text)"
-    }
-    if !originalMatches.isEmpty {
-      // A deleted new row can leave its comment next to an identical old row.
-      // Only the exact insertion into the original snapshot proves that the
-      // additional duplicate persisted; a comment alone cannot prove ownership.
-      let expected = try ApexDashboardParser().parse(
-        data: makePatch(for: request, in: request.snapshot).data,
-        fileURL: request.snapshot.fileURL)
-      guard
-        DashboardTaskLocator.normalizedData(expected)
-          == DashboardTaskLocator.normalizedData(dashboard)
-      else { throw DashboardWriteError.conflict }
-    }
     return candidate
+  }
+
+  private static func uniqueDestination(
+    for request: DashboardTaskCreationRequest, in dashboard: Dashboard
+  ) throws -> (DashboardColumn, DashboardCard) {
+    let matches = dashboard.columns.flatMap { column in
+      column.cards.filter { request.destination.matches(column, $0) }.map { (column, $0) }
+    }
+    guard matches.count == 1, let match = matches.first else { throw DashboardWriteError.conflict }
+    return match
+  }
+
+  private static func destinationBytes(
+    for request: DashboardTaskCreationRequest, in dashboard: Dashboard
+  ) throws -> Data {
+    let (column, card) = try uniqueDestination(for: request, in: dashboard)
+    let document = try DashboardSourceDocument(data: DashboardTaskLocator.normalizedData(dashboard))
+    let range = try cardLineRange(column: column, card: card, document: document)
+    let start = document.lines[range.lowerBound].byteOffset
+    let end =
+      range.upperBound < document.lines.count
+      ? document.lines[range.upperBound].byteOffset : document.data.count
+    return Data(document.data[start..<end])
   }
 
   private static func rawCreationIdentifierCount(_ identifier: String, in dashboard: Dashboard)

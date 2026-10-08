@@ -50,9 +50,19 @@ preceding checkbox when no content intervenes.
 A retry accepts the unique marked task only when its content and destination
 match and the association can be verified. Raw occurrences of the same request
 ID prevent a retry from inserting a duplicate when the marker has been detached,
-damaged or copied. Ambiguous duplicate-text retries are refused unless the exact
-insertion can be proved. An auxiliary comment alone does not authorize a stale
-checkbox write to a different row.
+damaged or copied. Retry ownership requires the exact original insertion to
+survive: either the whole normalized document matches, or the destination card
+has unique anchors and its complete normalized bytes match. Ordinary checkbox
+states may change; task text, whitespace, native block IDs, notes and fenced
+content must remain intact. Changes outside that card can be retained. Rewriting
+inside it makes an uncertain retry fail safely, even when a leftover marker
+looks attached to the right text. An auxiliary comment alone does not authorize
+a stale checkbox write to a different row.
+
+Fresh creation uses a separate exact-patch validation against the latest
+coordinated file snapshot. It allows legitimate edits before the initial save
+and multiple queued creations; it does not incorrectly apply the old-snapshot
+retry proof to a newly generated patch.
 
 Pulse reads checkbox tasks even if Apex or a Markdown formatter separates,
 damages or leaves behind a retry comment. Only an exact, immediately adjacent,

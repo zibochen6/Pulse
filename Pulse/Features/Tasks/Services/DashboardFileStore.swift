@@ -274,9 +274,10 @@ final class DashboardFileStore: DashboardFileStoring, Sendable {
     guard initial.st_mode & 0o222 != 0 else { throw DashboardWriteError.permissionDenied }
     let patch = try DashboardTaskInsertion.makePatch(for: request, in: latest)
     let proposed = try parser.parse(data: patch.data, fileURL: fileURL)
-    guard proposed.allTasks.count == latest.allTasks.count + 1,
-      try DashboardTaskInsertion.existingTask(for: request, in: proposed) != nil
-    else { throw DashboardWriteError.verificationFailed }
+    guard proposed.allTasks.count == latest.allTasks.count + 1 else {
+      throw DashboardWriteError.verificationFailed
+    }
+    _ = try DashboardTaskInsertion.createdTask(for: request, in: proposed, patch: patch)
     try replacer.replace(data: patch.data, fileURL: fileURL) {
       try verifyRevision(fileURL, descriptor: descriptor, expected: bytes, initial: initial)
     }
@@ -284,9 +285,7 @@ final class DashboardFileStore: DashboardFileStoring, Sendable {
       let persisted = try read(fileURL)
       guard persisted == patch.data else { throw DashboardWriteError.verificationFailed }
       let verified = try parser.parse(data: persisted, fileURL: fileURL)
-      guard try DashboardTaskInsertion.existingTask(for: request, in: verified) != nil else {
-        throw DashboardWriteError.verificationFailed
-      }
+      _ = try DashboardTaskInsertion.createdTask(for: request, in: verified, patch: patch)
       let result = DashboardTaskInsertion.preservingIdentities(
         in: verified, from: latest, patch: patch)
       Self.insertionHistory.record(before: latest, after: result, patch: patch)
