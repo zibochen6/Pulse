@@ -37,28 +37,19 @@ struct TasksView: View {
   private var taskSurface: some View {
     VStack(spacing: 0) {
       if let failure = tasks.saveFailure {
-        VStack(alignment: .leading, spacing: 4) {
-          Text(failure.message)
-            .font(.caption)
-            .foregroundStyle(.red)
-            .fixedSize(horizontal: false, vertical: true)
-          HStack {
-            if failure.needsReselection {
-              Button("Choose file in Settings", action: onConfigure)
-            } else {
-              Button("Retry save") { tasks.retrySave() }
-                .disabled(tasks.pendingTaskIDs.contains(failure.task.id))
-              Button("Refresh") { tasks.requestRefresh() }
-            }
-            Spacer()
-            Button("Dismiss") { tasks.dismissSaveFailure() }
+        PulseErrorBanner(
+          message: failure.message,
+          accessibilityIdentifier: "dashboardSaveError"
+        ) {
+          if failure.needsReselection {
+            Button("Choose file in Settings", action: onConfigure)
+          } else {
+            Button("Retry save") { tasks.retrySave() }
+              .disabled(tasks.pendingTaskIDs.contains(failure.task.id))
+            Button("Refresh") { tasks.requestRefresh() }
           }
-          .buttonStyle(.borderless)
-          .font(.caption)
+          Button("Dismiss") { tasks.dismissSaveFailure() }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
-        .accessibilityIdentifier("dashboardSaveError")
         Divider()
       }
       content
@@ -123,12 +114,13 @@ struct TasksView: View {
       ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 4) {
           ForEach(dashboard.columns) { column in
-            TaskColumnTab(
+            PulsePillTab(
               title: column.title,
-              isSelected: selectedColumn(dashboard)?.title == column.title
-            ) {
-              presentation.selectedColumnTitle = column.title
-            }
+              isSelected: selectedColumn(dashboard)?.title == column.title,
+              action: {
+                presentation.selectedColumnTitle = column.title
+              }
+            )
             .accessibilityIdentifier("dashboardColumnTab.\(column.sourceOrder)")
           }
         }
@@ -240,36 +232,6 @@ struct TasksView: View {
   }
 }
 
-private struct TaskColumnTab: View {
-  let title: String
-  let isSelected: Bool
-  let action: () -> Void
-
-  @State private var isHovered = false
-
-  var body: some View {
-    Button(action: action) {
-      Text(title)
-        .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-        .foregroundStyle(isSelected ? .primary : .secondary)
-        .lineLimit(1)
-        .padding(.horizontal, 9)
-        .frame(height: 26)
-        .background(tabBackground, in: Capsule())
-        .contentShape(Capsule())
-    }
-    .buttonStyle(.plain)
-    .onHover { isHovered = $0 }
-  }
-
-  private var tabBackground: Color {
-    if isSelected {
-      return Color(nsColor: .selectedControlColor).opacity(0.16)
-    }
-    return isHovered ? Color(nsColor: .controlBackgroundColor) : .clear
-  }
-}
-
 struct DashboardTaskRow: View {
   let task: DashboardTask
   let isPending: Bool
@@ -302,7 +264,7 @@ struct DashboardTaskRow: View {
         .frame(width: 28, height: 30, alignment: .top)
         .contentShape(Rectangle())
       }
-      .buttonStyle(TaskRowButtonStyle(isHovered: isHovered))
+      .buttonStyle(PulseRowButtonStyle(isHovered: isHovered))
       .disabled(isPending || !task.canToggle)
       .help(
         task.canToggle
@@ -336,30 +298,11 @@ struct DashboardTaskRow: View {
           .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
           .contentShape(Rectangle())
       }
-      .buttonStyle(TaskRowButtonStyle(isHovered: isHovered))
+      .buttonStyle(PulseRowButtonStyle(isHovered: isHovered))
       .accessibilityLabel("Open in Obsidian: \(task.text)")
       .accessibilityIdentifier("dashboardTask.\(task.lineNumber)")
     }
     .padding(.leading, CGFloat((task.source?.indentation ?? 0) / 4) * 10)
     .onHover { isHovered = $0 }
-  }
-}
-
-private struct TaskRowButtonStyle: ButtonStyle {
-  let isHovered: Bool
-
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .padding(.horizontal, 2)
-      .padding(.vertical, 3)
-      .background(
-        (isHovered || configuration.isPressed)
-          ? Color(nsColor: .quaternaryLabelColor)
-            .opacity(configuration.isPressed ? 0.28 : 0.16)
-          : .clear,
-        in: RoundedRectangle(cornerRadius: 6)
-      )
-      .opacity(configuration.isPressed ? 0.72 : 1)
-      .animation(.easeOut(duration: 0.12), value: isHovered)
   }
 }

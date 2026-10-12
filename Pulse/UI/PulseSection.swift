@@ -16,9 +16,9 @@ struct PulseSection<Content: View>: View {
     }
     .padding(12)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+    .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge))
     .overlay {
-      RoundedRectangle(cornerRadius: 12)
+      RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge)
         .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
     }
   }

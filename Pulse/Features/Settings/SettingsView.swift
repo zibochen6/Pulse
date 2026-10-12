@@ -25,7 +25,7 @@ struct SettingsView: View {
             .font(.system(size: 13, weight: .semibold))
             .frame(width: 28, height: 28)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(PulseIconButtonStyle())
         .help("Back to Home")
         .accessibilityLabel("Back to Home")
         .accessibilityIdentifier("backToHomeButton")

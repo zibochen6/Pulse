@@ -255,7 +255,7 @@ struct LocalTasksView: View {
   private func filterButton(
     _ title: String, filter: LocalTaskFilter, identifier: String
   ) -> some View {
-    LocalTaskFilterButton(
+    PulsePillTab(
       title: title,
       isSelected: presentation.selectedFilter == filter,
       action: { presentation.selectedFilter = filter }
@@ -266,27 +266,17 @@ struct LocalTasksView: View {
   private func errorContent(
     _ message: String, onRetry: @escaping () -> Void, onDismiss: @escaping () -> Void
   ) -> some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Text(message)
-        .font(.caption)
-        .foregroundStyle(.red)
-        .fixedSize(horizontal: false, vertical: true)
-      HStack {
-        Button("Try again", action: onRetry)
-          .disabled(controller.isSaving || controller.isLoading)
-        Spacer()
-        Button("Dismiss", action: onDismiss)
-      }
-      .buttonStyle(.borderless)
-      .font(.caption)
+    PulseErrorBanner(
+      message: message,
+      accessibilityIdentifier: "localTaskError"
+    ) {
+      Button("Try again", action: onRetry)
+        .disabled(controller.isSaving || controller.isLoading)
+      Button("Dismiss", action: onDismiss)
     }
-    .padding(.horizontal, 14)
-    .padding(.vertical, 6)
-    .accessibilityIdentifier("localTaskError")
   }
 
 }
-
 /// New tasks are composed under the existing list. Existing-task edits retain
 /// their separate editor, including its deletion confirmation.
 @MainActor
@@ -442,7 +432,7 @@ struct LocalTaskRow: View {
         .frame(width: 28, height: 30, alignment: .top)
         .contentShape(Rectangle())
       }
-      .buttonStyle(LocalTaskRowButtonStyle(isHovered: isHovered))
+      .buttonStyle(PulseRowButtonStyle(isHovered: isHovered))
       .disabled(isPending)
       .help(task.completed ? "Mark incomplete" : "Mark complete")
       .accessibilityLabel("\(task.completed ? "Mark incomplete" : "Mark complete"): \(task.text)")
@@ -461,7 +451,7 @@ struct LocalTaskRow: View {
           .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
           .contentShape(Rectangle())
       }
-      .buttonStyle(LocalTaskRowButtonStyle(isHovered: isHovered))
+      .buttonStyle(PulseRowButtonStyle(isHovered: isHovered))
       .disabled(!isEditingEnabled)
       .help(
         isEditingEnabled ? "Edit task" : "Add or cancel the new task before editing another task"
@@ -474,52 +464,6 @@ struct LocalTaskRow: View {
       .accessibilityIdentifier("localTaskText.\(task.id.uuidString)")
     }
     .onHover { isHovered = $0 }
-  }
-}
-
-private struct LocalTaskFilterButton: View {
-  let title: String
-  let isSelected: Bool
-  let action: () -> Void
-  @State private var isHovered = false
-
-  var body: some View {
-    Button(action: action) {
-      Text(title)
-        .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-        .foregroundStyle(isSelected ? .primary : .secondary)
-        .lineLimit(1)
-        .padding(.horizontal, 9)
-        .frame(height: 26)
-        .background(
-          isSelected
-            ? Color(nsColor: .selectedControlColor).opacity(0.16)
-            : (isHovered ? Color(nsColor: .controlBackgroundColor) : .clear),
-          in: Capsule()
-        )
-        .contentShape(Capsule())
-    }
-    .buttonStyle(.plain)
-    .accessibilityValue(isSelected ? "Selected" : "Not selected")
-    .onHover { isHovered = $0 }
-  }
-}
-
-private struct LocalTaskRowButtonStyle: ButtonStyle {
-  let isHovered: Bool
-
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .padding(.horizontal, 2)
-      .padding(.vertical, 3)
-      .background(
-        (isHovered || configuration.isPressed)
-          ? Color(nsColor: .quaternaryLabelColor).opacity(configuration.isPressed ? 0.28 : 0.16)
-          : .clear,
-        in: RoundedRectangle(cornerRadius: 6)
-      )
-      .opacity(configuration.isPressed ? 0.72 : 1)
-      .animation(.easeOut(duration: 0.12), value: isHovered)
   }
 }
 

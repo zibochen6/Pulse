@@ -117,7 +117,7 @@ struct HomeView: View {
             .font(.system(size: 13, weight: .semibold))
             .frame(width: 28, height: 28)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(PulseIconButtonStyle())
         .help("Back to Home")
         .accessibilityLabel("Back to Home")
         .accessibilityIdentifier("backToHomeButton")
@@ -181,10 +181,10 @@ struct HomeView: View {
         .font(.system(size: 15, weight: .medium))
         .frame(width: 28, height: 28)
     }
-    .buttonStyle(.borderless)
-    .help("Settings")
-    .accessibilityLabel("Open Settings")
-    .accessibilityIdentifier("openSettingsButton")
+        .buttonStyle(PulseIconButtonStyle())
+        .help("Settings")
+        .accessibilityLabel("Open Settings")
+        .accessibilityIdentifier("openSettingsButton")
   }
 
 }

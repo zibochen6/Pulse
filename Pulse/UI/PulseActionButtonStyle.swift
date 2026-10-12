@@ -22,20 +22,20 @@ struct PulseActionButtonStyle: ButtonStyle {
 
     var body: some View {
       configuration.label
-        .font(.system(size: 12, weight: .medium))
+        .font(.system(size: PulseDesignTokens.caption, weight: .medium))
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
         .foregroundStyle(isPrimary ? Color.white : (isDestructive ? Color.red : Color.primary))
-        .background(background, in: RoundedRectangle(cornerRadius: 6))
+        .background(background, in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
         .overlay {
-          RoundedRectangle(cornerRadius: 6)
+          RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
             .strokeBorder(
               isPrimary
                 ? tint.opacity(0.8)
                 : (isDestructive ? tint.opacity(0.25) : Color(nsColor: .separatorColor)),
               lineWidth: 0.7)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 6))
+        .contentShape(RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
         .opacity(isEnabled ? 1 : 0.45)
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: isHovered)
