@@ -406,3 +406,25 @@ Hardened uncertain Apex creation retry ownership using complete normalized desti
 ### Status
 
 [OK] **Completed**
+
+
+## Session 17: DeepSeek monitoring and Pulse 0.1.2 release
+<!-- trellis-session: v=2 fp=dfacd1b4be7a3acc -->
+
+**Date**: 2026-10-18
+**Task**: DeepSeek monitoring and Pulse 0.1.2 release
+**Branch**: `main`
+
+### Summary
+
+Added DeepSeek native-currency balances with isolated Keychain settings, generation-safe refresh and a left-aligned adaptive header. Replaced the initial generic whale with exact official vector geometry. Full suite: 194 tests, 2 existing skips, zero failures; build, formatting, independent reviews and focused rendering passed. Published development-signed universal Pulse 0.1.2/build 6 with verified DMG and checksum to GitHub v0.1.2, installed and launched the identical app locally with an old-app backup. Native desktop inspection timed out; no Gatekeeper settings or private user data were changed. Pre-existing .workbuddy and docs/images files remain excluded.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4b2a808` | release: prepare Pulse 0.1.2 |
+
+### Status
+
+[OK] **Completed**

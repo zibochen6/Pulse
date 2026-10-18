@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 16
-- **Last Active**: 2026-10-08
+- **Total Sessions**: 17
+- **Last Active**: 2026-10-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~408 | Active |
+| `journal-1.md` | ~430 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 17 | 2026-10-18 | DeepSeek monitoring and Pulse 0.1.2 release | `4b2a808` | `main` |
 | 16 | 2026-10-08 | Pulse 0.1.1 retry safety and preview release | `d986e9b`, `878ec52` | `main` |
 | 15 | 2026-10-07 | Hide Pulse metadata from Apex task labels | `ab1ee24` | `codex/pulse-task-first-home` |
 | 14 | 2026-10-02 | Inline task creation and settings delivery | `6bf6873` | `codex/pulse-task-first-home` |
