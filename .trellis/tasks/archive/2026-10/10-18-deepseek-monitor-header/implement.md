@@ -60,5 +60,5 @@ The latest user instruction explicitly authorizes code publication and local ins
 - [x] Build universal Release, sign with the existing local Apple Development identity, verify signature/version/architectures.
 - [x] Package DMG + SHA-256; mount read-only, verify exact app payload, and eject.
 - [x] Back up and replace the installed app; launch `/Applications/Pulse.app` and verify its version, signature, executable hash, and running process path.
-- [ ] Commit only task-owned source/docs; publish main/tag/release assets and verify GitHub state.
-- [ ] Record release evidence/spec conventions, archive the task, record journal, and push bookkeeping without modifying release source/tag.
+- [x] Commit only task-owned source/docs; publish main/tag/release assets and verify GitHub state.
+- [x] Record release evidence/spec conventions and hand off task archival, journal recording, and bookkeeping publication to the final finish-work sequence without modifying release source/tag.
