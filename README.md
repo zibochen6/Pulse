@@ -2,11 +2,11 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services and Obsidian every day. The intended product brings AI usage status and Markdown tasks into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP balance integrations, built-in tasks with multiple tags, and optional Apex Dashboard tasks with creation and checkbox completion saved to Markdown. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query a user-configured 88VIP account balance. The menu bar remains Codex-only; the popover header shows both compact statuses. Click either status for Usage details; Settings is another page in the same popover. A development-signed preview is available on GitHub.
+**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP and DeepSeek balance integrations, built-in tasks with multiple tags, and optional Apex Dashboard tasks with creation and checkbox completion saved to Markdown. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query user-configured 88VIP and DeepSeek account balances. The menu bar remains Codex-only; the popover header shows all three compact statuses, left aligned and wrapped when needed. Click any status for Usage details; Settings is another page in the same popover. A development-signed preview is available on GitHub.
 
 ## Download and install
 
-Download [Pulse 0.1.1](https://github.com/zibochen6/Pulse/releases/tag/v0.1.1)
+Download [Pulse 0.1.2](https://github.com/zibochen6/Pulse/releases/tag/v0.1.2)
 for macOS 13 or newer (Apple Silicon and Intel). Open the DMG and drag Pulse
 to Applications. Quit the previous Pulse instance before replacing it, then
 launch `/Applications/Pulse.app`; its settings and task storage are retained.
@@ -17,7 +17,7 @@ signed or notarized**. macOS may block first launch. If you trust the downloaded
 build, use the available **Open Anyway** option in System Settings → Privacy &
 Security after attempting to launch; follow [Apple's guidance](https://support.apple.com/102445)
 and do not disable Gatekeeper. Source builds
-remain available below. See [0.1.1 release notes](docs/releases/0.1.1.md) for
+remain available below. See [0.1.2 release notes](docs/releases/0.1.2.md) for
 changes and current limits.
 
 ## Build and run
@@ -37,7 +37,7 @@ xcodebuild -project Pulse.xcodeproj -scheme Pulse -configuration Debug -destinat
 
 After rebuilding, quit any running Pulse instance and launch the new build. A menu bar app can keep displaying the previous icon and readout until its process restarts.
 
-`project.yml` is the [XcodeGen](https://github.com/yonaskolb/XcodeGen) source for the checked-in Xcode project. XcodeGen is only needed if you change project structure: run `xcodegen generate` and commit the updated `.xcodeproj` together with `project.yml`. The app has `App`, `Core`, `Features`, and `UI` source directories. Unit tests use synthetic usage responses, a mock usage provider, and a simulated login item service. The test scheme disables live Codex refresh in its app host, so tests do not query a real account.
+`project.yml` is the [XcodeGen](https://github.com/yonaskolb/XcodeGen) source for the checked-in Xcode project. XcodeGen is only needed if you change project structure: run `xcodegen generate` and commit the updated `.xcodeproj` together with `project.yml`. The app has `App`, `Core`, `Features`, and `UI` source directories. Unit tests use synthetic usage responses, a mock usage provider, and a simulated login item service. The test scheme disables live provider refresh in its app host, so tests do not query a real account.
 
 ## Current settings
 
@@ -54,6 +54,29 @@ If the app cannot find Codex, install or launch Codex and check that its CLI wor
 Open **Settings → Providers**, enter your 88VIP API key, and select **Save key**. Pulse stores the key only in your macOS Keychain. It queries 88API's documented billing subscription and usage endpoints, calculates the remaining balance in USD, and shows it beside Codex in the popover. The full Usage page includes the limit, used amount, remaining amount, available expiry, update time, and a manual refresh action.
 
 88VIP refreshes at launch and every ten minutes. Opening the popover refreshes a reading older than 60 seconds; selecting the compact status or the Usage page's refresh control requests it immediately. Network requests time out instead of leaving refresh controls busy indefinitely. Missing keys and other unavailable/error states show an error marker in the compact status, with the detailed reason on the Usage page. Partial responses are retried on a later popover open after a 60-second cooldown. Pulse never converts a USD value to another currency or fabricates a remaining balance. Clicking the Codex status likewise requests a fresh reading.
+
+## DeepSeek balance
+
+Open **Settings → Providers**, enter your DeepSeek API key, and select **Save key**.
+Pulse stores it only in macOS Keychain, independently of 88VIP. **Replace key**
+and **Remove key** immediately clear the previous reading and refresh the account.
+The integration uses the [official account balance endpoint](https://api-docs.deepseek.com/api/get-user-balance);
+it monitors API account balance rather than a chat subscription or token history.
+
+The Home status shows the reported total with `¥` for CNY or `$` for USD. When
+both are reported, Home prefers CNY and Usage lists the totals separately with
+explicit currency labels. Pulse neither converts nor sums currencies. Zero and
+negative reported totals remain valid readings. Click the DeepSeek whale status
+for Usage details, update time, setup/error guidance, and manual refresh.
+
+DeepSeek refreshes at launch and every ten minutes, on popover open when the
+reading is older than 60 seconds, and immediately after a key change or manual
+refresh. Requests time out after 20 seconds. Missing keys and failed requests
+show `!` in Home and explain the reason in Usage; an old amount is never kept as
+the current result after a failure. Provider controls sit toward the leading
+edge and wrap as complete controls when amounts or quota windows need space.
+Only a readout wider than the entire row scrolls horizontally; ordinary amounts
+and their decimal digits remain visible in full within the 360 × 510 popover.
 
 ## Built-in tasks
 
@@ -138,16 +161,16 @@ feedback; Reduce Motion disables these transitions.
 
 ## Direction
 
-- **AI status:** Codex and 88VIP are connected. Provider-specific capabilities for OpenAI API, DeepSeek, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window are displayed as different kinds of information.
+- **AI status:** Codex, 88VIP, and DeepSeek are connected. Provider-specific capabilities for OpenAI API, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window are displayed as different kinds of information.
 - **Obsidian tasks:** Pulse can read one selected Apex Dashboard in the verified
   format. Checkbox completion writes back to the selected Markdown; general Vault scanning and other task editing remain future work.
-- **Privacy:** the app runs locally. 88VIP API keys are stored in macOS Keychain; ordinary preferences use UserDefaults. Built-in tasks are stored locally; Pulse stores no imported Vault content and has no analytics.
+- **Privacy:** the app runs locally. 88VIP and DeepSeek API keys are stored in macOS Keychain; ordinary preferences use UserDefaults. Built-in tasks are stored locally; Pulse stores no imported Vault content and has no analytics.
 
 See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
 
 ## 中文简介
 
-Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额，以及 Apex Dashboard 任务展示和完成状态写回：菜单栏只显示 Codex；在弹窗点击复选框可完成任务并保存到原 Markdown，点击正文打开 Obsidian。完成保存后任务直接从首页隐藏，不显示已完成分组或计数；原始文件和内置存储仍保留已完成任务。内置待办支持增删改、完成状态与多个标签，新用户无需 Obsidian 即可使用；两种任务来源在设置中切换，数据保持独立。通用 Vault 扫描和更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
+Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额与 DeepSeek 原币种余额，以及 Apex Dashboard 任务展示和完成状态写回：菜单栏只显示 Codex；在弹窗点击复选框可完成任务并保存到原 Markdown，点击正文打开 Obsidian。完成保存后任务直接从首页隐藏，不显示已完成分组或计数；原始文件和内置存储仍保留已完成任务。内置待办支持增删改、完成状态与多个标签，新用户无需 Obsidian 即可使用；两种任务来源在设置中切换，数据保持独立。通用 Vault 扫描和更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
 
 ## License
 

@@ -31,6 +31,7 @@ The production initializer supplies `.standard` and `SystemLoginItemService()` b
 - Opening the popover calls `refreshLoginItemStatus()` before presentation. Enabling or disabling calls `SMAppService.mainApp` through `LoginItemManaging`, then refreshes status.
 - The status item renders the bundled Codex icon plus the current `UsageRefreshState` title (`…`, percentage, `--`, or `!`). `showMenuBarLabel` only adds the word “Pulse”; it never hides the usage state.
 - `CodexMenuIcon.png` is the monochrome template artwork for the macOS status bar only. Popover views use `CodexProviderIcon`, backed by the alpha-enabled `CodexColorIcon.png`, so the Codex mark keeps its supplied blue-violet color in both Aqua and Dark Aqua. Do not set the popover image to template rendering or reuse it for the status item.
+- `DeepSeekProviderIcon` must preserve the actual DeepSeek whale geometry, including the belly, eye and tail negative spaces. The initial generic whale silhouette was rejected by the user. Reuse the shared native vector component on Home, Usage and Settings; preserve aspect ratio inside its existing frame and use the reference blue `#4D6BFE`. Obtain original vector geometry from the official source rather than approximating the mark. Keep attribution in `THIRD_PARTY_NOTICES.md` and inspect an enlarged render as well as the 14–18-point icons in both appearances.
 - The popover uses one `HomeView.popoverSize` for both AppKit and SwiftUI and covers the entire hosting surface with adaptive opaque `windowBackgroundColor`. Section cards use opaque `controlBackgroundColor`. Native show/close animation is enabled unless NSWorkspace reports Reduce Motion; never restore the former clear background or unconditionally disable motion. Observe accessibility display changes and reread the setting before opening/closing. Animation duration and appearance are owned by macOS.
 - `@Published` emits during `willSet`. Subscribers that update AppKit controls must use the emitted value rather than re-read the stored property in the same callback.
 - Rebuilding the app does not replace an already-running menu bar process. Restart the built app before judging its icon, quota, or popover appearance.
@@ -113,8 +114,9 @@ enum PopoverPage: Equatable {
 
 ### 3. Contracts
 
-- The Home header contains Pulse identity, Settings gear, and one clickable `AIStatusSummary`. Its only data is the real Codex icon and `UsageMenuFormatter.title(for:)`: one window yields a bare percentage, multiple windows yield short labeled values, and loading/unavailable/failure yield `…`/`--`/`!`. Home has no usage reset time, update time, refresh control, or provider list. The AppKit menu bar uses the same formatter, but its behavior is unchanged.
-- Clicking the summary calls `showUsage()` and displays full `UsageView` in a separate scrollable page. The existing Usage details and manual refresh remain there. Add Provider routes only to the Settings Providers explanation. Back from Usage or Settings calls `showHome()`.
+- The Home header contains Pulse identity, the Settings gear, and independent compact Codex, 88VIP, and DeepSeek controls. Codex uses the real icon and `UsageMenuFormatter.title(for:)`: one window yields a bare percentage, multiple windows yield short labeled values, and loading/unavailable/failure yield `…`/`--`/`!`. Money remains a native-currency balance, separate from quota percentages. Home has no reset time, update time, or refresh control; those belong to Usage. The AppKit menu bar continues to use only Codex state.
+- Header status controls begin beside the brand with flexible space after them, shifting them toward the leading edge. When they do not fit, place them in leading-aligned rows below the brand; wrap whole controls instead of clipping monetary decimals or overlapping Settings. Bound a single exceptionally wide quota control and make its text horizontally reachable. Use actual measured widths at the fixed 360 × 510 popover size. Keep the existing native colors, fonts, and task-region ownership.
+- Clicking a provider control requests that provider's refresh, calls `showUsage()`, and displays full `UsageView` in a separate scrollable page. Manual refresh remains in Usage. Add Provider routes to Settings → Providers, which owns separate 88VIP and DeepSeek Keychain forms. Back from Usage or Settings calls `showHome()`.
 - Tasks is Home's main region. `TaskSourceConfiguration` selects either built-in tasks or the independent Apex surface. Both connected sources offer Add Task with their own editor/storage; Apex creates a task only in an existing Dashboard group. Apex not-configured content routes to Settings. Neither source displays fabricated sample tasks.
 - `PopoverPageController` is presentation state only. It does not start an integration or change a UserDefaults key. `popoverDidClose` resets it to Home so a later open is task-first.
 - `NSTrackingArea` on both the status button and hosting view uses mouse entry/exit, active-always, and visible-rect tracking. `PulseAppDelegate` calls `beginOpening()` before `show`, then seeds tracked regions from actual geometry. Opening requires both a minimum 300 ms click guard and `popoverDidShow`; events record presence but cannot request hover close until both complete. Reread actual button, content and whole-window geometry at that boundary. While shown, reconcile all three regions every 50 ms, including the arrow, so missed exits cannot latch hover forever.
@@ -137,10 +139,14 @@ enum PopoverPage: Equatable {
 | Pointer/click returns during Closing | Finish dismissal; do not reverse or reopen the native animation. |
 | AppKit closes from outside click or status item toggle | Reset pending close and pointer state. |
 | Settings or placeholder entry is clicked inside popover | Navigate in place; do not request a close or integration. |
-| AI status is clicked | Show Usage detail with real quota windows, reset/update times, refresh, and error state. |
+| Provider status is clicked | Refresh only that provider and show its real quota/balance, update time, and error state on Usage. |
 | Popover closes while Usage or Settings is visible | Reset page state; next open shows Home and Tasks. |
 | Codex returns one weekly window or multiple windows | Home shows bare percentage or labeled short values respectively, with no window-selection setting. |
 | Codex refresh fails | Preserve the existing explicit error state, not a fabricated percentage. |
+| Three provider controls do not fit beside the brand | Move them to leading-aligned rows below it; keep amounts and Settings hit area complete. |
+| One quota label exceeds the full usable row | Bound that control's horizontal scroll area; sibling controls remain inside the popover. |
+| DeepSeek returns CNY and USD | Prefer CNY in Home and show separate labelled currency rows in Usage. |
+| Saved API key changes during a refresh | Clear the old reading and prevent the old request from publishing its result. |
 
 ### 5. Good / Base / Bad Cases
 
@@ -150,7 +156,7 @@ enum PopoverPage: Equatable {
 
 ### 6. Tests Required
 
-Unit tests cover the minimum guard plus native presentation completion, geometry resampling, short departure delay, duplicate exits, re-entry cancellation, missed events, arrow presence, Closing request gating and reset, and edit suspension. Check native NSPopover callbacks with animation enabled/disabled. Page tests assert Home → Usage, Home → Settings destination, Back → Home, and reset after completed closure. Render Home, Usage, and Settings in Aqua and Dark Aqua and assert opaque edges; keep existing usage/preference/task regressions. Actual mouse delivery and animation appearance still require desktop checks; do not infer visual acceptance from these tests.
+Unit tests cover the minimum guard plus native presentation completion, geometry resampling, short departure delay, duplicate exits, re-entry cancellation, missed events, arrow presence, Closing request gating and reset, and edit suspension. Check native NSPopover callbacks with animation enabled/disabled. Page tests assert Home → Usage, Home → Settings destination, Back → Home, and reset after completed closure. Render Home, Usage, and Settings in Aqua and Dark Aqua and assert opaque edges; keep existing usage/preference/task regressions. `DeepSeekRenderingTests` resolves actual `ProviderHeaderBoundsKey` anchors at 360 points: assert complete control IDs, leading insets, non-overlapping frames, amount text widths, whole-control wrapping, bounded oversized quota, and the single-row small-value case. Inspect representative images as well. Actual mouse delivery and animation appearance still require desktop checks; do not infer visual acceptance from these tests.
 
 ### 7. Wrong vs Correct
 

@@ -7,6 +7,8 @@ struct HomeView: View {
   @ObservedObject var config: AppConfig
   @ObservedObject var usage: UsageController
   @ObservedObject var vipUsage: UsageController
+  @ObservedObject var deepSeekUsage: UsageController
+  @ObservedObject var deepSeekConfiguration: DeepSeekConfiguration
   @ObservedObject var vipConfiguration: VIPConfiguration
   @ObservedObject var tasks: DashboardTaskController
   @ObservedObject var localTasks: LocalTaskController
@@ -15,6 +17,7 @@ struct HomeView: View {
   @StateObject private var localPresentation = LocalTaskPresentation()
   @StateObject private var dashboardPresentation = DashboardTaskPresentation()
   @ObservedObject var pages: PopoverPageController
+  let onDeepSeekCredentialsChanged: () -> Void
   let onVIPCredentialsChanged: () -> Void
   let onSelectDashboardFile: () -> Void
   let onOpenDashboardFile: (DashboardTask) -> Bool
@@ -31,6 +34,7 @@ struct HomeView: View {
       case .settings(let destination):
         SettingsView(
           config: config,
+          deepSeekConfiguration: deepSeekConfiguration,
           vipConfiguration: vipConfiguration,
           tasks: tasks,
           localTasks: localTasks,
@@ -38,6 +42,7 @@ struct HomeView: View {
           dashboardPicker: dashboardPicker,
           destination: destination,
           onBack: { pages.showHome() },
+          onDeepSeekCredentialsChanged: onDeepSeekCredentialsChanged,
           onVIPCredentialsChanged: onVIPCredentialsChanged,
           onSelectDashboardFile: onSelectDashboardFile,
           onQuit: onQuit,
@@ -63,21 +68,18 @@ struct HomeView: View {
     VStack(spacing: 0) {
       ViewThatFits(in: .horizontal) {
         HStack(spacing: 7) {
-          brand
-          Spacer(minLength: 4)
-          statusSummaries
+          brand.fixedSize()
+          statusSummaries.fixedSize(horizontal: true, vertical: false)
+          Spacer(minLength: 0)
           settingsButton
         }
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
           HStack(spacing: 7) {
             brand
             Spacer()
             settingsButton
           }
-          HStack(spacing: 7) {
-            Spacer()
-            statusSummaries
-          }
+          statusSummaries
         }
       }
       .padding(.horizontal, 14)
@@ -135,6 +137,7 @@ struct HomeView: View {
         UsageView(
           usage: usage,
           vipUsage: vipUsage,
+          deepSeekUsage: deepSeekUsage,
           onAddProvider: { pages.showSettings(.providers) }
         )
         .padding(16)
@@ -156,7 +159,7 @@ struct HomeView: View {
   }
 
   private var statusSummaries: some View {
-    HStack(spacing: 5) {
+    ProviderStatusLayout {
       AIStatusSummary(
         state: usage.state,
         onOpenUsage: {
@@ -169,8 +172,13 @@ struct HomeView: View {
           vipUsage.requestRefresh()
           pages.showUsage()
         })
+      DeepSeekStatusSummary(
+        state: deepSeekUsage.state,
+        onOpenUsage: {
+          deepSeekUsage.requestRefresh()
+          pages.showUsage()
+        })
     }
-    .fixedSize(horizontal: true, vertical: false)
   }
 
   private var settingsButton: some View {
@@ -181,10 +189,13 @@ struct HomeView: View {
         .font(.system(size: 15, weight: .medium))
         .frame(width: 28, height: 28)
     }
-        .buttonStyle(PulseIconButtonStyle())
-        .help("Settings")
-        .accessibilityLabel("Open Settings")
-        .accessibilityIdentifier("openSettingsButton")
+    .buttonStyle(PulseIconButtonStyle())
+    .help("Settings")
+    .accessibilityLabel("Open Settings")
+    .accessibilityIdentifier("openSettingsButton")
+    .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
+      ["openSettingsButton": $0]
+    }
   }
 
 }

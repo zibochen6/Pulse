@@ -3,6 +3,7 @@ import SwiftUI
 struct UsageView: View {
   @ObservedObject var usage: UsageController
   @ObservedObject var vipUsage: UsageController
+  @ObservedObject var deepSeekUsage: UsageController
   let onAddProvider: () -> Void
 
   var body: some View {
@@ -12,6 +13,9 @@ struct UsageView: View {
       Divider()
 
       vipContent
+
+      Divider()
+      deepSeekContent
 
       Divider()
       HStack(spacing: 8) {
@@ -107,13 +111,16 @@ struct UsageView: View {
           detailRow("Balance", value: "Unlimited")
         } else {
           if let allowance = amount(for: .allowance, in: snapshot) {
-            detailRow("Limit", value: VIPUsageFormatter.money(allowance.amount, currency: allowance.currency))
+            detailRow(
+              "Limit", value: MoneyFormatter.string(allowance.amount, currency: allowance.currency))
           }
           if let used = amount(for: .usage, in: snapshot) {
-            detailRow("Used", value: VIPUsageFormatter.money(used.amount, currency: used.currency))
+            detailRow("Used", value: MoneyFormatter.string(used.amount, currency: used.currency))
           }
           if let remaining = amount(for: .balance, in: snapshot) {
-            detailRow("Remaining", value: VIPUsageFormatter.money(remaining.amount, currency: remaining.currency))
+            detailRow(
+              "Remaining",
+              value: MoneyFormatter.string(remaining.amount, currency: remaining.currency))
           } else {
             detailRow("Remaining", value: "--")
           }
@@ -126,6 +133,52 @@ struct UsageView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+        }
+        updated(at: snapshot.fetchedAt)
+      }
+    }
+  }
+
+  private var deepSeekContent: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 8) {
+        DeepSeekProviderIcon(size: 16)
+        Text("DeepSeek").font(.subheadline.weight(.semibold))
+        Spacer()
+        Button {
+          deepSeekUsage.requestRefresh()
+        } label: {
+          Image(systemName: "arrow.clockwise")
+            .font(.system(size: 12, weight: .semibold))
+        }
+        .buttonStyle(.borderless)
+        .disabled(deepSeekUsage.isRefreshing)
+        .help(
+          deepSeekUsage.isRefreshing ? "Refreshing DeepSeek balance" : "Refresh DeepSeek balance"
+        )
+        .accessibilityLabel("Refresh DeepSeek balance")
+        .accessibilityIdentifier("refreshDeepSeekUsageButton")
+      }
+      switch deepSeekUsage.state {
+      case .loading:
+        Text("Checking balance…").foregroundStyle(.secondary)
+      case .unavailable(let message):
+        Label(message, systemImage: "minus.circle")
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+        Button("Open Providers settings", action: onAddProvider)
+          .buttonStyle(.borderless)
+          .font(.caption.weight(.medium))
+          .accessibilityIdentifier("configureDeepSeekButton")
+      case .failure(let message):
+        Label(message, systemImage: "exclamationmark.triangle")
+          .foregroundStyle(.red)
+          .fixedSize(horizontal: false, vertical: true)
+      case .success(let snapshot):
+        ForEach(snapshot.balances, id: \.currency) { balance in
+          detailRow(
+            "Total balance (\(balance.currency))",
+            value: MoneyFormatter.string(balance.amount, currency: balance.currency))
         }
         updated(at: snapshot.fetchedAt)
       }

@@ -27,3 +27,10 @@ under the following MIT license. Pulse's own source remains under [LICENSE](LICE
 > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
+
+## DeepSeek mark
+
+`Pulse/UI/DeepSeekProviderIcon.swift` reproduces the original DeepSeek whale
+geometry from the header SVG on [DeepSeek's official website](https://www.deepseek.com/),
+retrieved on 2026-10-18, as a native vector for provider identification.
+The DeepSeek name and mark belong to their respective rights holders.

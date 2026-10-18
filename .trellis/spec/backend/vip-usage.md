@@ -22,7 +22,7 @@ struct VIPProvider: UsageProviding {
 }
 ```
 
-`VIPConfiguration` is the sole Settings-facing owner of the fixed Keychain account. `VIPProvider` reads it through `SecretStoring`, uses `VIPHTTPClient` for the fixed service URL, and returns generic `UsageMetric` values. `UsageController` owns refresh state and schedule.
+`VIPConfiguration` is the sole Settings-facing owner of the fixed `88VIP API key` Keychain account. It inherits shared persistence behavior from `APIKeyConfiguration`; keep its existing initializer, account, and provider-specific errors intact. `VIPProvider` reads it through `SecretStoring`, uses `VIPHTTPClient` for the fixed service URL, and returns generic `UsageMetric` values. `UsageController` owns refresh state and schedule.
 
 ## 3. Contracts
 
@@ -34,6 +34,7 @@ struct VIPProvider: UsageProviding {
 - Bound each 88API request with a finite timeout so unavailable network paths cannot leave refresh UI busy indefinitely. Record `fetchedAt` after the response processing completes, not before the network requests.
 - A partial snapshot's compact summary must remain an error marker until a complete balance is available; never show the previous or incomplete numeric balance as current.
 - API keys live only in the macOS Keychain. Never put a key in UserDefaults, a snapshot, an error message, a log, a fixture, or documentation. The Settings form clears its in-memory text after a successful save or remove.
+- Credential mutation calls `UsageController.credentialsDidChange()` to clear the prior account's reading, invalidate/cancel older fetches, and request a new reading. Do not use only `requestRefresh()` here: its single-flight guard can drop the refresh while an old credential is still fetching.
 
 ## 4. Validation & Error Matrix
 

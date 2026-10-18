@@ -6,24 +6,10 @@ struct VIPStatusSummary: View {
   let onOpenUsage: () -> Void
 
   var body: some View {
-    Button(action: onOpenUsage) {
-      HStack(spacing: 4) {
-        VIPProviderIcon(size: 14)
-        Text(VIPUsageFormatter.title(for: state))
-          .font(.system(size: 12, weight: .medium))
-          .monospacedDigit()
-          .lineLimit(1)
-          .fixedSize(horizontal: true, vertical: false)
-      }
-      .foregroundStyle(.secondary)
-      .padding(.horizontal, 3)
-      .frame(height: 22)
-      .contentShape(RoundedRectangle(cornerRadius: 6))
-    }
-    .buttonStyle(.plain)
-    .help("Open 88VIP usage details")
-    .accessibilityLabel("88VIP usage: \(VIPUsageFormatter.title(for: state)). Open details")
-    .accessibilityIdentifier("openVIPUsageButton")
+    ProviderStatusButton(
+      title: VIPUsageFormatter.title(for: state), providerName: "88VIP",
+      identifier: "openVIPUsageButton", onOpenUsage: onOpenUsage
+    ) { VIPProviderIcon(size: 14) }
   }
 }
 
@@ -45,13 +31,7 @@ enum VIPUsageFormatter {
   }
 
   static func money(_ amount: Decimal, currency: String) -> String {
-    let formatter = NumberFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.numberStyle = .decimal
-    formatter.minimumFractionDigits = 0
-    formatter.maximumFractionDigits = 2
-    let value = formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "--"
-    return currency == "USD" ? "$\(value)" : "\(currency) \(value)"
+    MoneyFormatter.string(amount, currency: currency)
   }
 
   private static func balanceAmount(_ metric: UsageMetric) -> (amount: Decimal, currency: String)? {

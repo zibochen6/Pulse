@@ -1,0 +1,8 @@
+{"file":".trellis/spec/frontend/state-management.md","reason":"Verify navigation, native UI behavior, fixed popover size and test isolation"}
+{"file":".trellis/spec/backend/vip-usage.md","reason":"Verify existing balance integration and Keychain behavior remain correct"}
+{"file":".trellis/spec/backend/deepseek-usage.md","reason":"Verify native-currency Decimal balances, independent secrets, HTTP states, and credential invalidation"}
+{"file":".trellis/spec/backend/codex-usage.md","reason":"Verify existing Codex formatting and menu-bar behavior remain correct"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check repeated credential and summary logic"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check complete key-to-fetch-to-visible-status flow and cancellation"}
+{"file":".trellis/tasks/10-18-deepseek-monitor-header/research/integration-and-header.md","reason":"Check official response semantics and concrete layout/race regressions"}
+{"file":".trellis/tasks/10-18-deepseek-monitor-header/research/icon-correction.md","reason":"Compare the corrected mark to official vector geometry and user's reference"}

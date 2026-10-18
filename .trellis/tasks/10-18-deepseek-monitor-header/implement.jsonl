@@ -1,0 +1,8 @@
+{"file":".trellis/spec/frontend/state-management.md","reason":"Shared usage ownership, in-popover navigation, fixed size and test isolation contracts"}
+{"file":".trellis/spec/backend/vip-usage.md","reason":"Existing Keychain, independent provider, request timeout and monetary normalization guarantees to preserve"}
+{"file":".trellis/spec/backend/deepseek-usage.md","reason":"Official DeepSeek request/normalization and credential-generation publication contract"}
+{"file":".trellis/spec/backend/codex-usage.md","reason":"Preserve quota formatting, local integration, and Codex-only menu-bar behavior"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse credential and summary presentation behavior without duplicating provider-specific semantics"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace credential, provider, controller and UI boundaries"}
+{"file":".trellis/tasks/10-18-deepseek-monitor-header/research/integration-and-header.md","reason":"Verified official DeepSeek schema, existing source owners, layout evidence and focused risks"}
+{"file":".trellis/tasks/10-18-deepseek-monitor-header/research/icon-correction.md","reason":"User correction requires the actual official DeepSeek mark, not the initial generic silhouette"}

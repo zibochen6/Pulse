@@ -22,6 +22,9 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   private let config = AppConfig(defaults: PulseAppDelegate.runtimeDefaults)
   private let usage = UsageController(provider: CodexProvider())
+  private let deepSeekConfiguration = DeepSeekConfiguration()
+  private let deepSeekUsage = UsageController(
+    provider: DeepSeekProvider(), refreshInterval: .seconds(600))
   private let vipConfiguration = VIPConfiguration()
   private let vipUsage = UsageController(provider: VIPProvider(), refreshInterval: .seconds(600))
   private let tasks = DashboardTaskController(
@@ -121,6 +124,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     if Self.shouldStartLiveUsage(environment: ProcessInfo.processInfo.environment) {
       usage.start()
       vipUsage.start()
+      deepSeekUsage.start()
     }
   }
 
@@ -132,6 +136,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     hoverController.reset()
     usage.stop()
     vipUsage.stop()
+    deepSeekUsage.stop()
   }
 
   private func configureStatusItem() {
@@ -171,13 +176,16 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         config: config,
         usage: usage,
         vipUsage: vipUsage,
+        deepSeekUsage: deepSeekUsage,
+        deepSeekConfiguration: deepSeekConfiguration,
         vipConfiguration: vipConfiguration,
         tasks: tasks,
         localTasks: localTasks,
         taskSource: taskSource,
         dashboardPicker: dashboardPicker,
         pages: pages,
-        onVIPCredentialsChanged: { [weak self] in self?.vipUsage.requestRefresh() },
+        onDeepSeekCredentialsChanged: { [weak self] in self?.deepSeekUsage.credentialsDidChange() },
+        onVIPCredentialsChanged: { [weak self] in self?.vipUsage.credentialsDidChange() },
         onSelectDashboardFile: { [weak self] in self?.dashboardPicker.requestSelection() },
         onOpenDashboardFile: { [weak self] task in self?.openDashboardFileInObsidian(task) ?? false
         },
@@ -253,6 +261,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     guard let button = statusItem.button, hoverController.state != .closing else { return }
     config.refreshLoginItemStatus()
     vipUsage.refreshIfStale(maxAge: 60)
+    deepSeekUsage.refreshIfStale(maxAge: 60)
     if taskSource.source == .apex { tasks.requestRefresh() }
     Task { [weak self] in await self?.localTasks.refresh() }
     if let settings { pages.showSettings(settings) } else { pages.reset() }

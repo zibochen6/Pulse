@@ -8,6 +8,8 @@ final class UsageController: ObservableObject {
 
   private let provider: any UsageProviding
   private let refreshInterval: Duration
+  private var activeRefresh: Task<Void, Never>?
+  private var generation = 0
   private var loop: Task<Void, Never>?
 
   init(provider: any UsageProviding, refreshInterval: Duration = .seconds(60)) {
@@ -35,6 +37,10 @@ final class UsageController: ObservableObject {
   func stop() {
     loop?.cancel()
     loop = nil
+    generation &+= 1
+    activeRefresh?.cancel()
+    activeRefresh = nil
+    isRefreshing = false
   }
 
   @discardableResult
@@ -57,17 +63,46 @@ final class UsageController: ObservableObject {
     return requestRefresh()
   }
 
+  /// Changing accounts must clear old money immediately and cannot be dropped
+  /// by the normal single-flight guard. Late replies belong to the old generation.
+  @discardableResult
+  func credentialsDidChange() -> Task<Void, Never> {
+    generation &+= 1
+    activeRefresh?.cancel()
+    activeRefresh = nil
+    isRefreshing = false
+    state = .loading
+    return requestRefresh()
+  }
+
   func refresh() async {
-    guard !isRefreshing else { return }
+    guard !Task.isCancelled, activeRefresh == nil else { return }
     isRefreshing = true
+    let currentGeneration = generation
+    let task = Task { await performRefresh(generation: currentGeneration) }
+    activeRefresh = task
+    await withTaskCancellationHandler {
+      await task.value
+    } onCancel: {
+      task.cancel()
+    }
+  }
+
+  private func performRefresh(generation currentGeneration: Int) async {
+    defer {
+      if currentGeneration == generation {
+        activeRefresh = nil
+        isRefreshing = false
+      }
+    }
+    guard !Task.isCancelled, currentGeneration == generation else { return }
     // Keep a visible quota steady during a background refresh. A failed fetch
     // still replaces it with an error, so an old value is never shown as current.
     if case .success = state {} else { state = .loading }
-    defer { isRefreshing = false }
 
     do {
       let snapshot = try await provider.fetch()
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled, currentGeneration == generation else { return }
       state =
         snapshot.metrics.isEmpty
         ? .unavailable("No usage data is available for this provider.")
@@ -75,13 +110,13 @@ final class UsageController: ObservableObject {
     } catch is CancellationError {
       return
     } catch let error as UsageFailureDescribing {
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled, currentGeneration == generation else { return }
       state =
         error.isUnavailable
         ? .unavailable(error.userMessage)
         : .failure(error.userMessage)
     } catch {
-      guard !Task.isCancelled else { return }
+      guard !Task.isCancelled, currentGeneration == generation else { return }
       state = .failure("Could not refresh usage. Try again.")
     }
   }

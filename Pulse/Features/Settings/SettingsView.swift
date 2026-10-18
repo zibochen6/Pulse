@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
   @ObservedObject var config: AppConfig
+  @ObservedObject var deepSeekConfiguration: DeepSeekConfiguration
   @ObservedObject var vipConfiguration: VIPConfiguration
   @ObservedObject var tasks: DashboardTaskController
   @ObservedObject var localTasks: LocalTaskController
@@ -10,12 +11,11 @@ struct SettingsView: View {
   @ObservedObject var dashboardPicker: DashboardFilePicker
   let destination: SettingsDestination
   let onBack: () -> Void
+  let onDeepSeekCredentialsChanged: () -> Void
   let onVIPCredentialsChanged: () -> Void
   let onSelectDashboardFile: () -> Void
   let onQuit: () -> Void
   var onTaskEditingChanged: (Bool) -> Void = { _ in }
-
-  @State private var vipAPIKey = ""
 
   var body: some View {
     VStack(spacing: 0) {
@@ -72,6 +72,7 @@ struct SettingsView: View {
         .onAppear {
           proxy.scrollTo(destination, anchor: .top)
           vipConfiguration.refresh()
+          deepSeekConfiguration.refresh()
         }
       }
     }
@@ -136,52 +137,17 @@ struct SettingsView: View {
 
   private var providerContent: some View {
     VStack(alignment: .leading, spacing: 10) {
-      HStack(spacing: 8) {
-        VIPProviderIcon(size: 18)
-        Text("88VIP")
-          .font(.subheadline.weight(.semibold))
-        Spacer()
-        Text(vipConfiguration.hasAPIKey ? "Connected" : "Not connected")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-
-      SecureField("88VIP API key", text: $vipAPIKey)
-        .textFieldStyle(.roundedBorder)
-        .accessibilityIdentifier("vipAPIKeyField")
-
-      HStack(spacing: 10) {
-        Button(vipConfiguration.hasAPIKey ? "Replace key" : "Save key") {
-          guard vipConfiguration.save(apiKey: vipAPIKey) else { return }
-          vipAPIKey = ""
-          onVIPCredentialsChanged()
-        }
-        .disabled(vipAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
-        .accessibilityIdentifier("saveVIPAPIKeyButton")
-
-        if vipConfiguration.hasAPIKey {
-          Button("Remove key", role: .destructive) {
-            guard vipConfiguration.removeAPIKey() else { return }
-            vipAPIKey = ""
-            onVIPCredentialsChanged()
-          }
-          .accessibilityIdentifier("removeVIPAPIKeyButton")
-        }
-      }
-      .buttonStyle(PulseActionButtonStyle())
-      .font(.caption.weight(.medium))
-
-      if let errorMessage = vipConfiguration.errorMessage {
-        Text(errorMessage)
-          .font(.caption)
-          .foregroundStyle(.red)
-          .fixedSize(horizontal: false, vertical: true)
-      } else {
-        Text("Your API key is stored only in macOS Keychain.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
+      ProviderCredentialForm(
+        configuration: vipConfiguration, name: "88VIP", fieldIdentifier: "vipAPIKeyField",
+        actionIdentifier: "VIP",
+        onCredentialsChanged: onVIPCredentialsChanged
+      ) { VIPProviderIcon(size: 18) }
+      Divider()
+      ProviderCredentialForm(
+        configuration: deepSeekConfiguration, name: "DeepSeek",
+        fieldIdentifier: "deepSeekAPIKeyField", actionIdentifier: "DeepSeek",
+        onCredentialsChanged: onDeepSeekCredentialsChanged
+      ) { DeepSeekProviderIcon(size: 18) }
 
       Text("More AI providers are coming soon.")
         .font(.caption)
