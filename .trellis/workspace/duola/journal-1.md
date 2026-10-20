@@ -465,3 +465,25 @@ restoring the official build.
 ### Status
 
 [OK] **Completed**
+
+
+## Session 19: Todo and tag interaction improvements
+<!-- trellis-session: v=2 fp=ce9151700379c177 -->
+
+**Date**: 2026-10-20
+**Task**: Todo and tag interaction improvements
+**Branch**: `codex/todo-tag-interactions`
+
+### Summary
+
+Implemented independent single-tag lists with permanent Todo, empty-tag creation, fixed continuous quick entry, retained per-list drafts, tag management and20-entry deletion undo. Added exact-byte legacy compatibility backup, transaction-current undo receipts and stale-save safeguards. Fixed native field disabled/focus/accessibility behavior and text Undo/Redo binding sync; moved/restored rows expand and scroll into view. Full suite175 tests passed, zero failures; strict formatting11 Swift files and independent review passed. Reviewed20 Aqua/Dark Aqua renders and full Home integration. Real task-file hash unchanged. Desktop mouse/Chinese IME end-to-end validation blocked by repeated Computer Use timeouts; native AppKit field/scroll and marked-text unit checks passed. Local work only; no install/push. Pre-existing .workbuddy and docs/images excluded.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f7f617c` | feat: improve todo lists, tag creation and deletion undo |
+
+### Status
+
+[OK] **Completed**
