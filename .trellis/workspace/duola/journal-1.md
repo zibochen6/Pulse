@@ -428,3 +428,40 @@ Added DeepSeek native-currency balances with isolated Keychain settings, generat
 ### Status
 
 [OK] **Completed**
+
+## Session 18: Native to-dos and Pulse 0.1.3 auto-update release
+<!-- trellis-session: v=2 fp=auto-update-0-1-3 -->
+
+**Date**: 2026-10-20
+**Task**: Native to-do surface and in-app auto-update
+**Branch**: `main`
+
+### Summary
+
+Removed the Obsidian/Apex Dashboard integration so Pulse has one native to-do
+system: tag-only tabs with a filled capsule selection (no square focus ring),
+quick add under the list, a tag-row menu for adding tasks to another or a new
+tag, completed tasks kept visible and struck through with hover delete, and an
+optional daily repeat re-armed on the next day. Added a self-built updater
+(GitHub latest release, SHA-256 plus Apple code-signature verification, staged
+detached installer with backup/restore, restart only when no draft is open) and
+`scripts/release.sh` for the whole release path. Suite: 152 tests, zero
+failures. Released development-signed universal Pulse 0.1.3/build 7, installed
+it locally before tagging, pushed `v0.1.3` with DMG + ZIP + checksums, and
+rehearsed a real self-update from 0.1.3 to a locally served 0.1.4 before
+restoring the official build.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ac852f9` | feat: native-only tasks, tag tabs, daily repeat and in-app auto-update |
+| `91548de` | docs: document the updater and release flow |
+| `19e0f24` | build: drop the removed Tests/Fixtures resource source |
+| `5dd3987` | fix(scripts): read the signing authority from the verbose codesign report |
+| `a628fde` | release: prepare Pulse 0.1.3 |
+| `a3b25d2` | docs: record the measured 0.1.3 validation evidence |
+
+### Status
+
+[OK] **Completed**
