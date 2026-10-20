@@ -32,6 +32,8 @@ set -euo pipefail
 
 REPO_SLUG="zibochen6/Pulse"
 INSTALLED_APP="/Applications/Pulse.app"
+# The updater trusts this team id; keep the release verifier in agreement.
+EXPECTED_TEAM="${PULSE_TEAM_ID:-9Y4B7WBUU2}"
 BACKUP_ROOT="$HOME/Library/Application Support/Pulse/Backups"
 
 VERSION=""; NOTES_ARG=""; SKIP_TESTS=0; NO_INSTALL=0; NO_PUSH=0; DRY_RUN=0
@@ -71,11 +73,18 @@ assert_meta() { # <app> <version> <build> <label>
 }
 
 verify_signed() { # <app> <label>
-  local authority
+  local report authority team
   [ -d "$1" ] || die "$2: app bundle not found at $1"
-  codesign --verify --deep --strict "$1" >/dev/null 2>&1 || die "$2: codesign --verify --deep --strict failed for $1"
-  authority="$(codesign -dv "$1" 2>&1 | sed -n 's/^Authority=//p' | head -1)"
+  codesign --verify --deep --strict "$1" >/dev/null 2>&1 \
+    || die "$2: codesign --verify --deep --strict failed for $1"
+  # `codesign -dv` without --verbose=2 omits the Authority chain entirely, so a
+  # naive parse reads "none" for every bundle. Always ask for the verbose report.
+  report="$(codesign -dv --verbose=2 "$1" 2>&1)"
+  authority="$(printf '%s\n' "$report" | sed -n 's/^Authority=//p' | head -1)"
+  team="$(printf '%s\n' "$report" | sed -n 's/^TeamIdentifier=//p' | head -1)"
   [ "$authority" = "$IDENTITY" ] || die "$2: signature authority '${authority:-none}' != '$IDENTITY'"
+  [ "$team" = "$EXPECTED_TEAM" ] \
+    || die "$2: TeamIdentifier '${team:-none}' != '$EXPECTED_TEAM' (override with PULSE_TEAM_ID)"
 }
 
 assert_hash() { # <app> <expected_sha256> <label>
@@ -204,6 +213,7 @@ plan_text() {
   lipo -archs "$APP/Contents/MacOS/Pulse"                    # must contain arm64 and x86_64
   codesign --force --sign "@IDENTITY@" --timestamp=none "$APP"
   codesign --verify --deep --strict "$APP"
+  codesign -dv --verbose=2 "$APP"                            # Authority + TeamIdentifier 9Y4B7WBUU2
   plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist"   # @VERSION@
   plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist"              # @BUILD@
 
