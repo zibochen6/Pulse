@@ -67,8 +67,7 @@ installable.
 The chain is a hard requirement, not a best-effort sequence. The digest must
 be verified before the archive is unpacked, and every identity check must pass
 before the download is called staged or an install script is written. Any
-failure removes that update's staging directory; the installed app is never
-touched.
+failure removes the staging root; the installed app is never touched.
 
 1. **Transport and hosts.** The feed and every asset URL must be HTTPS. After
    redirects, the final URL's host must be one of `api.github.com`,
@@ -106,8 +105,8 @@ touched.
 - The updater's working root is `~/Library/Application Support/Pulse/Update/`.
   Each attempt downloads into `Staged/<version>/`, expands to
   `Staged/<version>/Expanded/`, and removes the archive after verification. A
-  fresh launch removes the whole staging root, and a failed attempt removes
-  its own directory; a leftover partial download is never installed.
+  fresh launch removes the whole staging root, and a failed attempt does the
+  same; a leftover partial download is never installed.
 - A verified download becomes a staged update. Pulse restarts to install it
   only when the popover is closed and no task draft is open. That condition is
   re-checked every 3 seconds for about 20 minutes; if it never becomes true,
@@ -143,9 +142,9 @@ touched.
 | --- | --- |
 | No network, DNS failure or timeout | The check reports its reason in Settings → Updates; the installed app stays as it is and the next scheduled or manual check retries. |
 | GitHub rate limit (403/429) | Reported as "GitHub is rate-limiting update checks. Pulse will try again later."; no download is attempted. |
-| Other feed/asset HTTP error | Reported with the status code; the staging directory is removed. |
+| Other feed/asset HTTP error | Reported with the status code; the staging root is removed. |
 | Malformed payload, tag or asset metadata | No download is attempted; the parse error is reported. |
-| Missing ZIP or missing `.sha256` asset | No download is attempted; release is not offered as installable. |
+| Missing ZIP or missing `.sha256` asset | No download is attempted; the release is rejected. |
 | ZIP larger than 200 MB or empty | Download is refused before installation. |
 | Checksum mismatch or malformed checksum | The download is discarded; the installed app and data are untouched. |
 | GitHub digest disagrees with `.sha256` | The download is discarded; the installed app and data are untouched. |
@@ -208,10 +207,14 @@ The full update path is rehearsed end to end with a local feed:
    `sha256:<hex>` `digest`.
 4. Serve that directory with
    `python3 -m http.server <port> --bind 127.0.0.1`.
-5. Launch the installed app with the override in its environment, for example
-   `PULSE_UPDATE_FEED_URL=http://127.0.0.1:<port>/latest.json
-   /Applications/Pulse.app/Contents/MacOS/Pulse`, then use Settings → Updates
-   → **Check Now**.
+5. Launch the installed app with the override in its environment, then use
+   Settings → Updates → **Check Now**:
+
+   ```sh
+   PULSE_UPDATE_FEED_URL=http://127.0.0.1:<port>/latest.json \
+     /Applications/Pulse.app/Contents/MacOS/Pulse
+   ```
+
 6. Confirm the download, verification and staged banner; close the popover and
    let the update restart. Verify the new version, the backup, the clean log
    line, and that tasks, preferences and Keychain items are unchanged.

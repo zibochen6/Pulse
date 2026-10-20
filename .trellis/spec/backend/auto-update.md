@@ -54,15 +54,14 @@ log: `~/Library/Logs/Pulse/update.log`.
   layout, `codesign --verify --deep --strict`, bundle identifier,
   TeamIdentifier + `Apple Development` authority, embedded version — all
   before a download is staged. The digest check precedes unpacking. Any
-  mismatch discards the staging directory and never touches the installed
-  app.
+  mismatch discards the staging root and never touches the installed app.
 - The only trusted signer is TeamIdentifier `9Y4B7WBUU2` with an
   `Apple Development` authority and identifier `dev.zibochen.Pulse`. This
   signature is the trust anchor; a compromised GitHub account alone must not
   be able to install code.
 - Staging lives only under `~/Library/Application Support/Pulse/Update/`.
-  A fresh launch clears the staging root; a failed attempt removes its own
-  directory; the archive is deleted after successful verification. A leftover
+  A fresh launch clears the staging root; a failed attempt clears the staging
+  root too; the archive is deleted after successful verification. A leftover
   download is never installed without a fresh verification.
 - Restart safety: Pulse installs and restarts only when the popover is closed
   and no task draft is open. Otherwise it stages the update, shows the
@@ -110,7 +109,7 @@ log: `~/Library/Logs/Pulse/update.log`.
 | Malformed feed/tag/asset metadata | Reject the release; do not download |
 | Missing ZIP or `.sha256` asset | Do not offer the release as installable |
 | Archive over 200 MB or empty | Refuse before installation |
-| Checksum mismatch or malformed checksum | Discard the staging directory; installed app untouched |
+| Checksum mismatch or malformed checksum | Discard the staging root; installed app untouched |
 | GitHub digest disagrees with `.sha256` | Discard the download |
 | Archive does not contain exactly one `.app` | Discard the download |
 | Invalid signature, wrong identifier/team/authority | Discard the download |

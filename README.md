@@ -38,15 +38,18 @@ mismatch discards the download and leaves the installed app untouched.
 
 A verified update installs itself only when no task draft is open and the
 popover is closed; otherwise a "Pulse 0.1.x is ready" banner with **Restart**
-and **Later** appears above the task list, and quitting applies it. Tasks,
-preferences and Keychain items are not touched. The current app is backed up to
-`~/Library/Application Support/Pulse/Backups/` and restored if replacement
-fails; progress is logged to `~/Library/Logs/Pulse/update.log`.
+and **Later** appears above the task list, and quitting applies it. Task data,
+existing preferences and Keychain items are not touched. The current app is
+backed up to `~/Library/Application Support/Pulse/Backups/` and restored if
+replacement fails; progress is logged to
+`~/Library/Logs/Pulse/update.log`.
 
 Updates work only when Pulse runs from a user-writable `/Applications/Pulse.app`;
 development builds report that updates are disabled. Updates are enabled from
 0.1.3 onward, so replacing 0.1.2 is a manual DMG install. The preview remains
-Apple Development signed, not Developer ID signed or notarized.
+Apple Development signed, not Developer ID signed or notarized. See
+[the auto-update contract](docs/auto-update.md) for the verification chain and
+failure behavior.
 
 ## Build and run
 

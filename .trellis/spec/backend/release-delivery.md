@@ -15,7 +15,7 @@ codesign --verify --deep --strict <release-app>
 lipo -archs <release-app>/Contents/MacOS/Pulse
 ditto -c -k --keepParent <release-app> <release-dir>/Pulse-<version>.zip
 shasum -a 256 <release-dir>/Pulse-<version>.zip > <release-dir>/Pulse-<version>.zip.sha256
-gh release create <version-tag> <dmg> <dmg-sha256> <zip> <zip-sha256> --repo zibochen6/Pulse --target <verified-commit> --title <title> --notes-file <release-notes>
+gh release create <version-tag> <dmg> <dmg-sha256> <zip> <zip-sha256> --repo zibochen6/Pulse --verify-tag --title <title> --notes-file <release-notes>
 ```
 
 `project.yml` owns `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`; the generated Xcode project and app Info.plist must agree. Keep `dev.zibochen.Pulse`, macOS 13 minimum, and both arm64/x86_64 architectures.
