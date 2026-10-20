@@ -21,21 +21,26 @@ there is no account, import, source selector, database or network sync.
 
 ## Fast entry and editing
 
-- A compact task input stays below the tabs, above the scrolling rows. It
-  names the destination list. Enter saves, clears confirmed input and retains
-  focus for continuous entry. Confirming Chinese IME marked text must not save
-  a task. Empty/whitespace-only titles cannot be submitted.
-- Additional options expose a single-choice list selector, new-tag entry and
-  **Repeat daily**. Both creation and editing can create and select a new tag.
-- Clicking a task opens its editor. Save confirms changes and reveals the
-  destination if the task moved. Cancel discards that edit, not another list's
-  quick-entry draft.
+- A centered **+** follows all task rows and the Completed group inside the
+  scrolling list. It expands inline entry and focuses the destination-labelled
+  input. Enter saves; confirmed success clears and collapses back to **+**.
+  Failure preserves input for retry. Chinese IME candidate confirmation must
+  not submit, and empty/whitespace-only titles cannot be submitted.
+- Esc or the collapse control hides entry without discarding the draft. Click
+  **+** again to continue. New empty tags select their list and open entry.
+- Creation options are disclosed on demand. The list menu offers **New tag…**;
+  only choosing it reveals name entry. Both creation and editing can create and
+  select one new tag, and support **Repeat daily**.
+- Clicking a task opens a compact editor with Cancel / Edit task / Save in the
+  header, a multiline content area, list and daily-repeat property rows, and
+  Delete below them. Save confirms changes and reveals the destination if moved.
+  Cancel discards that edit, not another list's quick-entry draft.
 - Quick-entry drafts are owned above navigation and kept separately per list.
   Switching lists, visiting Settings or closing/reopening the popover does not
   discard them. Pending saves capture their draft identity and destination;
   late completion cannot clear a different or subsequently changed draft.
-- Explicit input focus, unfinished input and active editing suspend pointer
-  departure dismissal. An idle empty input does not. Outside-click and menu-bar
+- Explicit input focus, visible unfinished input and active editing suspend
+  pointer departure dismissal. A collapsed draft or idle empty input does not. Outside-click and menu-bar
   toggle dismissal retain their normal AppKit behavior.
 
 ## Completion and deletion
@@ -105,8 +110,10 @@ change the machine clock to test failures/repeat.
    conversion and the original byte backup exists.
 2. Create an empty tag using **+**, cancel another, retry a duplicate with
    different capitalization and create enough tags to require scrolling.
-3. Add several tasks with Enter; verify destination, focus, whitespace rejection,
-   long text and Chinese IME candidate confirmation without submission.
+3. Expand **+**, add with Enter and verify success collapses entry. Reopen and
+   check destination, focus, whitespace rejection, long text and Chinese IME
+   candidate confirmation without submission. Collapse a draft with Esc and
+   verify it remains on reopening without blocking pointer dismissal.
 4. Expand options, create a new tag while adding/editing a task and move a task
    to another list. The task appears only at its destination.
 5. Leave drafts in two lists, switch tabs, visit Settings, close/reopen and verify

@@ -100,6 +100,7 @@ final class LocalTasksRenderingTests: XCTestCase {
     draft.newTagText = " Writing "
     draft.acceptPendingTag(availableTags: [work, home])
     XCTAssertEqual(draft.newTagNames, ["Writing"])
+    XCTAssertFalse(draft.newTagInputVisible)
     XCTAssertTrue(draft.tagIDs.isEmpty)
     draft.newTagText = " HOME "
     draft.acceptPendingTag(availableTags: [work, home])
@@ -111,8 +112,9 @@ final class LocalTasksRenderingTests: XCTestCase {
     XCTAssertTrue(draft.newTagNames.isEmpty)
   }
 
-  func testCaptureDeduplicatesAndSuccessClearsOnlyMatchingInputAndRefocuses() throws {
+  func testCaptureDeduplicatesAndSuccessClearsOnlyMatchingInputAndCollapses() throws {
     let presentation = LocalTaskPresentation()
+    presentation.beginAddingTask()
     presentation.quickDraft.text = "First"
     let submission = try XCTUnwrap(presentation.captureSubmission())
     XCTAssertNil(presentation.captureSubmission())
@@ -121,7 +123,8 @@ final class LocalTasksRenderingTests: XCTestCase {
     presentation.finishSubmission(submission, saved: true, task: task, tags: [])
     XCTAssertEqual(presentation.quickDraft.text, "")
     XCTAssertNotEqual(presentation.quickDraft.creationID, submission.draft.creationID)
-    XCTAssertNotEqual(presentation.focusRequest, oldFocus)
+    XCTAssertEqual(presentation.focusRequest, oldFocus)
+    XCTAssertFalse(presentation.isComposerExpanded)
     presentation.quickDraft.text = "Second"
     XCTAssertNotNil(presentation.captureSubmission())
   }
@@ -165,6 +168,7 @@ final class LocalTasksRenderingTests: XCTestCase {
 
   func testFailureRetainsStableCreationIntentAndAllInputForRetry() throws {
     let presentation = LocalTaskPresentation()
+    presentation.beginAddingTask()
     presentation.quickDraft.text = "Keep me"
     presentation.quickDraft.newTagText = "Work"
     presentation.quickDraft.acceptPendingTag(availableTags: [])
@@ -172,8 +176,71 @@ final class LocalTasksRenderingTests: XCTestCase {
     let submission = try XCTUnwrap(presentation.captureSubmission())
     presentation.finishSubmission(submission, saved: false, task: nil, tags: [])
     XCTAssertEqual(presentation.quickDraft, submission.draft)
+    XCTAssertTrue(presentation.isComposerExpanded)
     let retry = try XCTUnwrap(presentation.captureSubmission())
     XCTAssertEqual(retry.draft.creationID, submission.draft.creationID)
+  }
+
+  func testCollapseAndReopenDuringSaveRetainsDraftAndExpandedInput() throws {
+    let presentation = LocalTaskPresentation()
+    presentation.beginAddingTask()
+    presentation.quickDraft.text = "Pending"
+    let submission = try XCTUnwrap(presentation.captureSubmission())
+    presentation.collapseComposer()
+    XCTAssertFalse(presentation.isComposerExpanded)
+    XCTAssertEqual(presentation.quickDraft, submission.draft)
+    presentation.beginAddingTask()
+    presentation.finishSubmission(submission, saved: true, task: nil, tags: [])
+    XCTAssertTrue(presentation.isComposerExpanded)
+    XCTAssertEqual(presentation.quickDraft.text, "Pending")
+    XCTAssertNotEqual(presentation.quickDraft.creationID, submission.draft.creationID)
+  }
+
+  func testExpansionIsPerListAndLaterInputIsNotCollapsedByOldSave() throws {
+    let presentation = LocalTaskPresentation()
+    presentation.beginAddingTask()
+    presentation.quickDraft.text = "First"
+    let submission = try XCTUnwrap(presentation.captureSubmission())
+    let work = UUID()
+    presentation.selectedFilter = .tag(work)
+    XCTAssertFalse(presentation.isComposerExpanded)
+    presentation.beginAddingTask()
+    presentation.quickDraft.text = "Work draft"
+    presentation.finishSubmission(submission, saved: true, task: nil, tags: [])
+    XCTAssertTrue(presentation.isComposerExpanded)
+    XCTAssertEqual(presentation.quickDraft.text, "Work draft")
+    presentation.selectedFilter = .untagged
+    XCTAssertFalse(presentation.isComposerExpanded)
+    presentation.beginAddingTask()
+    presentation.quickDraft.text = "Next"
+    let next = try XCTUnwrap(presentation.captureSubmission())
+    presentation.quickDraft.text = "Newer text"
+    presentation.finishSubmission(next, saved: true, task: nil, tags: [])
+    XCTAssertTrue(presentation.isComposerExpanded)
+    XCTAssertEqual(presentation.quickDraft.text, "Newer text")
+  }
+
+  func testNativeEscapeCollapsesWithoutDiscardingAndIMEKeepsComposition() {
+    let presentation = LocalTaskPresentation()
+    presentation.beginAddingTask()
+    presentation.quickDraft.text = "中文草稿"
+    let field = TaskEntryField(
+      text: .constant("中文草稿"), placeholder: "Add", identifier: "escapeTest",
+      focusRequest: nil, onSubmit: {}, onFocusChanged: { _ in },
+      onCancel: { presentation.collapseComposer() })
+    let coordinator = field.makeCoordinator()
+    let editor = MarkedTaskTextView()
+    editor.marked = true
+    XCTAssertFalse(
+      coordinator.control(
+        NSTextField(), textView: editor, doCommandBy: #selector(NSResponder.cancelOperation(_:))))
+    XCTAssertTrue(presentation.isComposerExpanded)
+    editor.marked = false
+    XCTAssertTrue(
+      coordinator.control(
+        NSTextField(), textView: editor, doCommandBy: #selector(NSResponder.cancelOperation(_:))))
+    XCTAssertFalse(presentation.isComposerExpanded)
+    XCTAssertEqual(presentation.quickDraft.text, "中文草稿")
   }
 
   func testHoverSuspendsOnlyForFocusedDirtyOrActiveEditor() {
@@ -181,10 +248,16 @@ final class LocalTasksRenderingTests: XCTestCase {
     XCTAssertFalse(presentation.isEditing)
     presentation.quickDraft.optionsExpanded = true
     XCTAssertFalse(presentation.isEditing)
+    presentation.beginAddingTask()
     presentation.composerFocused = true
     XCTAssertTrue(presentation.isEditing)
     presentation.composerFocused = false
     presentation.quickDraft.text = "Draft"
+    XCTAssertTrue(presentation.isEditing)
+    presentation.collapseComposer()
+    XCTAssertFalse(presentation.isEditing)
+    XCTAssertEqual(presentation.quickDraft.text, "Draft")
+    presentation.beginAddingTask()
     XCTAssertTrue(presentation.isEditing)
     presentation.quickDraft.text = ""
     XCTAssertFalse(presentation.isEditing)
@@ -248,6 +321,101 @@ final class LocalTasksRenderingTests: XCTestCase {
     host.rootView = root
     host.layoutSubtreeIfNeeded()
     XCTAssertNil(presentation.revealedTaskID)
+  }
+
+  func testTrailingComposerMountsFocusesScrollsAndCollapsesWithoutRestoringOldFieldText()
+    async throws
+  {
+    let controller = try await controller()
+    for index in 0..<24 {
+      _ = await controller.saveTask(id: nil, text: "Existing \(index)", tagIDs: [], newTagNames: [])
+    }
+    let presentation = LocalTaskPresentation()
+    let root = LocalTasksView(
+      controller: controller, presentation: presentation, onEditingChanged: { _ in }
+    ).frame(width: 360, height: 455)
+    let host = NSHostingView(rootView: root)
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 360, height: 455),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    window.orderFront(nil)
+    defer { window.orderOut(nil) }
+    host.layoutSubtreeIfNeeded()
+    func fields(_ view: NSView) -> [NSTextField] {
+      (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap { fields($0) }
+    }
+    XCTAssertFalse(fields(host).contains { $0.accessibilityIdentifier() == "localTaskTextField" })
+    presentation.beginAddingTask()
+    for _ in 0..<30 {
+      host.layoutSubtreeIfNeeded()
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    let field = try XCTUnwrap(
+      fields(host).first {
+        $0.accessibilityIdentifier() == "localTaskTextField"
+      })
+    let editor = try XCTUnwrap(
+      field.currentEditor() as? NSTextView,
+      "Explicit expansion must focus the newly mounted field")
+    editor.insertText("Fresh task", replacementRange: NSRange(location: 0, length: 0))
+    XCTAssertEqual(presentation.quickDraft.text, "Fresh task")
+    func scrollViews(_ view: NSView) -> [NSScrollView] {
+      (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap { scrollViews($0) }
+    }
+    let scroll = try XCTUnwrap(scrollViews(host).first { $0.documentView?.frame.height ?? 0 > 455 })
+    let fieldInDocument = field.convert(field.bounds, to: scroll.documentView)
+    XCTAssertTrue(scroll.documentVisibleRect.intersects(fieldInDocument))
+    let snapshot = try XCTUnwrap(presentation.captureSubmission())
+    presentation.finishSubmission(snapshot, saved: true, task: nil, tags: [])
+    host.layoutSubtreeIfNeeded()
+    try await Task.sleep(for: .milliseconds(30))
+    XCTAssertFalse(presentation.isComposerExpanded)
+    XCTAssertEqual(
+      presentation.quickDraft.text, "", "Native field teardown cannot restore a saved draft")
+    XCTAssertFalse(fields(host).contains { $0.accessibilityIdentifier() == "localTaskTextField" })
+  }
+
+  func testAcceptingNewTagRemovesFieldWithoutRestoringAcceptedNameOnEditingEnd() async throws {
+    let controller = try await controller()
+    let presentation = LocalTaskPresentation()
+    presentation.beginEditingTask(LocalTask(text: "Existing task"))
+    presentation.editDraft?.newTagInputVisible = true
+    let root = LocalTasksView(
+      controller: controller, presentation: presentation, onEditingChanged: { _ in }
+    ).frame(width: 360, height: 455)
+    let host = NSHostingView(rootView: root)
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 360, height: 455),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    window.orderFront(nil)
+    defer { window.orderOut(nil) }
+    host.layoutSubtreeIfNeeded()
+    try await Task.sleep(for: .milliseconds(30))
+    func fields(_ view: NSView) -> [NSTextField] {
+      (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap { fields($0) }
+    }
+    let field = try XCTUnwrap(
+      fields(host).first {
+        $0.accessibilityIdentifier() == "localTaskNewTagField"
+      })
+    XCTAssertTrue(window.makeFirstResponder(field))
+    let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+    editor.insertText("Writing", replacementRange: NSRange(location: 0, length: 0))
+    let delegate = try XCTUnwrap(field.delegate as? TaskEntryField.Coordinator)
+    XCTAssertTrue(
+      delegate.control(
+        field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+    // Explicitly deliver AppKit's late end notification before SwiftUI teardown.
+    delegate.controlTextDidEndEditing(
+      Notification(name: NSControl.textDidEndEditingNotification, object: field))
+    host.layoutSubtreeIfNeeded()
+    try await Task.sleep(for: .milliseconds(30))
+    XCTAssertEqual(presentation.editDraft?.newTagNames, ["Writing"])
+    XCTAssertEqual(presentation.editDraft?.newTagText, "")
+    XCTAssertEqual(presentation.editDraft?.newTagInputVisible, false)
+    XCTAssertFalse(fields(host).contains { $0.accessibilityIdentifier() == "localTaskNewTagField" })
   }
 
   func testNativeEntryInheritsDisabledStateAndUpdatesAccessibleDestination() throws {
@@ -364,6 +532,7 @@ final class LocalTasksRenderingTests: XCTestCase {
     presentation.finishTagSubmission(retry, saved: true)
     XCTAssertNil(presentation.tagIntent)
     XCTAssertEqual(presentation.selectedFilter, .tag(retry.id))
+    XCTAssertTrue(presentation.isComposerExpanded)
   }
 
   func testNativeQuickEntryEditorUndoRedoRetainsTextEditingSemantics() throws {
@@ -451,25 +620,52 @@ final class LocalTasksRenderingTests: XCTestCase {
     let deleted = await controller.deleteTask(id: removed.id)
     XCTAssertTrue(deleted)
     let empty = try await self.controller()
-    let renderDirectory = URL(fileURLWithPath: "/tmp/PulseTaskInteractionRender", isDirectory: true)
+    let completedOnly = try await self.controller()
+    let doneID = UUID()
+    _ = await completedOnly.saveTask(
+      id: nil, text: "All done", tagIDs: [], newTagNames: [], creationID: doneID)
+    await completedOnly.setCompleted(true, taskID: doneID)?.value
+    let longList = try await self.controller()
+    _ = await longList.createTag(id: work.id, name: work.name)
+    for index in 0..<24 {
+      _ = await longList.saveTask(
+        id: nil, text: "示例事项 \(index + 1)", tagIDs: [work.id], newTagNames: [])
+    }
+    let renderDirectory = URL(fileURLWithPath: "/tmp/PulseMinimalTodoRender", isDirectory: true)
     try FileManager.default.createDirectory(at: renderDirectory, withIntermediateDirectories: true)
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
       for mode in [
         "empty", "list", "completed-only", "collapsed", "options", "editor", "new-tag",
-        "rename-tag", "delete-tag", "tag-settings",
+        "rename-tag", "delete-tag", "tag-settings", "composer", "editor-new-tag", "editor-error",
+        "long-list",
       ] {
+        controller.dismissError()
         let presentation = LocalTaskPresentation()
-        let target = mode == "empty" ? empty : controller
+        let target =
+          mode == "empty"
+          ? empty
+          : mode == "completed-only" ? completedOnly : mode == "long-list" ? longList : controller
         presentation.reconcileTags(target.document?.tags ?? [])
         if mode != "empty" { presentation.selectedFilter = .tag(work.id) }
         switch mode {
+        case "composer":
+          presentation.beginAddingTask()
+          presentation.quickDraft.text = "添加一条新的待办"
         case "options":
+          presentation.beginAddingTask()
+          presentation.quickDraft.newTagInputVisible = true
           presentation.quickDraft.text = "新增虚构待办 👩‍💻"
           presentation.quickDraft.optionsExpanded = true
           presentation.quickDraft.newTagText = "Writing"
-        case "editor":
+        case "editor", "editor-new-tag", "editor-error":
           presentation.beginEditingTask(try XCTUnwrap(controller.document?.tasks.first))
-          presentation.editDraft?.optionsExpanded = true
+          if mode == "editor-new-tag" {
+            presentation.editDraft?.newTagInputVisible = true
+            presentation.editDraft?.newTagText = "Personal"
+          }
+          if mode == "editor-error" {
+            _ = await controller.createTag(id: UUID(), name: "Work")
+          }
         case "new-tag": presentation.tagIntent = LocalTagIntent(name: "New list")
         case "rename-tag":
           presentation.tagIntent = LocalTagIntent(action: .rename(work.id), name: work.name)
@@ -478,11 +674,6 @@ final class LocalTasksRenderingTests: XCTestCase {
         case "collapsed": presentation.collapsedCompleted.insert(.tag(work.id))
         case "completed-only":
           presentation.selectedFilter = .untagged
-          let taskID = UUID()
-          let created = await empty.saveTask(
-            id: nil, text: "All done", tagIDs: [], newTagNames: [], creationID: taskID)
-          XCTAssertTrue(created)
-          await empty.setCompleted(true, taskID: taskID)?.value
         default: break
         }
         let content: AnyView
@@ -492,7 +683,7 @@ final class LocalTasksRenderingTests: XCTestCase {
         } else {
           content = AnyView(
             LocalTasksView(
-              controller: mode == "completed-only" ? empty : target, presentation: presentation,
+              controller: target, presentation: presentation,
               onEditingChanged: { _ in }))
         }
         let root = content.frame(width: 360, height: 455).background(

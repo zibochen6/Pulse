@@ -140,10 +140,12 @@ and their decimal digits remain visible in full within the 360 × 510 popover.
 
 Pulse has independent native to-do lists. **Todo** always holds tasks without a
 custom tag; each custom tag is another list, and each task belongs to one list.
-Use the tab bar's **+** to create an empty tag, then type into the quick input
-below the tabs and press Enter to add tasks continuously. More options expose
-single-list selection, a new tag and **Repeat daily**. Moving a task changes its
-list. Completed tasks remain in a counted, collapsible section.
+Use the tab bar's **+** to create an empty tag. A separate centered **+** at the
+end of the task list expands quick entry; Enter saves and collapses it again.
+Collapse without saving to retain a draft for later. Options expose single-list
+selection, **New tag…** and **Repeat daily**. The compact editor has explicit
+Cancel/Save actions and list/repeat settings. Moving a task changes its list.
+Completed tasks remain in a counted, collapsible section.
 
 Delete a task directly and use **Undo** to restore it. The last 20 deletions stay
 available until Pulse quits. Removing a tag requires confirmation and moves its

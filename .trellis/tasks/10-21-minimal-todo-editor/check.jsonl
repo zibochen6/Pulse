@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Presentation ownership, native field bridge and pointer dismissal; new approved PRD supersedes fixed top composer contract."}
+{"file": ".trellis/spec/backend/builtin-tasks.md", "reason": "Preserve persistence, retry, undo and single-list invariants."}

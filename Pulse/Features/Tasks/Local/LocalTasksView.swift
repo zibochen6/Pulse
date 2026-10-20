@@ -10,6 +10,7 @@ struct LocalTaskDraft: Equatable {
   var newTagNames: [String] = []
   var newTagText = ""
   var optionsExpanded = false
+  var newTagInputVisible = false
 
   var tagIDs: Set<UUID> {
     get { selectedTagID.map { [$0] } ?? [] }
@@ -28,6 +29,7 @@ struct LocalTaskDraft: Equatable {
     selectedTagID = id
     newTagNames = []
     newTagText = ""
+    newTagInputVisible = false
   }
   mutating func acceptPendingTag(availableTags: [TaskTag]) {
     let name = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -43,6 +45,7 @@ struct LocalTaskDraft: Equatable {
       selectedTagID = nil
       newTagNames = [name]
       newTagText = ""
+      newTagInputVisible = false
     }
   }
 }
@@ -62,6 +65,7 @@ struct LocalTaskSubmission {
   let origin: LocalTaskFilter
   let draft: LocalTaskDraft
   let selectionRevision: Int
+  let expansionRevision: Int
 }
 
 /// Lives above page navigation and popover closure. Each list has its own
@@ -72,6 +76,7 @@ final class LocalTaskPresentation: ObservableObject {
     didSet {
       guard oldValue != selectedFilter else { return }
       selectionRevision += 1
+      composerFocused = false
       ensureQuickDraft()
     }
   }
@@ -83,6 +88,8 @@ final class LocalTaskPresentation: ObservableObject {
   @Published var revealedTaskID: UUID?
   @Published var revealRequest = UUID()
   @Published var submittingIDs = Set<UUID>()
+  @Published var expandedComposers = Set<LocalTaskFilter>()
+  private var expansionRevisions: [LocalTaskFilter: Int] = [:]
   @Published var collapsedCompleted = Set<LocalTaskFilter>()
   private var selectionRevision = 0
 
@@ -94,8 +101,10 @@ final class LocalTaskPresentation: ObservableObject {
     get { quickDrafts[selectedFilter] ?? LocalTaskDraft(tagIDs: selectedTagID.map { [$0] } ?? []) }
     set { quickDrafts[selectedFilter] = newValue }
   }
+  var isComposerExpanded: Bool { expandedComposers.contains(selectedFilter) }
   var isEditing: Bool {
-    editDraft != nil || tagIntent != nil || composerFocused || quickDraft.isDirty
+    editDraft != nil || tagIntent != nil
+      || (isComposerExpanded && (composerFocused || quickDraft.isDirty))
       || submittingIDs.contains(quickDraft.creationID)
   }
   func ensureQuickDraft() {
@@ -105,7 +114,14 @@ final class LocalTaskPresentation: ObservableObject {
   }
   func beginAddingTask() {
     ensureQuickDraft()
+    expandedComposers.insert(selectedFilter)
+    expansionRevisions[selectedFilter, default: 0] += 1
     focusRequest = UUID()
+  }
+  func collapseComposer() {
+    expandedComposers.remove(selectedFilter)
+    expansionRevisions[selectedFilter, default: 0] += 1
+    composerFocused = false
   }
   func beginCreatingTag() {
     guard tagIntent == nil else { return }
@@ -177,14 +193,17 @@ final class LocalTaskPresentation: ObservableObject {
     else { return nil }
     submittingIDs.insert(current.creationID)
     return LocalTaskSubmission(
-      origin: selectedFilter, draft: current, selectionRevision: selectionRevision)
+      origin: selectedFilter, draft: current, selectionRevision: selectionRevision,
+      expansionRevision: expansionRevisions[selectedFilter, default: 0])
   }
   func finishSubmission(
     _ submission: LocalTaskSubmission, saved: Bool, task: LocalTask?, tags: [TaskTag]
   ) {
     submittingIDs.remove(submission.draft.creationID)
     guard saved else { return }
-    let unchanged = quickDrafts[submission.origin] == submission.draft
+    let unchanged =
+      quickDrafts[submission.origin] == submission.draft
+      && expansionRevisions[submission.origin, default: 0] == submission.expansionRevision
     guard unchanged else {
       // This ID has been consumed on disk; retain later input as a fresh
       // creation instead of trapping its next save behind taskConflict.
@@ -206,9 +225,10 @@ final class LocalTaskPresentation: ObservableObject {
       return nil
     }()
     quickDrafts[submission.origin] = LocalTaskDraft(tagIDs: originID.map { [$0] } ?? [])
+    expandedComposers.remove(submission.origin)
     if selectedFilter == submission.origin, selectionRevision == submission.selectionRevision {
+      composerFocused = false
       if let task { reveal(task, tags: tags) }
-      focusRequest = UUID()
     }
   }
   func reveal(_ task: LocalTask, tags: [TaskTag]) {
@@ -277,8 +297,6 @@ struct LocalTasksView: View {
           LocalTagEntry(controller: controller, presentation: presentation)
           Divider()
         }
-        LocalTaskQuickComposer(controller: controller, presentation: presentation)
-        Divider()
       }
       errorBanner
       if controller.document != nil {
@@ -319,7 +337,7 @@ struct LocalTasksView: View {
   private var taskScrollView: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        LazyVStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 2) {
           let filter = presentation.selectedFilter
           let incomplete = controller.incompleteTasks(matching: filter)
           let completed = controller.completedTasks(matching: filter)
@@ -353,13 +371,53 @@ struct LocalTasksView: View {
               ForEach(completed) { taskRow($0).id($0.id) }
             }
           }
+          if presentation.isComposerExpanded {
+            LocalTaskQuickComposer(controller: controller, presentation: presentation)
+              .id(presentation.selectedFilter)
+          } else {
+            Button {
+              presentation.beginAddingTask()
+            } label: {
+              Image(systemName: "plus")
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(.secondary).frame(width: 36, height: 36)
+            }
+            .buttonStyle(PulseIconButtonStyle()).help("Add task")
+            .accessibilityLabel("Add task").accessibilityIdentifier("addLocalTaskButton")
+            .frame(maxWidth: .infinity).padding(.top, 6)
+          }
+          Color.clear.frame(height: 1).id("taskComposerEnd")
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .accessibilityIdentifier("localTaskList")
-      .onAppear { scrollToRevealedTask(using: proxy) }
+      .onAppear {
+        scrollToRevealedTask(using: proxy)
+        if presentation.isComposerExpanded { scrollToComposer(using: proxy) }
+      }
+      .onChange(of: presentation.focusRequest) { _ in scrollToComposer(using: proxy) }
+      .onChange(of: presentation.selectedFilter) { _ in
+        if presentation.isComposerExpanded { scrollToComposer(using: proxy) }
+      }
+      .onChange(of: presentation.quickDraft.optionsExpanded) { _ in
+        scrollToComposer(using: proxy)
+      }
+      .onChange(of: presentation.quickDraft.newTagInputVisible) { _ in
+        scrollToComposer(using: proxy)
+      }
       .onChange(of: presentation.revealRequest) { _ in scrollToRevealedTask(using: proxy) }
+    }
+  }
+
+  private func scrollToComposer(using proxy: ScrollViewProxy) {
+    let origin = presentation.selectedFilter
+    let request = presentation.focusRequest
+    DispatchQueue.main.async {
+      guard presentation.isComposerExpanded, presentation.selectedFilter == origin,
+        presentation.focusRequest == request, presentation.editDraft == nil
+      else { return }
+      proxy.scrollTo("taskComposerEnd", anchor: .bottom)
     }
   }
 
@@ -534,7 +592,14 @@ private struct LocalTaskQuickComposer: View {
   @ObservedObject var controller: LocalTaskController
   @ObservedObject var presentation: LocalTaskPresentation
   private var draft: Binding<LocalTaskDraft> {
-    Binding(get: { presentation.quickDraft }, set: { presentation.quickDraft = $0 })
+    let origin = presentation.selectedFilter
+    let creationID = presentation.quickDraft.creationID
+    return Binding(
+      get: { presentation.quickDrafts[origin] ?? LocalTaskDraft() },
+      set: {
+        guard presentation.quickDrafts[origin]?.creationID == creationID else { return }
+        presentation.quickDrafts[origin] = $0
+      })
   }
   private var isBusy: Bool {
     presentation.submittingIDs.contains(presentation.quickDraft.creationID)
@@ -550,7 +615,8 @@ private struct LocalTaskQuickComposer: View {
         TaskEntryField(
           text: draft.text, placeholder: "Add to \(listName)…", identifier: "localTaskTextField",
           focusRequest: presentation.focusRequest, isEnabled: !isBusy, onSubmit: submit,
-          onFocusChanged: { presentation.composerFocused = $0 }
+          onFocusChanged: { presentation.composerFocused = $0 },
+          onCancel: { presentation.collapseComposer() }
         )
         .frame(height: 26)
         if isBusy { ProgressView().controlSize(.mini) }
@@ -570,17 +636,26 @@ private struct LocalTaskQuickComposer: View {
         }
         .buttonStyle(PulseIconButtonStyle()).disabled(isBusy).help("Task options")
         .accessibilityLabel("Task options").accessibilityIdentifier("localTaskOptionsButton")
+        Button {
+          presentation.collapseComposer()
+        } label: {
+          Image(systemName: "xmark").font(.system(size: 11)).frame(width: 24, height: 26)
+        }
+        .buttonStyle(PulseIconButtonStyle()).help("Collapse input (Esc)")
+        .accessibilityLabel("Collapse input").accessibilityIdentifier("collapseLocalTaskButton")
       }
       if presentation.quickDraft.optionsExpanded {
         LocalTaskOptions(
           controller: controller, draft: draft,
-          onFocusChanged: { presentation.composerFocused = $0 }
+          onFocusChanged: { presentation.composerFocused = $0 },
+          onCancel: { presentation.collapseComposer() }
         )
         .disabled(isBusy)
       }
     }
-    .padding(.horizontal, 14).padding(.vertical, 9)
+    .padding(.vertical, 9)
     .accessibilityIdentifier("localTaskInlineComposer")
+    .onExitCommand { presentation.collapseComposer() }
   }
   private func submit() {
     guard !isBusy else { return }
@@ -604,9 +679,19 @@ private struct LocalTaskOptions: View {
   @ObservedObject var controller: LocalTaskController
   @Binding var draft: LocalTaskDraft
   var onFocusChanged: (Bool) -> Void = { _ in }
+  var onCancel: (() -> Void)?
+  @State private var tagFocusRequest: UUID?
+
+  private var listName: String {
+    draft.newTagNames.first ?? controller.document?.tags.first(where: {
+      $0.id == draft.selectedTagID
+    })?.name ?? "Todo"
+  }
   var body: some View {
-    VStack(alignment: .leading, spacing: 7) {
-      HStack(spacing: 8) {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(spacing: 12) {
+        Text("List").foregroundStyle(.secondary)
+        Spacer(minLength: 12)
         Menu {
           Button {
             draft.choose(nil)
@@ -628,36 +713,48 @@ private struct LocalTaskOptions: View {
               }
             }
           }
+          Divider()
+          Button("New tag…") {
+            draft.newTagInputVisible = true
+            tagFocusRequest = UUID()
+          }
+          .accessibilityIdentifier("newDraftTagButton")
         } label: {
-          Label(
-            draft.newTagNames.first ?? controller.document?.tags.first(where: {
-              $0.id == draft.selectedTagID
-            })?.name ?? "Todo", systemImage: "tag"
-          )
-          .lineLimit(1)
+          Text(listName).lineLimit(1).truncationMode(.middle)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityLabel("Choose task list").accessibilityIdentifier("localTaskTagsMenu")
-        Spacer(minLength: 0)
+      }
+      if draft.newTagInputVisible {
+        HStack(spacing: 6) {
+          TaskEntryField(
+            text: Binding(
+              get: { draft.newTagText },
+              set: {
+                // The shared field editor may finish after this conditional
+                // field disappears. Do not reinsert the name just accepted.
+                if draft.newTagInputVisible { draft.newTagText = $0 }
+              }),
+            placeholder: "New tag", identifier: "localTaskNewTagField",
+            focusRequest: tagFocusRequest, isEnabled: true, onSubmit: addTag,
+            onFocusChanged: onFocusChanged, onCancel: onCancel
+          )
+          .frame(height: 26)
+          Button("Use tag", action: addTag)
+            .buttonStyle(PulseActionButtonStyle())
+            .disabled(draft.newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("addDraftTagButton")
+        }
+      }
+      HStack {
+        Text("Repeat daily").foregroundStyle(.secondary)
+        Spacer()
         Toggle("Repeat daily", isOn: $draft.repeatsDaily)
-          .toggleStyle(.checkbox).fixedSize().accessibilityIdentifier("localTaskRepeatsDailyToggle")
-      }
-      HStack(spacing: 6) {
-        // Native field bridge also prevents an IME confirmation from staging a tag.
-        TaskEntryField(
-          text: $draft.newTagText, placeholder: "New tag", identifier: "localTaskNewTagField",
-          focusRequest: nil, isEnabled: true, onSubmit: addTag, onFocusChanged: onFocusChanged
-        )
-        .frame(height: 24)
-        Button("Use tag", action: addTag)
-          .buttonStyle(PulseActionButtonStyle())
-          .disabled(draft.newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-          .accessibilityIdentifier("addDraftTagButton")
-      }
-      if let newName = draft.newTagNames.first {
-        Text("New list: \(newName)").foregroundStyle(.secondary).lineLimit(2)
+          .labelsHidden().toggleStyle(.switch).controlSize(.mini)
+          .accessibilityIdentifier("localTaskRepeatsDailyToggle")
       }
     }
-    .font(.system(size: 12)).controlSize(.small)
+    .font(.system(size: 13)).controlSize(.small)
   }
   private func addTag() { draft.acceptPendingTag(availableTags: controller.document?.tags ?? []) }
 }
@@ -672,54 +769,56 @@ private struct LocalTaskEditor: View {
   var body: some View {
     VStack(spacing: 0) {
       HStack {
-        Text("Edit task").font(.system(size: 14, weight: .semibold))
-        Spacer()
         Button("Cancel") { presentation.editDraft = nil }
           .keyboardShortcut(.cancelAction).accessibilityIdentifier("cancelLocalTaskEditButton")
+          .frame(width: 60, alignment: .leading)
+        Spacer(minLength: 0)
+        Text("Edit task").font(.system(size: 14, weight: .semibold))
+        Spacer(minLength: 0)
+        HStack(spacing: 4) {
+          if isSubmitting { ProgressView().controlSize(.mini) }
+          Button("Save", action: save)
+            .disabled(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .keyboardShortcut("s", modifiers: .command)
+            .accessibilityIdentifier("saveLocalTaskButton")
+        }
+        .frame(width: 60, alignment: .trailing)
       }
-      .buttonStyle(.borderless).padding(.horizontal, 16).padding(.vertical, 10)
+      .buttonStyle(.borderless).font(.system(size: 13))
+      .padding(.horizontal, 16).padding(.vertical, 12)
       Divider()
       ScrollView {
-        VStack(alignment: .leading, spacing: 10) {
-          Text("Task").font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 20) {
           TextEditor(text: $draft.text).font(.system(size: 15))
-            .frame(minHeight: 80, maxHeight: 120).padding(4)
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor)))
-            .focused($textFocused).accessibilityLabel("Task text").accessibilityIdentifier(
-              "localTaskTextField")
-          DisclosureGroup("Task options", isExpanded: $draft.optionsExpanded) {
-            LocalTaskOptions(controller: controller, draft: $draft).padding(.top, 6)
-          }.font(.system(size: 12))
+            .scrollContentBackground(.hidden)
+            .frame(height: 148).padding(10)
+            .background(Color.primary.opacity(0.035))
+            .clipShape(RoundedRectangle(cornerRadius: 9))
+            .focused($textFocused).accessibilityLabel("Task text")
+            .accessibilityIdentifier("localTaskTextField")
+          LocalTaskOptions(controller: controller, draft: $draft)
           if let error = controller.errorMessage {
             Text(error).font(.caption).foregroundStyle(.red).fixedSize(
               horizontal: false, vertical: true)
           }
+          Button("Delete task", role: .destructive, action: delete)
+            .buttonStyle(.borderless).font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .accessibilityIdentifier("deleteLocalTaskButton")
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
       }
-      Divider()
-      HStack {
-        Button("Delete", role: .destructive) {
-          guard !isSubmitting, let id = draft.taskID else { return }
-          guard let snapshot = presentation.captureEditSubmission() else { return }
-          Task {
-            let saved = await controller.deleteTask(id: id)
-            presentation.finishEditSubmission(
-              snapshot, saved: saved, task: nil, tags: controller.document?.tags ?? [])
-          }
-        }.accessibilityIdentifier("deleteLocalTaskButton")
-        Spacer()
-        if isSubmitting { ProgressView().controlSize(.mini) }
-        Button("Save", action: save)
-          .disabled(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-          .keyboardShortcut("s", modifiers: .command).accessibilityIdentifier("saveLocalTaskButton")
-      }
-      .buttonStyle(PulseActionButtonStyle()).font(.system(size: 13))
-      .padding(.horizontal, 16).padding(.vertical, 10)
     }
     .disabled(isSubmitting).onAppear { textFocused = true }
+  }
+  private func delete() {
+    guard !isSubmitting, let id = draft.taskID else { return }
+    guard let snapshot = presentation.captureEditSubmission() else { return }
+    Task {
+      let saved = await controller.deleteTask(id: id)
+      presentation.finishEditSubmission(
+        snapshot, saved: saved, task: nil, tags: controller.document?.tags ?? [])
+    }
   }
   private func save() {
     guard !isSubmitting else { return }
@@ -829,6 +928,7 @@ struct TaskEntryField: NSViewRepresentable {
   var isEnabled = true
   let onSubmit: () -> Void
   let onFocusChanged: (Bool) -> Void
+  var onCancel: (() -> Void)?
 
   func makeCoordinator() -> Coordinator { Coordinator(self) }
   func makeNSView(context: Context) -> FocusableTaskTextField {
@@ -869,7 +969,7 @@ struct TaskEntryField: NSViewRepresentable {
     private weak var activeEditor: NSTextView?
     init(_ parent: TaskEntryField) {
       self.parent = parent
-      lastFocusRequest = parent.focusRequest
+      lastFocusRequest = nil
     }
     func controlTextDidChange(_ notification: Notification) {
       guard let field = notification.object as? NSTextField else { return }
@@ -911,8 +1011,13 @@ struct TaskEntryField: NSViewRepresentable {
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector)
       -> Bool
     {
-      guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
       guard !textView.hasMarkedText() else { return false }
+      if commandSelector == #selector(NSResponder.cancelOperation(_:)), let cancel = parent.onCancel
+      {
+        cancel()
+        return true
+      }
+      guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
       parent.onSubmit()
       return true
     }

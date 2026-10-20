@@ -120,9 +120,9 @@ enum PopoverPage: Equatable {
 - Tasks is Home's main region and has one native local implementation in
   `Pulse/Features/Tasks/Local/`. The fixed tab row contains permanent default
   Todo (untagged only) plus independent custom tags, with no All/aggregate tab.
-  Each task belongs to one logical list. A fixed + creates empty tags; quick
-  entry stays immediately below tabs and above scrolling rows. Completed tasks
-  have a counted collapsible section. Delete is immediate with controller-owned
+  Each task belongs to one logical list. A fixed tab-bar + creates empty tags;
+  a separate centered + follows all scrolling task rows and expands quick entry.
+  Completed tasks have a counted collapsible section. Delete is immediate with controller-owned
   Undo. Never fabricate sample tasks for empty/loading states. See Built-in
   tasks below for the complete interaction contract.
 - `PopoverPageController` is presentation state only. It does not start an integration or change a UserDefaults key. `popoverDidClose` resets it to Home so a later open is task-first.
@@ -206,8 +206,8 @@ Tests use isolated defaults and a temporary store.
   existing-task edit state and tag-management input. Recreating a view or
   closing the popover does not discard this owner.
 - `LocalTasksView` reports active editing through `onEditingChanged` to the
-  hover controller. Focus/unfinished input counts; an idle empty composer does
-  not suspend departure dismissal indefinitely.
+  hover controller. Focus/visible unfinished input counts; an idle empty
+  composer or explicitly collapsed draft does not suspend departure dismissal.
 - `PulseApplicationMenu.makeMainMenu()` supplies nil-target native text
   Undo/Redo/Cut/Copy/Paste/Select All commands. Text undo stays on AppKit's
   responder chain, never a task-deletion shortcut. The actual NSTextField field
@@ -230,20 +230,32 @@ Tests use isolated defaults and a temporary store.
   reserved and cannot be renamed/deleted/duplicated.
 - Tab context menus and Settings share tag rename/remove operations. Remove
   requires confirmation explicitly stating tasks move to Todo and are kept.
-- Quick entry is fixed below tabs, outside the task ScrollView. Enter confirms
-  nonblank input, then clears and refocuses for continuous entry. Explicitly
-  guard AppKit marked-text composition so IME candidate confirmation cannot
-  trigger task submission. Empty input does not auto-focus on ordinary appear.
+- A centered task + follows all task rows and the Completed group inside the
+  task ScrollView. Presentation owns expansion per list alongside retained
+  drafts. Explicit expansion scrolls entry into view after mount and requests
+  focus; ordinary list appearance never focuses hidden entry. Esc/collapse
+  hides without discarding. Confirmed matching save clears and collapses the
+  origin; failure preserves input. Explicitly guard AppKit marked-text
+  composition so IME candidate confirmation cannot trigger task submission.
   The AppKit bridge combines its explicit enabled flag with SwiftUI's inherited
   `Environment(\.isEnabled)`; a parent's `.disabled` must disable its actual
   NSTextField. Refresh the accessibility label when the destination changes.
-- List selection is single-choice; default is current list. Additional list/
-  new-tag/repeat options start collapsed. Create/edit may create/select one new
-  tag. Confirmed edits that move a task reveal its destination.
+  Newly mounted fields retain an explicit focus request until attached to a
+  window; ordinary hidden entry must not request focus. Bind quick entry to its
+  captured origin and creation ID so a late native end-edit callback cannot
+  resurrect a saved draft or write into a newly selected list. Conditional
+  new-tag fields reject late binding writes after staging hides the field.
+- List selection is single-choice; default is current list. Creation options
+  start collapsed. The list menu's New tag action reveals name entry only when
+  requested. Editor has Cancel / Edit task / Save in its header, a subtle
+  multiline content area, compact list/repeat property rows and Delete below.
+  Explicit Save commits; Cancel discards only the edit. Create/edit may select
+  one new tag. Confirmed edits that move a task reveal its destination.
 - Capture stable creation ID, draft version and originating list before async
   submission. Duplicate intent is blocked. A late reply may clear only the
   exact saved version, not newer typing/another list. Switching lists stores
-  and restores their individual drafts. Failed save keeps retryable input and
+  and restores their individual drafts and expansion state. A retained hidden
+  draft alone does not suspend hover dismissal. Failed save keeps retryable input and
   its original creation ID. A successful save that finds newer retained input
   must give that input a fresh creation ID; reusing a committed ID with divergent
   content causes `taskConflict`. Editor/tag pending guards likewise survive
@@ -276,15 +288,15 @@ Tests use isolated defaults and a temporary store.
 | Save pending while switching lists | Submission uses captured destination; other draft survives. |
 | Later input before old save resolves | Old result cannot clear new text or redirect selection. |
 | Popover closes / Settings visited | Drafts remain; returning reinstates relevant editing protection. |
-| No input focus or unfinished text | Normal pointer dismissal resumes despite mounted quick entry. |
+| Collapsed draft or unfocused empty input | Normal pointer dismissal resumes; retained text stays available. |
 | All rows completed | Counted Completed disclosure still appears. |
 | Delete then another edit then Undo | Restore target only; subsequent edit persists. |
 | Save/restore fails | Retain input/receipt and offer retry; no false success. |
 
 ### 5. Good / Base / Bad Cases
 
-- Good: create an empty tag, enter multiple tasks with Enter, move one, delete
-  another and Undo without reflow or modal confirmation.
+- Good: create an empty tag, add with Enter and return to the centered +,
+  reopen a retained draft, move a task, delete another and Undo without reflow.
 - Base: Todo always holds untagged tasks; empty custom tabs allow immediate entry.
 - Bad: a late save returns after tab/draft changes. Preserve current input and
   selection while updating only confirmed storage and the matching saved draft.
@@ -295,6 +307,9 @@ Exercise real presentation transitions across lists/recreated views and stale
 save responses, not duplicate copies of view logic. Assert default Todo plus
 independent single membership, create/edit new tag, matching-draft clearing,
 failed-save retention, completed count/collapse and editing-suspension state.
+Assert success collapses only its matching origin, collapse/reopen preserves
+input, and a newly mounted composer actually becomes first responder and is
+visible in the native scroll viewport. Test Escape during marked composition.
 Render empty/populated/completed/options/editor/tag-management/undo states in
 Aqua and Dark Aqua at the fixed size; inspect representative images. AppKit
 text-command tests exercise the actual TaskEntryField editor
