@@ -283,6 +283,46 @@ final class HomeViewRenderingTests: XCTestCase {
     }
   }
 
+  /// The Updates section sits below the popover fold, so it is rendered at full
+  /// height to keep the verified status and actions visually inspectable.
+  func testUpdatesSectionRendersAtFullHeightInBothAppearances() async throws {
+    let suite = "PulseUpdatesRender.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "PulseUpdatesRender")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
+    let updates = makeInactiveUpdateController(defaults: defaults)
+    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+      let view = SettingsView(
+        config: config,
+        deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
+        vipConfiguration: VIPConfiguration(secretStore: PreviewSecretStore()),
+        localTasks: isolatedLocalTasks(),
+        updates: updates,
+        destination: .updates,
+        onBack: {}, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
+        onQuit: {}
+      )
+      .frame(width: 360)
+      .background(Color(nsColor: .windowBackgroundColor))
+      let host = NSHostingView(rootView: view)
+      host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
+      host.frame = NSRect(x: 0, y: 0, width: 360, height: 1100)
+      host.layoutSubtreeIfNeeded()
+      let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+      host.cacheDisplay(in: host.bounds, to: bitmap)
+      for point in [(2, 2), (bitmap.pixelsWide - 2, bitmap.pixelsHigh - 2)] {
+        let color = try XCTUnwrap(bitmap.colorAt(x: point.0, y: point.1))
+        XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01)
+      }
+      let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+      try png.write(
+        to: directory.appendingPathComponent("\(appearanceName.rawValue)-updates.png"))
+    }
+  }
+
   func testVisibleSettingsActionsRenderInBothAppearances() async throws {
     let suite = "PulseSettingsButtons.\(UUID())"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
