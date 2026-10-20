@@ -117,7 +117,7 @@ enum PopoverPage: Equatable {
 - The Home header contains Pulse identity, the Settings gear, and independent compact Codex, 88VIP, and DeepSeek controls. Codex uses the real icon and `UsageMenuFormatter.title(for:)`: one window yields a bare percentage, multiple windows yield short labeled values, and loading/unavailable/failure yield `…`/`--`/`!`. Money remains a native-currency balance, separate from quota percentages. Home has no reset time, update time, or refresh control; those belong to Usage. The AppKit menu bar continues to use only Codex state.
 - Header status controls begin beside the brand with flexible space after them, shifting them toward the leading edge. When they do not fit, place them in leading-aligned rows below the brand; wrap whole controls instead of clipping monetary decimals or overlapping Settings. Bound a single exceptionally wide quota control and make its text horizontally reachable. Use actual measured widths at the fixed 360 × 510 popover size. Keep the existing native colors, fonts, and task-region ownership.
 - Clicking a provider control requests that provider's refresh, calls `showUsage()`, and displays full `UsageView` in a separate scrollable page. Manual refresh remains in Usage. Add Provider routes to Settings → Providers, which owns separate 88VIP and DeepSeek Keychain forms. Back from Usage or Settings calls `showHome()`.
-- Tasks is Home's main region. `TaskSourceConfiguration` selects either built-in tasks or the independent Apex surface. Both connected sources offer Add Task with their own editor/storage; Apex creates a task only in an existing Dashboard group. Apex not-configured content routes to Settings. Neither source displays fabricated sample tasks.
+- Tasks is Home's main region and has exactly one implementation: the native local list in `Pulse/Features/Tasks/Local/`. There is no source-switching configuration, no source picker, and no second surface; no UserDefaults preference decides where tasks come from. The tab row shows only saved tags in creation order (no `All`, no `Untagged` tab; zero tags render one `Todo` guidance tab), the centered `+` under the list expands the inline composer, completed rows stay visible dimmed and struck through under a `Completed` heading, and repeating tasks re-arm on popover open. Neither empty states nor loading states display fabricated sample tasks.
 - `PopoverPageController` is presentation state only. It does not start an integration or change a UserDefaults key. `popoverDidClose` resets it to Home so a later open is task-first.
 - `NSTrackingArea` on both the status button and hosting view uses mouse entry/exit, active-always, and visible-rect tracking. `PulseAppDelegate` calls `beginOpening()` before `show`, then seeds tracked regions from actual geometry. Opening requires both a minimum 300 ms click guard and `popoverDidShow`; events record presence but cannot request hover close until both complete. Reread actual button, content and whole-window geometry at that boundary. While shown, reconcile all three regions every 50 ms, including the arrow, so missed exits cannot latch hover forever.
 - The controller has Closed, Opening, Interactive, PendingClose and Closing states. PendingClose waits 180 ms and rechecks actual pointer geometry before closure. Schedule only when no pending task exists: duplicate exits or reconciliation cannot extend the deadline. Returning to the button, content or arrow immediately cancels it; geometry alone can repair missed entry events.
@@ -182,115 +182,75 @@ func popoverDidClose(_ notification: Notification) {
 }
 ```
 
-## Apex Dashboard task state and checkbox persistence
+## Built-in tasks
 
-`PulseAppDelegate` owns one `DashboardTaskController`. `TasksView` renders its
-connection state and dispatches intents; it never performs file I/O. The left
-checkbox and text opener are sibling buttons. Text opens Obsidian; checkbox
-completion calls `setCompleted(_:task:)`, never the opener. Pending IDs are
-registered synchronously; completion is confirmed from a verified disk snapshot.
-Special markers are read-only. Source order, typography and hover behavior stay
-unchanged. A loaded list remains mounted during refresh/save, preserving matched
-row IDs and selection. Inline failures offer explicit retry or re-selection.
-
-Completed rows are directly hidden from Home in both Apex cards and the current
-built-in tag filter. Do not render a completed heading, count, disclosure or
-expansion control. Preserve incomplete source order and every task in the
-Dashboard/JSON model; this presentation never deletes or relocates data.
-Pending writes keep the current row visible. Hide it only after applying a
-verified saved/reread state; failed writes follow the reread source rather than
-optimistically hiding a task. An Obsidian undo becomes visible on the next
-refresh. Source changes, column/filter switches and reopen all use the same
-incomplete-only policy. This is presentation only, not a preference or a new
-persisted task classification.
-
-Ordinary bookmarks remain in use in the non-sandboxed build. Selection generation
-rejects undispatched intents and late UI replies after a new selection. A save
-already accepted by the file worker may finish against its original file; it
-never changes the newly selected file or publishes a stale result into it.
-See [the persistence contract](../backend/apex-task-writeback.md) for source
-locators, byte patches, serialization, conflict handling and test assertions.
-
-### Dashboard file chooser handoff
-
-`DashboardFilePicker` coordinates Idle → WaitingForClose → Choosing → Saving.
-Selection first requests popover close and waits for `popoverDidClose`; a closed
-popover skips the wait. Activate the accessory app, retain one `NSOpenPanel`,
-present it with asynchronous `begin` outside the close callback and bring it forward. Do not run a modal
-loop while the transient popover is still closing. Repeated status-item clicks
-focus that panel rather than reopening Home or creating another chooser.
-
-The handoff also checks actual popover and animated-window visibility every
-50 ms. A missed delegate callback may advance only once both are invisible;
-after two seconds of an unsuccessful close, clear the busy state and show an
-inline retry error. Never reset Opening on an already-visible popover when
-restoring Settings. Request explicit file-picker closure directly from AppKit,
-not through potentially stale hover state. Late callbacks and repeat requests
-must not present two panels. Test both missed-callback recovery and a real
-still-visible timeout; do not equate a fake-panel test with desktop focus proof.
-
-After cancellation or completed `saveDashboard(url:)`, restore Settings/Tasks.
-Cancellation leaves the existing bookmark and selected task source intact. Saving
-a bookmark does not implicitly switch from built-in tasks to Apex. Show this
-explicitly when local is selected. The connection label must follow the actual
-controller state, with read/parse/permission errors inline; bookmark existence
-alone is not proof of a connection. Keep file selection testable via a fake panel
-and isolated defaults/temporary Dashboards. Never overwrite the user's real
-configuration for automated verification.
-
-### Dashboard creation and Settings feedback
-
-`DashboardTaskPresentation` lives above navigation beside local draft state. It
-retains the original Dashboard snapshot, creation UUID, selected column/card and
-text. New-task input is a compact footer under an always-mounted task list, not a
-replacement page. Native menus/pickers choose column/card and optional plain
-hashtags. The composer only dispatches `addTask(request:)`; the file store owns
-insertion. Existing text hashtags and selected names deduplicate case-insensitively;
-new tags modify only the new task text, never Dashboard metadata or old tasks.
-Pending is registered synchronously by the controller; close a draft only after
-verified success and only if its UUID still matches. Return to the destination
-column. File re-selection clears a draft belonging to the old file, including
-when the change happened while TasksView was unmounted. The presentation listens
-to the controller's observable selection generation
-above navigation, including failed reads/parses and explicit same-file choices.
-Ordinary refreshes do not invalidate a draft. Errors retain input and
-explain re-selection when needed. A column without cards cannot accept creation;
-offer another existing column rather than inventing a new card.
-
-The Apex editor reports `isEditing` through the same hover suspension callback as
-the local editor. Outside clicks and status-item toggles still close normally.
-Settings uses `PulseActionButtonStyle`: compact borders/fills, primary emphasis
-for save, red tint for removal, accurate disabled opacity and short hover/press
-color transitions. Respect SwiftUI Reduce Motion, never scale/move the whole page
-for an action. General preferences use switches; source choice uses a segmented
-control. Keep existing handler semantics, native keyboard focus and typography.
-
-## Built-in tasks and source selection
-
-The app delegate owns a `LocalTaskController` and `TaskSourceConfiguration` beside
-the independent `DashboardTaskController`. Absent a saved source, an existing
-Apex bookmark selects Apex on upgrade; otherwise built-in tasks is the default.
-Source changes only choose a view and never convert, merge or delete data. Unit
-host initialization uses isolated defaults and a temporary task store.
+The app delegate owns one `LocalTaskController`. The native local list in
+`Pulse/Features/Tasks/Local/` is the only task system: there is no
+source-switching configuration, no source picker, no second surface, and no
+UserDefaults preference that decides where tasks come from. Unit host
+initialization uses isolated defaults and a temporary task store.
 
 Local list rows use sibling completion/edit buttons, stable UUIDs and existing
-15/14/13-point task/tab/group typography. Completed tasks remain in storage and
-are hidden directly from Home without a completed section or count. Filters
-are All, Untagged and named tags. The task editor retains a draft in an observable
-presentation owner above page navigation; draft text is not cleared on dismissal.
-Deleted tag IDs and invalid filters are reconciled when the task surface returns.
-Creation uses a compact inline footer with existing/new tag choices and the
-list/filters retained; editing/deleting an existing task keeps its current form.
-After confirmed creation preserve a matching filter, otherwise show All so the
-new task is visible. A submission guard is set at the button boundary before
-scheduling asynchronous saves, preventing double creation clicks. Failed saves retain the draft.
+15/13-point task/tab typography. The tab row shows only saved tags in creation
+order — no `All` and no `Untagged` tab is rendered. Zero tags show one
+selected `Todo` guidance tab and the empty message "No tasks yet"; an empty tag
+shows "No tasks in this tag". Selection is presentation state in
+`LocalTaskPresentation`, kept above page navigation; `.untagged` remains only
+the internal filter behind the empty-vocabulary guidance state. Deleted tag
+IDs and invalid selections are reconciled when the task surface returns (to the
+first remaining tag, or back to the guidance state).
+
+A selected tab is an accent-tinted filled capsule with semibold text; an
+unselected tab is secondary text with a light hover fill. Selection itself is
+the affordance — never a focus box. AppKit's square focus ring is suppressed
+(`PulseFocusRingSuppressor` in `PulseFocusEffect.swift`); keyboard focus draws
+a soft, shape-matched stroke or fill instead of a rectangle around the capsule
+(`PulsePillTab`, `PulseIconButtonStyle`, `PulseRowButtonStyle`).
+
+Under the list, a centered `+` icon button expands the inline composer in the
+same footer slot: text field, Tags menu, New tag field, "Repeat daily"
+checkbox, Add/Cancel. The tag row's trailing `+` menu offers "Add task in tag"
+(one entry per saved tag, pre-selecting that tag) and "New tag…", which starts
+a composer for a task that gets a brand-new tag. Editing an existing task keeps
+its separate editor page, including its delete confirmation. A submission guard
+is set at the button boundary before scheduling asynchronous saves, preventing
+double creation clicks. Failed saves retain the draft. After confirmed
+creation, keep a tab that already shows the task or reveal the earliest-created
+tag of the new task so the row is visible. The draft is retained in the
+observable presentation owner above page navigation; draft text is not cleared
+on dismissal.
+
+Completed tasks stay visible: dimmed, struck through, after the open tasks
+under a small `Completed` heading, in stored order. Nothing is hidden or
+auto-removed, and the JSON model always retains every task. While a toggle is
+pending, the row shows a spinner and its checkbox is disabled; state updates
+only after the store confirms the write, and a failed save follows the reloaded
+state. Hovering a row reveals a trash button whose confirmation dialog must be
+accepted before `deleteTask` runs; deletion from the editor is confirmed the
+same way. Settings → Tasks owns tags only (`LocalTagSettingsView`, rename and
+remove); removing a tag detaches its IDs and never deletes tasks.
+
+Daily repeat: each task carries an optional `repeatsDaily` flag and a
+`lastCompletedDay` (the local calendar day). The composer and editor share one
+"Repeat daily" checkbox, and repeating rows show a small circular-arrows
+marker. Completing a repeating task records the day of the click;
+`LocalTaskController.resetRepeatingTasks()` runs on popover open
+(`PulseAppDelegate`) and on task-surface appearance, re-arms repeating tasks
+completed on an earlier day, is idempotent, and writes nothing when nothing is
+stale. It is background maintenance: it must never raise `isSaving` (typing
+stays enabled) and a successful run must never clear a visible error.
 
 The visible task/tag editor reports editing state to the hover controller.
 `setDismissalSuspended` cancels only hover departure while editing; AppKit's
 transient outside click and status-item toggle remain immediate. Leaving a visible
 editor releases suspension, and returning to a retained local draft reinstates it.
 Editing retains the normal native motion lifecycle and 180 ms departure timing
-after suspension is released.
+after suspension is released. Settings actions use `PulseActionButtonStyle`:
+compact borders/fills, primary emphasis for save, red tint for removal,
+accurate disabled opacity and short hover/press color transitions. Respect
+SwiftUI Reduce Motion, never scale/move the whole page for an action. General
+preferences use switches. Keep existing handler semantics, native keyboard
+focus and typography.
 
 See [built-in persistence](../backend/builtin-tasks.md) for storage guarantees and
-required failure, retry and migration tests.
+required failure, retry and schema-compatibility tests.

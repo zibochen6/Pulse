@@ -23,8 +23,8 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [88VIP Usage](./vip-usage.md) | 88API billing, Keychain credential, and balance normalization contract | Phase 3 |
 | [DeepSeek Usage](./deepseek-usage.md) | Official native-currency balances, isolated Keychain credential, and refresh invalidation | Current |
 | [Release Delivery](./release-delivery.md) | Universal preview signing, recoverable local installation, and GitHub artifact/source publication | Current |
-| [Built-in Tasks](./builtin-tasks.md) | Local JSON transactions, tags, retry and source migration | Current |
-| [Apex Task Write-back](./apex-task-writeback.md) | Source locators, byte patches, conflicts, and persistence tests | Current |
+| [Auto Update](./auto-update.md) | GitHub latest-release feed, digest + code-signature verification, staged install with rollback | Current |
+| [Built-in Tasks](./builtin-tasks.md) | Local JSON transactions, tags, daily repeat, retry and schema compatibility | Current |
 
 ---
 

@@ -4,6 +4,7 @@ enum SettingsDestination: Hashable {
   case general
   case providers
   case tasks
+  case updates
   case about
 }
 

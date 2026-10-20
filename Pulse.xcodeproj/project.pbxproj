@@ -9,83 +9,76 @@
 /* Begin PBXBuildFile section */
 		05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */; };
 		0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */; };
-		0D76F3E584FFBF0E12B1AAD2 /* ApexDashboardParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC89F07DD7D9AD92476F82EF /* ApexDashboardParser.swift */; };
 		1032D7E2BC7C7D2B7F30890A /* PulseApplicationMenuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441866DB43F7C8459D8A210B /* PulseApplicationMenuTests.swift */; };
-		175D7876266AF12D8868473C /* DashboardTaskInsertion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF1238CABFCF8FCBA0A13A4F /* DashboardTaskInsertion.swift */; };
+		166ED168C944009DA1A31834 /* PulseFocusEffect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B6FE7FC418EBBA7521EEB4C /* PulseFocusEffect.swift */; };
 		1B3A9C5B59FAFE1527DD6128 /* UsageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5763D22FF29A87447FD82E62 /* UsageController.swift */; };
+		1B760C5C8555A2A1141233E7 /* UpdateVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D94C4F7CE4DBBDC535507E9 /* UpdateVersion.swift */; };
 		1BE60A027FF7E01300C38221 /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = 2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */; };
+		1D0438C99EBC0FA4EAC2E5B6 /* UpdateSignature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 187D556CDC1B8381E012BB29 /* UpdateSignature.swift */; };
 		1DC63B9C05D5D1C4FC42DB95 /* PulseApplicationMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0367F6E30F9AFE000D8201 /* PulseApplicationMenu.swift */; };
+		229D3DCF67FB24381F0293AD /* UpdateVerificationError.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7B9827440C4DEFD1801572 /* UpdateVerificationError.swift */; };
+		231A0DB1D5945EC7B69A28AA /* UpdateInstallScriptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C0A936185B31D0C8776ED5 /* UpdateInstallScriptTests.swift */; };
 		23F727C65F085B7DC955AD6E /* ProviderCredentialForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEA20A35F8CF235912BC59A3 /* ProviderCredentialForm.swift */; };
-		241F449A4B4B746B86FCA9FA /* DashboardFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCFDCEFE7C9B8218250C23AE /* DashboardFileStore.swift */; };
 		24E16A2A520AF859941E39E8 /* PopoverPageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D4C870D63B26C2433BCB4 /* PopoverPageController.swift */; };
 		29E74F2638B20780595D298E /* LocalTasksRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4AC82C04589E099C65A4FA9 /* LocalTasksRenderingTests.swift */; };
 		3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D1390EE653F2D9B57F24AA /* HomeView.swift */; };
-		3D9C0BCC1DB625541F7AB8CC /* ObsidianURLOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D388DA8F4C4E03EDD8317B8 /* ObsidianURLOpener.swift */; };
-		3DB52E68CA6794F2F1C56BBB /* sample-apex-dashboard.md in Resources */ = {isa = PBXBuildFile; fileRef = FE634AFDAC3E2B16AF7D5589 /* sample-apex-dashboard.md */; };
 		41EA3DB12BEA80C13861F06F /* LocalTagSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FF340EC2F400E3D116F82B3 /* LocalTagSettingsView.swift */; };
 		4598BC1202B93684E58A0DDA /* UsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BCCC91F953A8FF437E4BBA /* UsageView.swift */; };
 		4A3779C2CB4D487729AB784A /* CodexAppServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C278C9EFD158EEE6E7C50B92 /* CodexAppServerTransport.swift */; };
-		4B01AFB396C10D12557CD221 /* DashboardTaskCreation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0097752C31B25685CE188DBC /* DashboardTaskCreation.swift */; };
-		4C36F1FB431AC06C0A8D93A3 /* DashboardFilePickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD76F6C5B3ED382112FE71D /* DashboardFilePickerTests.swift */; };
 		4C3DFC3718B36E11A8A6EA6E /* APIKeyConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0210F151F1BAE5E7BC8820 /* APIKeyConfiguration.swift */; };
-		5061257378E6D1AD37400E1F /* DashboardTaskEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CD5850A869CA24EDA07BFEA /* DashboardTaskEditorTests.swift */; };
-		52084371F4B9EBFC8B883BA1 /* DashboardFilePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F29D4E924931AF038CB48DAB /* DashboardFilePicker.swift */; };
-		60007CF3A6DCE7E6BEDC9A2B /* TaskSourceConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 697B032CE52A4C758F9F1C14 /* TaskSourceConfigurationTests.swift */; };
+		540DDA415409CFB556A69310 /* UpdateFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116943C50D7C3B25DB42B845 /* UpdateFeed.swift */; };
 		6116F768A78F36250C2AC8C1 /* AIStatusSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 713E8909A7BD912071712C5E /* AIStatusSummary.swift */; };
 		631450CCD9342AB98DBC225E /* VIPProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E9A7F3F6DE36F13930B307 /* VIPProvider.swift */; };
 		63E04A2143D91B14A4FA735D /* DeepSeekProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68A18956B27ACC01716A4841 /* DeepSeekProvider.swift */; };
 		66CAE67A523CE15785F80E19 /* SecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46F164972943AB9CCA0C495A /* SecretStore.swift */; };
 		68FA78572F380260FE065046 /* LocalTaskControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA059DD49514947DEAEB889 /* LocalTaskControllerTests.swift */; };
 		6BB6BF529BA3E006464A3D04 /* PulseSharedControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E755A038311E5C9CCE10662 /* PulseSharedControls.swift */; };
-		6DCBF665433A566AE3E9D0CA /* DashboardDocumentReplacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C4F9D784F2D6E93D6895AC /* DashboardDocumentReplacing.swift */; };
 		6F7BDB9101FAE05E50004C43 /* PopoverHoverController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281A772B09CA86AEA477DB58 /* PopoverHoverController.swift */; };
 		715C7B88CFE0C9B3DDB927B9 /* CodexProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D6D74D06E7A1FA2711BE28 /* CodexProvider.swift */; };
+		71EFD9FBABCCA9DB74C7160B /* UpdateLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9565C857E8DA4981567DEDF7 /* UpdateLogicTests.swift */; };
 		740B0BDB4D56172573B7C6D6 /* UsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */; };
+		74D38B8BC428EB224CDC7599 /* UpdateRelease.swift in Sources */ = {isa = PBXBuildFile; fileRef = B562D19ED31C1D1181B8544E /* UpdateRelease.swift */; };
 		77505DE63A22592DA6B881BC /* PulseMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBA39302CF835124B8AEF19 /* PulseMain.swift */; };
 		780A50D97F7C17764B8A85BB /* DeepSeekConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2379293C4F1BE631DDFEB05 /* DeepSeekConfiguration.swift */; };
 		78C6122344747E555A5DF17A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AE5E25194558D68B33915D /* SettingsView.swift */; };
+		7DA5A5C4CA1C06CF699C8B92 /* UpdateArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D4228C05D50510CB51BF48D /* UpdateArchive.swift */; };
 		84E4BF6159673FA92DAAD65D /* LocalTaskStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21776204749CB9D05914233B /* LocalTaskStorageTests.swift */; };
 		85B40BEF67AA1C3909B2B0A7 /* LocalTaskController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A96382B34E302A7A4571435 /* LocalTaskController.swift */; };
-		8B6C60E115FC6943A6F22970 /* sample-apex-writeback.md in Resources */ = {isa = PBXBuildFile; fileRef = 4597FACD62406C35E158D20E /* sample-apex-writeback.md */; };
-		921D792256CD77E44C684DF6 /* DashboardTaskCreationControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E758D0437FC46A55D8A8FB1 /* DashboardTaskCreationControllerTests.swift */; };
+		8B4E3BDB920735E58A0A4184 /* UpdateChecksum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE6098E5849B352D6A230BC /* UpdateChecksum.swift */; };
 		92526D6A0C60CAA531B5A941 /* DeepSeekUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D031446E76DE601D0D7B2F /* DeepSeekUsageTests.swift */; };
+		92AD78C730D8747970CAD1EA /* UpdatePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A78C1EC9187C29E8EB5C633 /* UpdatePreferences.swift */; };
 		94B880F789FC10F3C8FD7AE2 /* PopoverPageControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */; };
-		9652B6C5489AD28AC6D58CEB /* DashboardTaskRowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A347C83B35040DDBB86F14D /* DashboardTaskRowTests.swift */; };
-		9BC3BCEEE74FBA45F80F421B /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B0B70F343CCFB86ABADB8C9 /* TasksView.swift */; };
 		9D9FE44395812CDEE6AFDBBA /* CodexColorIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = F2A0A8DFBF3B7B1C314D8AEB /* CodexColorIcon.png */; };
 		A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */; };
 		A60A6A0A9336861AA0B2C31A /* ProviderStatusButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9BB2D02767F384B6D283C4 /* ProviderStatusButton.swift */; };
 		A8FAAF4961A15FBBA7DE7AEE /* VIPUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5304F589667B9760522B5D /* VIPUsageTests.swift */; };
 		A93E36A532A840A2C14E8460 /* CodexMenuIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */; };
+		A96CB8B1BEAD99C09CA72274 /* UpdateDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DCE3BF430CB3A566FC29F26 /* UpdateDownloader.swift */; };
 		AAF52EB9E8D5324CA25B00ED /* DeepSeekRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D901E427033AC23A76278F78 /* DeepSeekRenderingTests.swift */; };
-		ACCE2973189FC74A96B514A4 /* DashboardTaskCreationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD929D78A9459AE82CCD869 /* DashboardTaskCreationTests.swift */; };
+		AC87454D0A761A904FEED46B /* UpdateShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = F366B1EC394E8BAF586B12C6 /* UpdateShell.swift */; };
+		AE96BCA94A5FD4CDC95BC614 /* UpdateControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 221A97C088B95E7BB24ADBC5 /* UpdateControllerTests.swift */; };
 		AFFDACE68BF111198037569F /* LocalTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6FCB7F49CE2E7A36595D5B3 /* LocalTasksView.swift */; };
 		B3EB731718ADE3E5DE625CC1 /* MoneyFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28B9BCE49092988D188DD19D /* MoneyFormatter.swift */; };
 		B415DCE4C64CCFE45FDE4734 /* PulseSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B3677511248F21F5214EC7 /* PulseSection.swift */; };
-		B4BB95E3893979D34D1FEFE1 /* TaskSourceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CDC1D68AD0E8CBF6E200645 /* TaskSourceConfiguration.swift */; };
 		B5E5FCABA3E15E4DA7FF07F1 /* VIPConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5823C23B8E4F0D4F7DA8E7A9 /* VIPConfiguration.swift */; };
 		B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE685F7EE3DC1774AF1A117C /* AppConfig.swift */; };
 		B86308E401912B97D7DC7580 /* VIPStatusSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF50DC8A711AB126591F56DA /* VIPStatusSummary.swift */; };
 		BB0BC398F38CB7B8F9499C1D /* LocalTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36929D1609E33BD51819C9C7 /* LocalTask.swift */; };
-		BD5820F58346DFA449BA0B40 /* DashboardConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846A5B65A68152F8BA16A0EA /* DashboardConfiguration.swift */; };
+		C21628B1FB230845B6C498DA /* UpdateTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384B56134EB99E8DE097A9E9 /* UpdateTestSupport.swift */; };
 		C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */; };
 		C5D93053CF6CF9C2F860D56A /* DeepSeekStatusSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F8F59654EFDBD6A6BC4CD8 /* DeepSeekStatusSummary.swift */; };
-		C71DA3A7F25F49DAFA337192 /* DashboardSourceDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = C38533C9AF3FAFDABCC8EFE9 /* DashboardSourceDocument.swift */; };
 		D0B2C24325FFB34F4EC3C153 /* DeepSeekProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E73F80F3C7C6B0FCF5425EA /* DeepSeekProviderIcon.swift */; };
-		D3978C281A22CF592E332D7D /* DashboardTaskControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B923DE04A3CBA16BF03E57E /* DashboardTaskControllerTests.swift */; };
 		D53FCE80E27506B55F51E4E8 /* LocalTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD105F6FD073A53E8EE3CE6 /* LocalTaskStore.swift */; };
 		D7B982F5C6010AF39032C442 /* PulseDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CDEEA43A307EB361306B3A8 /* PulseDesignTokens.swift */; };
 		D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */; };
 		DB042EEBE631A96D5A209658 /* CodexProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F293341995B6DF958E21987 /* CodexProviderIcon.swift */; };
-		DD5BE2D9B0E33D90B86563C2 /* Dashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D542992BA19E48BE5D4BAD11 /* Dashboard.swift */; };
 		DEB5B3FDB91867F1AC2C3E70 /* PopoverHoverControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042EECB94368AEA980440D75 /* PopoverHoverControllerTests.swift */; };
-		E5B660D86EEEF1430F2CE278 /* DashboardTaskController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86289849745CB3C7DE902B3E /* DashboardTaskController.swift */; };
-		F03D47ECF6B9C04761EA83E5 /* DashboardWritebackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62182B378C8D7C3F360002E1 /* DashboardWritebackTests.swift */; };
-		F15FF9063E32D8024DD410D8 /* ApexDashboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E271CEA373E40EDA8325DEA4 /* ApexDashboardTests.swift */; };
+		EED8931DC294D2E343BC8ABB /* DailyRepeatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34978B23EACA2BD148421E33 /* DailyRepeatTests.swift */; };
+		EF89DDB0B0027072C2C8271C /* UpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 488B789B49DD6ECF053238BD /* UpdateController.swift */; };
 		FAA3C692F56898992578FFF8 /* VIPProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FB59F65E0164FAEC859576B /* VIPProviderIcon.swift */; };
 		FD6D2687756812138AF449B4 /* PulseActionButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F779067F23C0C3971B44D899 /* PulseActionButtonStyle.swift */; };
 		FE62819241A0C92080F98041 /* ProviderStatusLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF2CBFBC24A2CBB339C09DAA /* ProviderStatusLayout.swift */; };
-		FEEEB7869E031536DEA66443 /* DashboardTaskEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F85E00BF765184DD3E8266 /* DashboardTaskEditor.swift */; };
+		FF7F77B61E6BE76D2B13A678 /* UpdateInstallScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4BDB885E509C12D7F665BB /* UpdateInstallScript.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,99 +92,83 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		0097752C31B25685CE188DBC /* DashboardTaskCreation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskCreation.swift; sourceTree = "<group>"; };
 		042EECB94368AEA980440D75 /* PopoverHoverControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverHoverControllerTests.swift; sourceTree = "<group>"; };
 		08B3677511248F21F5214EC7 /* PulseSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseSection.swift; sourceTree = "<group>"; };
+		0D94C4F7CE4DBBDC535507E9 /* UpdateVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateVersion.swift; sourceTree = "<group>"; };
 		0FF340EC2F400E3D116F82B3 /* LocalTagSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTagSettingsView.swift; sourceTree = "<group>"; };
+		116943C50D7C3B25DB42B845 /* UpdateFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateFeed.swift; sourceTree = "<group>"; };
 		13FEF2D2118D74C3572DF349 /* Pulse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pulse.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		187D556CDC1B8381E012BB29 /* UpdateSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateSignature.swift; sourceTree = "<group>"; };
 		1A96382B34E302A7A4571435 /* LocalTaskController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTaskController.swift; sourceTree = "<group>"; };
+		1DE6098E5849B352D6A230BC /* UpdateChecksum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecksum.swift; sourceTree = "<group>"; };
 		21776204749CB9D05914233B /* LocalTaskStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTaskStorageTests.swift; sourceTree = "<group>"; };
-		25C4F9D784F2D6E93D6895AC /* DashboardDocumentReplacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardDocumentReplacing.swift; sourceTree = "<group>"; };
+		221A97C088B95E7BB24ADBC5 /* UpdateControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateControllerTests.swift; sourceTree = "<group>"; };
 		281A772B09CA86AEA477DB58 /* PopoverHoverController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverHoverController.swift; sourceTree = "<group>"; };
 		28B9BCE49092988D188DD19D /* MoneyFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyFormatter.swift; sourceTree = "<group>"; };
 		2EE9BB373C63BB81C8BD7906 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
 		30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = CodexMenuIcon.png; sourceTree = "<group>"; };
+		34978B23EACA2BD148421E33 /* DailyRepeatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyRepeatTests.swift; sourceTree = "<group>"; };
 		34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemService.swift; sourceTree = "<group>"; };
 		36929D1609E33BD51819C9C7 /* LocalTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTask.swift; sourceTree = "<group>"; };
+		384B56134EB99E8DE097A9E9 /* UpdateTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateTestSupport.swift; sourceTree = "<group>"; };
+		3B6FE7FC418EBBA7521EEB4C /* PulseFocusEffect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseFocusEffect.swift; sourceTree = "<group>"; };
 		441866DB43F7C8459D8A210B /* PulseApplicationMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseApplicationMenuTests.swift; sourceTree = "<group>"; };
-		4597FACD62406C35E158D20E /* sample-apex-writeback.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "sample-apex-writeback.md"; sourceTree = "<group>"; };
 		46F164972943AB9CCA0C495A /* SecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretStore.swift; sourceTree = "<group>"; };
-		4A347C83B35040DDBB86F14D /* DashboardTaskRowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskRowTests.swift; sourceTree = "<group>"; };
+		488B789B49DD6ECF053238BD /* UpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateController.swift; sourceTree = "<group>"; };
 		4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseAppDelegate.swift; sourceTree = "<group>"; };
 		4FBA30D234A433E58E16508B /* PulseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5763D22FF29A87447FD82E62 /* UsageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageController.swift; sourceTree = "<group>"; };
 		5823C23B8E4F0D4F7DA8E7A9 /* VIPConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPConfiguration.swift; sourceTree = "<group>"; };
-		5BD929D78A9459AE82CCD869 /* DashboardTaskCreationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskCreationTests.swift; sourceTree = "<group>"; };
 		5F293341995B6DF958E21987 /* CodexProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProviderIcon.swift; sourceTree = "<group>"; };
 		5FB59F65E0164FAEC859576B /* VIPProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPProviderIcon.swift; sourceTree = "<group>"; };
-		62182B378C8D7C3F360002E1 /* DashboardWritebackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWritebackTests.swift; sourceTree = "<group>"; };
 		68A18956B27ACC01716A4841 /* DeepSeekProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekProvider.swift; sourceTree = "<group>"; };
-		697B032CE52A4C758F9F1C14 /* TaskSourceConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskSourceConfigurationTests.swift; sourceTree = "<group>"; };
-		6B0B70F343CCFB86ABADB8C9 /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
 		6CBA39302CF835124B8AEF19 /* PulseMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseMain.swift; sourceTree = "<group>"; };
-		6CDC1D68AD0E8CBF6E200645 /* TaskSourceConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskSourceConfiguration.swift; sourceTree = "<group>"; };
 		6CDEEA43A307EB361306B3A8 /* PulseDesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseDesignTokens.swift; sourceTree = "<group>"; };
+		6DCE3BF430CB3A566FC29F26 /* UpdateDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateDownloader.swift; sourceTree = "<group>"; };
 		713E8909A7BD912071712C5E /* AIStatusSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStatusSummary.swift; sourceTree = "<group>"; };
 		73F8F59654EFDBD6A6BC4CD8 /* DeepSeekStatusSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekStatusSummary.swift; sourceTree = "<group>"; };
-		75F85E00BF765184DD3E8266 /* DashboardTaskEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskEditor.swift; sourceTree = "<group>"; };
 		7E73F80F3C7C6B0FCF5425EA /* DeepSeekProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekProviderIcon.swift; sourceTree = "<group>"; };
-		7E758D0437FC46A55D8A8FB1 /* DashboardTaskCreationControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskCreationControllerTests.swift; sourceTree = "<group>"; };
-		846A5B65A68152F8BA16A0EA /* DashboardConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardConfiguration.swift; sourceTree = "<group>"; };
 		84E9A7F3F6DE36F13930B307 /* VIPProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPProvider.swift; sourceTree = "<group>"; };
-		86289849745CB3C7DE902B3E /* DashboardTaskController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskController.swift; sourceTree = "<group>"; };
-		8B923DE04A3CBA16BF03E57E /* DashboardTaskControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskControllerTests.swift; sourceTree = "<group>"; };
-		8CD5850A869CA24EDA07BFEA /* DashboardTaskEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskEditorTests.swift; sourceTree = "<group>"; };
 		8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexUsageTests.swift; sourceTree = "<group>"; };
 		8E755A038311E5C9CCE10662 /* PulseSharedControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseSharedControls.swift; sourceTree = "<group>"; };
+		9565C857E8DA4981567DEDF7 /* UpdateLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateLogicTests.swift; sourceTree = "<group>"; };
+		9A78C1EC9187C29E8EB5C633 /* UpdatePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatePreferences.swift; sourceTree = "<group>"; };
 		9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverPageControllerTests.swift; sourceTree = "<group>"; };
-		9D388DA8F4C4E03EDD8317B8 /* ObsidianURLOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObsidianURLOpener.swift; sourceTree = "<group>"; };
+		9D4228C05D50510CB51BF48D /* UpdateArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateArchive.swift; sourceTree = "<group>"; };
 		AA5304F589667B9760522B5D /* VIPUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPUsageTests.swift; sourceTree = "<group>"; };
 		AD0210F151F1BAE5E7BC8820 /* APIKeyConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyConfiguration.swift; sourceTree = "<group>"; };
 		AE9BB2D02767F384B6D283C4 /* ProviderStatusButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderStatusButton.swift; sourceTree = "<group>"; };
 		B4AC82C04589E099C65A4FA9 /* LocalTasksRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTasksRenderingTests.swift; sourceTree = "<group>"; };
+		B562D19ED31C1D1181B8544E /* UpdateRelease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateRelease.swift; sourceTree = "<group>"; };
 		B8BCCC91F953A8FF437E4BBA /* UsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageView.swift; sourceTree = "<group>"; };
 		BBD105F6FD073A53E8EE3CE6 /* LocalTaskStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTaskStore.swift; sourceTree = "<group>"; };
-		BC89F07DD7D9AD92476F82EF /* ApexDashboardParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApexDashboardParser.swift; sourceTree = "<group>"; };
 		BEA20A35F8CF235912BC59A3 /* ProviderCredentialForm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderCredentialForm.swift; sourceTree = "<group>"; };
 		C0D1390EE653F2D9B57F24AA /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		C278C9EFD158EEE6E7C50B92 /* CodexAppServerTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAppServerTransport.swift; sourceTree = "<group>"; };
-		C38533C9AF3FAFDABCC8EFE9 /* DashboardSourceDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSourceDocument.swift; sourceTree = "<group>"; };
 		C7D031446E76DE601D0D7B2F /* DeepSeekUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekUsageTests.swift; sourceTree = "<group>"; };
-		CCFDCEFE7C9B8218250C23AE /* DashboardFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardFileStore.swift; sourceTree = "<group>"; };
+		CA7B9827440C4DEFD1801572 /* UpdateVerificationError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateVerificationError.swift; sourceTree = "<group>"; };
 		CF50DC8A711AB126591F56DA /* VIPStatusSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPStatusSummary.swift; sourceTree = "<group>"; };
 		D0AE5E25194558D68B33915D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D3D6D74D06E7A1FA2711BE28 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
-		D542992BA19E48BE5D4BAD11 /* Dashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dashboard.swift; sourceTree = "<group>"; };
+		D8C0A936185B31D0C8776ED5 /* UpdateInstallScriptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateInstallScriptTests.swift; sourceTree = "<group>"; };
 		D901E427033AC23A76278F78 /* DeepSeekRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekRenderingTests.swift; sourceTree = "<group>"; };
 		DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigTests.swift; sourceTree = "<group>"; };
 		DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSnapshot.swift; sourceTree = "<group>"; };
 		DE685F7EE3DC1774AF1A117C /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
-		DF1238CABFCF8FCBA0A13A4F /* DashboardTaskInsertion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTaskInsertion.swift; sourceTree = "<group>"; };
 		DF2CBFBC24A2CBB339C09DAA /* ProviderStatusLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderStatusLayout.swift; sourceTree = "<group>"; };
 		E2379293C4F1BE631DDFEB05 /* DeepSeekConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekConfiguration.swift; sourceTree = "<group>"; };
-		E271CEA373E40EDA8325DEA4 /* ApexDashboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApexDashboardTests.swift; sourceTree = "<group>"; };
-		EFD76F6C5B3ED382112FE71D /* DashboardFilePickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardFilePickerTests.swift; sourceTree = "<group>"; };
-		F29D4E924931AF038CB48DAB /* DashboardFilePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardFilePicker.swift; sourceTree = "<group>"; };
 		F2A0A8DFBF3B7B1C314D8AEB /* CodexColorIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = CodexColorIcon.png; sourceTree = "<group>"; };
+		F366B1EC394E8BAF586B12C6 /* UpdateShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateShell.swift; sourceTree = "<group>"; };
 		F69D4C870D63B26C2433BCB4 /* PopoverPageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverPageController.swift; sourceTree = "<group>"; };
 		F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewRenderingTests.swift; sourceTree = "<group>"; };
 		F6FCB7F49CE2E7A36595D5B3 /* LocalTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTasksView.swift; sourceTree = "<group>"; };
 		F779067F23C0C3971B44D899 /* PulseActionButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseActionButtonStyle.swift; sourceTree = "<group>"; };
 		FAA059DD49514947DEAEB889 /* LocalTaskControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTaskControllerTests.swift; sourceTree = "<group>"; };
+		FB4BDB885E509C12D7F665BB /* UpdateInstallScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateInstallScript.swift; sourceTree = "<group>"; };
 		FE0367F6E30F9AFE000D8201 /* PulseApplicationMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseApplicationMenu.swift; sourceTree = "<group>"; };
-		FE634AFDAC3E2B16AF7D5589 /* sample-apex-dashboard.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "sample-apex-dashboard.md"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
-		04FD9FBF3CEF13019557FBAD /* Parser */ = {
-			isa = PBXGroup;
-			children = (
-				BC89F07DD7D9AD92476F82EF /* ApexDashboardParser.swift */,
-				C38533C9AF3FAFDABCC8EFE9 /* DashboardSourceDocument.swift */,
-			);
-			path = Parser;
-			sourceTree = "<group>";
-		};
 		0DBDBE9D62FC59B0A976D043 /* Core */ = {
 			isa = PBXGroup;
 			children = (
@@ -201,6 +178,7 @@
 				34A0BCE1910BB558ED9C82D8 /* LoginItemService.swift */,
 				46F164972943AB9CCA0C495A /* SecretStore.swift */,
 				5823C23B8E4F0D4F7DA8E7A9 /* VIPConfiguration.swift */,
+				F9A3ACC69B4241B4B451303D /* Update */,
 				C25E5FD084B360E1BCF08C27 /* Usage */,
 			);
 			path = Core;
@@ -234,6 +212,7 @@
 				7E73F80F3C7C6B0FCF5425EA /* DeepSeekProviderIcon.swift */,
 				F779067F23C0C3971B44D899 /* PulseActionButtonStyle.swift */,
 				6CDEEA43A307EB361306B3A8 /* PulseDesignTokens.swift */,
+				3B6FE7FC418EBBA7521EEB4C /* PulseFocusEffect.swift */,
 				08B3677511248F21F5214EC7 /* PulseSection.swift */,
 				8E755A038311E5C9CCE10662 /* PulseSharedControls.swift */,
 				5FB59F65E0164FAEC859576B /* VIPProviderIcon.swift */,
@@ -244,12 +223,7 @@
 		1D7AD98EA52483CBC8A73D48 /* Tasks */ = {
 			isa = PBXGroup;
 			children = (
-				75F85E00BF765184DD3E8266 /* DashboardTaskEditor.swift */,
-				6B0B70F343CCFB86ABADB8C9 /* TasksView.swift */,
 				811837C37E1A93395C36C17C /* Local */,
-				536AFF13AAD187E7A08319F3 /* Models */,
-				04FD9FBF3CEF13019557FBAD /* Parser */,
-				E09C48C05FA28C9329A1FEB1 /* Services */,
 			);
 			path = Tasks;
 			sourceTree = "<group>";
@@ -266,7 +240,6 @@
 		38F29541A06B8A159C0EFF06 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				F29D4E924931AF038CB48DAB /* DashboardFilePicker.swift */,
 				281A772B09CA86AEA477DB58 /* PopoverHoverController.swift */,
 				F69D4C870D63B26C2433BCB4 /* PopoverPageController.swift */,
 				4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */,
@@ -279,20 +252,9 @@
 		3D33189D82F097DF4B7CC07E /* Fixtures */ = {
 			isa = PBXGroup;
 			children = (
-				FE634AFDAC3E2B16AF7D5589 /* sample-apex-dashboard.md */,
-				4597FACD62406C35E158D20E /* sample-apex-writeback.md */,
 			);
 			name = Fixtures;
 			path = Tests/Fixtures;
-			sourceTree = "<group>";
-		};
-		536AFF13AAD187E7A08319F3 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				D542992BA19E48BE5D4BAD11 /* Dashboard.swift */,
-				0097752C31B25685CE188DBC /* DashboardTaskCreation.swift */,
-			);
-			path = Models;
 			sourceTree = "<group>";
 		};
 		6BBC8380317D62458772FCFE /* Features */ = {
@@ -325,7 +287,6 @@
 				1A96382B34E302A7A4571435 /* LocalTaskController.swift */,
 				BBD105F6FD073A53E8EE3CE6 /* LocalTaskStore.swift */,
 				F6FCB7F49CE2E7A36595D5B3 /* LocalTasksView.swift */,
-				6CDC1D68AD0E8CBF6E200645 /* TaskSourceConfiguration.swift */,
 			);
 			path = Local;
 			sourceTree = "<group>";
@@ -347,19 +308,6 @@
 				DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */,
 			);
 			path = Usage;
-			sourceTree = "<group>";
-		};
-		E09C48C05FA28C9329A1FEB1 /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				846A5B65A68152F8BA16A0EA /* DashboardConfiguration.swift */,
-				25C4F9D784F2D6E93D6895AC /* DashboardDocumentReplacing.swift */,
-				CCFDCEFE7C9B8218250C23AE /* DashboardFileStore.swift */,
-				86289849745CB3C7DE902B3E /* DashboardTaskController.swift */,
-				DF1238CABFCF8FCBA0A13A4F /* DashboardTaskInsertion.swift */,
-				9D388DA8F4C4E03EDD8317B8 /* ObsidianURLOpener.swift */,
-			);
-			path = Services;
 			sourceTree = "<group>";
 		};
 		EB05EB971523B38E8F3FCE6A /* Home */ = {
@@ -384,19 +332,31 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		F9A3ACC69B4241B4B451303D /* Update */ = {
+			isa = PBXGroup;
+			children = (
+				9D4228C05D50510CB51BF48D /* UpdateArchive.swift */,
+				1DE6098E5849B352D6A230BC /* UpdateChecksum.swift */,
+				488B789B49DD6ECF053238BD /* UpdateController.swift */,
+				6DCE3BF430CB3A566FC29F26 /* UpdateDownloader.swift */,
+				116943C50D7C3B25DB42B845 /* UpdateFeed.swift */,
+				FB4BDB885E509C12D7F665BB /* UpdateInstallScript.swift */,
+				9A78C1EC9187C29E8EB5C633 /* UpdatePreferences.swift */,
+				B562D19ED31C1D1181B8544E /* UpdateRelease.swift */,
+				F366B1EC394E8BAF586B12C6 /* UpdateShell.swift */,
+				187D556CDC1B8381E012BB29 /* UpdateSignature.swift */,
+				CA7B9827440C4DEFD1801572 /* UpdateVerificationError.swift */,
+				0D94C4F7CE4DBBDC535507E9 /* UpdateVersion.swift */,
+			);
+			path = Update;
+			sourceTree = "<group>";
+		};
 		FCB0E6001B954CCA450AA55C /* PulseTests */ = {
 			isa = PBXGroup;
 			children = (
-				E271CEA373E40EDA8325DEA4 /* ApexDashboardTests.swift */,
 				DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */,
 				8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */,
-				EFD76F6C5B3ED382112FE71D /* DashboardFilePickerTests.swift */,
-				8B923DE04A3CBA16BF03E57E /* DashboardTaskControllerTests.swift */,
-				7E758D0437FC46A55D8A8FB1 /* DashboardTaskCreationControllerTests.swift */,
-				5BD929D78A9459AE82CCD869 /* DashboardTaskCreationTests.swift */,
-				8CD5850A869CA24EDA07BFEA /* DashboardTaskEditorTests.swift */,
-				4A347C83B35040DDBB86F14D /* DashboardTaskRowTests.swift */,
-				62182B378C8D7C3F360002E1 /* DashboardWritebackTests.swift */,
+				34978B23EACA2BD148421E33 /* DailyRepeatTests.swift */,
 				D901E427033AC23A76278F78 /* DeepSeekRenderingTests.swift */,
 				C7D031446E76DE601D0D7B2F /* DeepSeekUsageTests.swift */,
 				F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */,
@@ -406,7 +366,10 @@
 				042EECB94368AEA980440D75 /* PopoverHoverControllerTests.swift */,
 				9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */,
 				441866DB43F7C8459D8A210B /* PulseApplicationMenuTests.swift */,
-				697B032CE52A4C758F9F1C14 /* TaskSourceConfigurationTests.swift */,
+				221A97C088B95E7BB24ADBC5 /* UpdateControllerTests.swift */,
+				D8C0A936185B31D0C8776ED5 /* UpdateInstallScriptTests.swift */,
+				9565C857E8DA4981567DEDF7 /* UpdateLogicTests.swift */,
+				384B56134EB99E8DE097A9E9 /* UpdateTestSupport.swift */,
 				AA5304F589667B9760522B5D /* VIPUsageTests.swift */,
 			);
 			name = PulseTests;
@@ -432,7 +395,6 @@
 			buildConfigurationList = F2F1EA2CB05C310F102D486E /* Build configuration list for PBXNativeTarget "PulseTests" */;
 			buildPhases = (
 				8B00C375CD98515701D2325C /* Sources */,
-				93C796CF73706F0C16F31375 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -509,15 +471,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		93C796CF73706F0C16F31375 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				3DB52E68CA6794F2F1C56BBB /* sample-apex-dashboard.md in Resources */,
-				8B6C60E115FC6943A6F22970 /* sample-apex-writeback.md in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -525,16 +478,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F15FF9063E32D8024DD410D8 /* ApexDashboardTests.swift in Sources */,
 				D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */,
 				A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */,
-				4C36F1FB431AC06C0A8D93A3 /* DashboardFilePickerTests.swift in Sources */,
-				D3978C281A22CF592E332D7D /* DashboardTaskControllerTests.swift in Sources */,
-				921D792256CD77E44C684DF6 /* DashboardTaskCreationControllerTests.swift in Sources */,
-				ACCE2973189FC74A96B514A4 /* DashboardTaskCreationTests.swift in Sources */,
-				5061257378E6D1AD37400E1F /* DashboardTaskEditorTests.swift in Sources */,
-				9652B6C5489AD28AC6D58CEB /* DashboardTaskRowTests.swift in Sources */,
-				F03D47ECF6B9C04761EA83E5 /* DashboardWritebackTests.swift in Sources */,
+				EED8931DC294D2E343BC8ABB /* DailyRepeatTests.swift in Sources */,
 				AAF52EB9E8D5324CA25B00ED /* DeepSeekRenderingTests.swift in Sources */,
 				92526D6A0C60CAA531B5A941 /* DeepSeekUsageTests.swift in Sources */,
 				0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */,
@@ -544,7 +490,10 @@
 				DEB5B3FDB91867F1AC2C3E70 /* PopoverHoverControllerTests.swift in Sources */,
 				94B880F789FC10F3C8FD7AE2 /* PopoverPageControllerTests.swift in Sources */,
 				1032D7E2BC7C7D2B7F30890A /* PulseApplicationMenuTests.swift in Sources */,
-				60007CF3A6DCE7E6BEDC9A2B /* TaskSourceConfigurationTests.swift in Sources */,
+				AE96BCA94A5FD4CDC95BC614 /* UpdateControllerTests.swift in Sources */,
+				231A0DB1D5945EC7B69A28AA /* UpdateInstallScriptTests.swift in Sources */,
+				71EFD9FBABCCA9DB74C7160B /* UpdateLogicTests.swift in Sources */,
+				C21628B1FB230845B6C498DA /* UpdateTestSupport.swift in Sources */,
 				A8FAAF4961A15FBBA7DE7AEE /* VIPUsageTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -555,21 +504,10 @@
 			files = (
 				6116F768A78F36250C2AC8C1 /* AIStatusSummary.swift in Sources */,
 				4C3DFC3718B36E11A8A6EA6E /* APIKeyConfiguration.swift in Sources */,
-				0D76F3E584FFBF0E12B1AAD2 /* ApexDashboardParser.swift in Sources */,
 				B8582403C42BA9100A1F3653 /* AppConfig.swift in Sources */,
 				4A3779C2CB4D487729AB784A /* CodexAppServerTransport.swift in Sources */,
 				715C7B88CFE0C9B3DDB927B9 /* CodexProvider.swift in Sources */,
 				DB042EEBE631A96D5A209658 /* CodexProviderIcon.swift in Sources */,
-				DD5BE2D9B0E33D90B86563C2 /* Dashboard.swift in Sources */,
-				BD5820F58346DFA449BA0B40 /* DashboardConfiguration.swift in Sources */,
-				6DCBF665433A566AE3E9D0CA /* DashboardDocumentReplacing.swift in Sources */,
-				52084371F4B9EBFC8B883BA1 /* DashboardFilePicker.swift in Sources */,
-				241F449A4B4B746B86FCA9FA /* DashboardFileStore.swift in Sources */,
-				C71DA3A7F25F49DAFA337192 /* DashboardSourceDocument.swift in Sources */,
-				E5B660D86EEEF1430F2CE278 /* DashboardTaskController.swift in Sources */,
-				4B01AFB396C10D12557CD221 /* DashboardTaskCreation.swift in Sources */,
-				FEEEB7869E031536DEA66443 /* DashboardTaskEditor.swift in Sources */,
-				175D7876266AF12D8868473C /* DashboardTaskInsertion.swift in Sources */,
 				780A50D97F7C17764B8A85BB /* DeepSeekConfiguration.swift in Sources */,
 				63E04A2143D91B14A4FA735D /* DeepSeekProvider.swift in Sources */,
 				D0B2C24325FFB34F4EC3C153 /* DeepSeekProviderIcon.swift in Sources */,
@@ -582,7 +520,6 @@
 				AFFDACE68BF111198037569F /* LocalTasksView.swift in Sources */,
 				05FAE46B6CE2DB17EAB037A4 /* LoginItemService.swift in Sources */,
 				B3EB731718ADE3E5DE625CC1 /* MoneyFormatter.swift in Sources */,
-				3D9C0BCC1DB625541F7AB8CC /* ObsidianURLOpener.swift in Sources */,
 				6F7BDB9101FAE05E50004C43 /* PopoverHoverController.swift in Sources */,
 				24E16A2A520AF859941E39E8 /* PopoverPageController.swift in Sources */,
 				23F727C65F085B7DC955AD6E /* ProviderCredentialForm.swift in Sources */,
@@ -592,13 +529,24 @@
 				C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */,
 				1DC63B9C05D5D1C4FC42DB95 /* PulseApplicationMenu.swift in Sources */,
 				D7B982F5C6010AF39032C442 /* PulseDesignTokens.swift in Sources */,
+				166ED168C944009DA1A31834 /* PulseFocusEffect.swift in Sources */,
 				77505DE63A22592DA6B881BC /* PulseMain.swift in Sources */,
 				B415DCE4C64CCFE45FDE4734 /* PulseSection.swift in Sources */,
 				6BB6BF529BA3E006464A3D04 /* PulseSharedControls.swift in Sources */,
 				66CAE67A523CE15785F80E19 /* SecretStore.swift in Sources */,
 				78C6122344747E555A5DF17A /* SettingsView.swift in Sources */,
-				B4BB95E3893979D34D1FEFE1 /* TaskSourceConfiguration.swift in Sources */,
-				9BC3BCEEE74FBA45F80F421B /* TasksView.swift in Sources */,
+				7DA5A5C4CA1C06CF699C8B92 /* UpdateArchive.swift in Sources */,
+				8B4E3BDB920735E58A0A4184 /* UpdateChecksum.swift in Sources */,
+				EF89DDB0B0027072C2C8271C /* UpdateController.swift in Sources */,
+				A96CB8B1BEAD99C09CA72274 /* UpdateDownloader.swift in Sources */,
+				540DDA415409CFB556A69310 /* UpdateFeed.swift in Sources */,
+				FF7F77B61E6BE76D2B13A678 /* UpdateInstallScript.swift in Sources */,
+				92AD78C730D8747970CAD1EA /* UpdatePreferences.swift in Sources */,
+				74D38B8BC428EB224CDC7599 /* UpdateRelease.swift in Sources */,
+				AC87454D0A761A904FEED46B /* UpdateShell.swift in Sources */,
+				1D0438C99EBC0FA4EAC2E5B6 /* UpdateSignature.swift in Sources */,
+				229D3DCF67FB24381F0293AD /* UpdateVerificationError.swift in Sources */,
+				1B760C5C8555A2A1141233E7 /* UpdateVersion.swift in Sources */,
 				1B3A9C5B59FAFE1527DD6128 /* UsageController.swift in Sources */,
 				740B0BDB4D56172573B7C6D6 /* UsageSnapshot.swift in Sources */,
 				4598BC1202B93684E58A0DDA /* UsageView.swift in Sources */,

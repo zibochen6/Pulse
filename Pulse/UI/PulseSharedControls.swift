@@ -55,16 +55,13 @@ struct PulseIconButtonStyle: ButtonStyle {
           in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
         )
         .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
-        .overlay {
-          if focused {
-            RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
-              .inset(by: -1)
-              .strokeBorder(Color.accentColor, lineWidth: 2)
-              .allowsHitTesting(false)
-          }
-        }
+        .pulseFocusAffordance(
+          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
+        // Own the keyboard focus so hover/press fills can react to it, and
+        // suppress AppKit's square ring in favour of the rounded affordance.
         .focusable(true)
         .focused($focused)
+        .pulseDisableSystemFocusRing()
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
         .animation(reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed)
@@ -79,8 +76,10 @@ struct PulseIconButtonStyle: ButtonStyle {
   }
 }
 
-/// Unified capsule "tab" used for dashboard column switching and local task
-/// filters. Selection, hover and keyboard value all read consistently.
+/// Unified capsule "tab" for the local task tag bar. Selection reads as a
+/// filled capsule (never a focus ring), and the
+/// keyboard focus affordance follows the capsule shape so it cannot look like a
+/// square box around a rounded control.
 struct PulsePillTab: View {
   let title: String
   let isSelected: Bool
@@ -88,13 +87,14 @@ struct PulsePillTab: View {
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var isHovered = false
-  @FocusState private var focused: Bool
 
   var body: some View {
     Button(action: action) {
       Text(title)
-        .font(.system(size: PulseDesignTokens.label, weight: isSelected ? .semibold : .regular))
-        .foregroundStyle(isSelected ? .primary : .secondary)
+        // 13pt keeps the tab row aligned with the 18pt brand glyph and leaves
+        // the list room without a second type size in the task surface.
+        .font(.system(size: PulseDesignTokens.footnote, weight: isSelected ? .semibold : .regular))
+        .foregroundStyle(isSelected ? Color.primary : Color.secondary)
         .lineLimit(1)
         .padding(.horizontal, 9)
         .frame(height: 26)
@@ -102,31 +102,26 @@ struct PulsePillTab: View {
         .contentShape(Capsule())
     }
     .buttonStyle(.plain)
+    .pulseDisableSystemFocusRing()
     .onHover { isHovered = $0 }
     .accessibilityValue(isSelected ? "Selected" : "Not selected")
-    .overlay {
-      if focused {
-        Capsule()
-          .inset(by: -1)
-          .strokeBorder(Color.accentColor, lineWidth: 2)
-          .allowsHitTesting(false)
-      }
-    }
-    .focusable(true)
-    .focused($focused)
     .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
   }
 
+  /// Selected: a filled capsule, so selection is the affordance itself.
+  /// Unselected: hover fill only. Focus is handled by the enclosing control.
+  /// The fill is not animated: selection is a discrete state change, and a
+  /// fade-in would also leave the tab blank in off-window renders.
   private var background: Color {
-    if isSelected { return PulseDesignTokens.selectedFill }
+    if isSelected { return PulseDesignTokens.accentSelectionFill }
     return isHovered ? PulseDesignTokens.hoverFill : .clear
   }
 }
 
-/// Shared hover/press treatment for task rows, so local and dashboard rows
-/// react identically. Replaces the two near-duplicate per-feature styles.
-/// Hover and press use distinct fills; motion is gated on Reduce Motion and a
-/// focus ring is drawn when keyboard-focused.
+/// Shared hover/press treatment for task rows. Replaces the two near-duplicate per-feature styles.
+/// Hover and press use distinct fills; motion is gated on Reduce Motion.
+/// Keyboard focus shows a subtle rounded fill (never a box outline), and the
+/// system square ring is suppressed.
 struct PulseRowButtonStyle: ButtonStyle {
   let isHovered: Bool
 
@@ -149,22 +144,17 @@ struct PulseRowButtonStyle: ButtonStyle {
           in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
         )
         .opacity(configuration.isPressed ? 0.72 : 1)
-        .overlay {
-          if focused {
-            RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
-              .inset(by: -1)
-              .strokeBorder(Color.accentColor, lineWidth: 2)
-              .allowsHitTesting(false)
-          }
-        }
         .focusable(true)
         .focused($focused)
+        .pulseDisableSystemFocusRing()
         .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
+        .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: focused)
     }
 
     private func fill(_ pressed: Bool) -> Color {
       if pressed { return PulseDesignTokens.pressedFill }
       if isHovered { return PulseDesignTokens.hoverFill }
+      if focused { return PulseDesignTokens.focusFill }
       return .clear
     }
   }
@@ -185,4 +175,39 @@ private struct PulseAccessibilityIdentifier: ViewModifier {
 extension PulseDesignTokens {
   static var hoverAnimation: Animation { .easeOut(duration: 0.12) }
   static var pressAnimation: Animation { .easeOut(duration: 0.08) }
+}
+
+/// Inline prompt for a staged update. Deliberately calm: the update has already
+/// been verified, so the only remaining action is a restart.
+struct PulseUpdateBanner: View {
+  let version: String
+  let onRestart: () -> Void
+  let onDismiss: () -> Void
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Image(systemName: "arrow.triangle.2.circlepath")
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(.tint)
+      Text("Pulse \(version) is ready")
+        .font(.system(size: PulseDesignTokens.caption, weight: .medium))
+        .lineLimit(1)
+      Spacer(minLength: 4)
+      Button("Restart", action: onRestart)
+        .accessibilityIdentifier("restartToUpdateButton")
+      Button("Later", action: onDismiss)
+        .accessibilityIdentifier("dismissUpdateBannerButton")
+    }
+    .font(.system(size: PulseDesignTokens.caption))
+    .buttonStyle(.borderless)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    .background(
+      Color.accentColor.opacity(0.08),
+      in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
+    )
+    .padding(.horizontal, 10)
+    .padding(.vertical, 6)
+    .accessibilityIdentifier("updateReadyBanner")
+  }
 }

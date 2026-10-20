@@ -10,17 +10,15 @@ struct HomeView: View {
   @ObservedObject var deepSeekUsage: UsageController
   @ObservedObject var deepSeekConfiguration: DeepSeekConfiguration
   @ObservedObject var vipConfiguration: VIPConfiguration
-  @ObservedObject var tasks: DashboardTaskController
   @ObservedObject var localTasks: LocalTaskController
-  @ObservedObject var taskSource: TaskSourceConfiguration
-  @ObservedObject var dashboardPicker: DashboardFilePicker
+  @ObservedObject var updates: UpdateController
   @StateObject private var localPresentation = LocalTaskPresentation()
-  @StateObject private var dashboardPresentation = DashboardTaskPresentation()
+  /// "Later" hides the ready banner for this run only; the update stays staged
+  /// and is still installed when Pulse quits.
+  @State private var hidesUpdateBanner = false
   @ObservedObject var pages: PopoverPageController
   let onDeepSeekCredentialsChanged: () -> Void
   let onVIPCredentialsChanged: () -> Void
-  let onSelectDashboardFile: () -> Void
-  let onOpenDashboardFile: (DashboardTask) -> Bool
   let onQuit: () -> Void
   var onTaskEditingChanged: (Bool) -> Void = { _ in }
 
@@ -36,15 +34,12 @@ struct HomeView: View {
           config: config,
           deepSeekConfiguration: deepSeekConfiguration,
           vipConfiguration: vipConfiguration,
-          tasks: tasks,
           localTasks: localTasks,
-          taskSource: taskSource,
-          dashboardPicker: dashboardPicker,
+          updates: updates,
           destination: destination,
           onBack: { pages.showHome() },
           onDeepSeekCredentialsChanged: onDeepSeekCredentialsChanged,
           onVIPCredentialsChanged: onVIPCredentialsChanged,
-          onSelectDashboardFile: onSelectDashboardFile,
           onQuit: onQuit,
           onTaskEditingChanged: onTaskEditingChanged
         )
@@ -53,14 +48,15 @@ struct HomeView: View {
     .frame(width: Self.popoverSize.width, height: Self.popoverSize.height)
     // Cover the entire hosting surface with an adaptive opaque color.
     .background(Color(nsColor: .windowBackgroundColor))
-    .onAppear { dashboardPresentation.reconcileSelection(tasks.selectionGeneration) }
-    .onChange(of: tasks.selectionGeneration) { generation in
-      // Settings and the native picker can reselect a file while TasksView is
-      // absent. Clear its old draft even if the new file cannot be read/parsed.
-      dashboardPresentation.reconcileSelection(generation)
-    }
-    .onChange(of: taskSource.source) { source in
-      if source == .apex { tasks.requestRefresh() }
+    .overlay(alignment: .topTrailing) {
+      // The gear is pinned over the header rather than laid out inside it, so
+      // the composer can replace the tag row without taking Settings with it.
+      // Usage and Settings do not repeat it: those pages already sit behind it.
+      if case .home = pages.page {
+        settingsButton
+          .padding(.top, 4)
+          .padding(.trailing, 14)
+      }
     }
   }
 
@@ -71,39 +67,31 @@ struct HomeView: View {
           brand.fixedSize()
           statusSummaries.fixedSize(horizontal: true, vertical: false)
           Spacer(minLength: 0)
-          settingsButton
         }
         VStack(alignment: .leading, spacing: 6) {
-          HStack(spacing: 7) {
-            brand
-            Spacer()
-            settingsButton
-          }
+          brand
           statusSummaries
         }
       }
-      .padding(.horizontal, 14)
+      .padding(.leading, 14)
+      .padding(.trailing, 48)
       .padding(.vertical, 7)
 
       Divider()
 
-      Group {
-        switch taskSource.source {
-        case .local:
-          LocalTasksView(
-            controller: localTasks, presentation: localPresentation,
-            onEditingChanged: onTaskEditingChanged)
-        case .apex:
-          TasksView(
-            tasks: tasks,
-            presentation: dashboardPresentation,
-            onConfigure: { pages.showSettings(.tasks) },
-            onOpenTask: onOpenDashboardFile,
-            onUseBuiltInTasks: { taskSource.setSource(.local) },
-            onEditingChanged: onTaskEditingChanged
-          )
-        }
+      if let release = updates.stagedRelease, !hidesUpdateBanner {
+        PulseUpdateBanner(
+          version: release.version.description,
+          onRestart: { updates.restartToUpdate() },
+          onDismiss: { hidesUpdateBanner = true }
+        )
+        Divider()
       }
+
+      LocalTasksView(
+        controller: localTasks, presentation: localPresentation,
+        onEditingChanged: onTaskEditingChanged
+      )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .accessibilityIdentifier("tasksRegion")
     }
@@ -181,6 +169,9 @@ struct HomeView: View {
     }
   }
 
+  /// Settings stays reachable while a composer is open: pointer departure is
+  /// already suspended during editing, so the gear must not disappear when the
+  /// tags area is replaced by the inline composer.
   private var settingsButton: some View {
     Button {
       pages.showSettings()

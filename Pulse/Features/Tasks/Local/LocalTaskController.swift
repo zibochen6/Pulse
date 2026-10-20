@@ -1,9 +1,14 @@
 import Combine
 import Foundation
 
+/// Enough information to repeat a failed completion faithfully. Repeating tasks
+/// also carry the intended completion instant, so a retry after midnight still
+/// records the day the user clicked instead of silently moving to today.
 struct LocalTaskCompletionFailure: Equatable, Sendable {
   let taskID: UUID
   let completed: Bool
+  let repeatsDaily: Bool
+  let completedAt: Date
   let message: String
 }
 
@@ -36,41 +41,61 @@ final class LocalTaskController: ObservableObject {
   }
 
   func tasks(matching filter: LocalTaskFilter) -> [LocalTask] {
-    let tasks = document?.tasks ?? []
-    switch filter {
-    case .all: return tasks
-    case .untagged: return tasks.filter { $0.tagIDs.isEmpty }
-    case .tag(let id): return tasks.filter { $0.tagIDs.contains(id) }
-    }
+    matching(document?.tasks ?? [], filter: filter)
+  }
+
+  /// Open tasks for the current filter, in stored order. Kept as a helper so the
+  /// list can show open tasks before completed ones without re-deriving the
+  /// filter in the view.
+  func incompleteTasks(matching filter: LocalTaskFilter) -> [LocalTask] {
+    tasks(matching: filter).filter { !$0.completed }
+  }
+
+  func completedTasks(matching filter: LocalTaskFilter) -> [LocalTask] {
+    tasks(matching: filter).filter(\.completed)
   }
 
   func saveTask(
-    id: UUID?, text: String, tagIDs: Set<UUID>, newTagNames: [String], creationID: UUID = UUID()
+    id: UUID?, text: String, tagIDs: Set<UUID>, newTagNames: [String], repeatsDaily: Bool = false,
+    creationID: UUID = UUID()
   ) async -> Bool {
     await perform(
       .saveTask(
-        id: id, text: text, tagIDs: tagIDs, newTagNames: newTagNames, creationID: creationID))
+        id: id, text: text, tagIDs: tagIDs, newTagNames: newTagNames, repeatsDaily: repeatsDaily,
+        creationID: creationID))
   }
 
   /// Register pending at the click boundary; duplicate clicks cannot queue a
   /// second intent before the asynchronous operation begins.
   @discardableResult
   func setCompleted(_ completed: Bool, taskID: UUID) -> Task<Void, Never>? {
-    guard document?.tasks.contains(where: { $0.id == taskID }) == true,
-      !pendingTaskIDs.contains(taskID)
-    else { return nil }
-    pendingTaskIDs.insert(taskID)
-    let operation = nextOperation()
-    beginSaving()
-    return Task {
-      defer {
-        pendingTaskIDs.remove(taskID)
-        endSaving()
-      }
-      _ = await performMutation(
-        .setCompleted(taskID: taskID, completed: completed), operation: operation,
-        completionIntent: (taskID, completed))
+    // The click is the moment that matters; capture it before the queued
+    // mutation runs so a slow save cannot shift a daily completion to the
+    // next day.
+    performCompletion(completed, taskID: taskID, completedAt: .now)
+  }
+
+  /// Retries a failed completion with the data recorded for it, so a repeating
+  /// task keeps its original day instead of moving to the retry's day.
+  @discardableResult
+  func retryCompletion(_ failure: LocalTaskCompletionFailure) -> Task<Void, Never>? {
+    guard failure.completed, failure.repeatsDaily else {
+      return setCompleted(failure.completed, taskID: failure.taskID)
     }
+    return performCompletion(true, taskID: failure.taskID, completedAt: failure.completedAt)
+  }
+
+  /// Re-arms daily tasks completed on an earlier day. Safe to call every time
+  /// the popover opens: the store short-circuits when nothing is stale.
+  ///
+  /// This is background maintenance rather than a user save, so it never raises
+  /// `isSaving` (which would disable typing mid-composition) and it never clears
+  /// a failure the user still has to act on.
+  func resetRepeatingTasks() async {
+    guard document != nil else { return }
+    let operation = nextOperation()
+    _ = await performMutation(
+      .resetRepeatingTasks(today: .now), operation: operation, clearsError: false)
   }
 
   func deleteTask(id: UUID) async -> Bool {
@@ -84,6 +109,46 @@ final class LocalTaskController: ObservableObject {
   func deleteTag(id: UUID) async -> Bool { await perform(.deleteTag(id)) }
   func dismissError() { errorMessage = nil }
   func dismissCompletionFailure(taskID: UUID) { completionFailures.removeValue(forKey: taskID) }
+
+  /// Shared completion path used by clicks and by recorded retries, so both
+  /// reserve the pending marker and pick the same store mutation.
+  private func performCompletion(_ completed: Bool, taskID: UUID, completedAt: Date) -> Task<
+    Void, Never
+  >? {
+    guard let task = document?.tasks.first(where: { $0.id == taskID }),
+      !pendingTaskIDs.contains(taskID)
+    else { return nil }
+    pendingTaskIDs.insert(taskID)
+    let operation = nextOperation()
+    beginSaving()
+    return Task {
+      defer {
+        pendingTaskIDs.remove(taskID)
+        endSaving()
+      }
+      // Daily completion goes through `.completeRepeating`, which records the
+      // day and is idempotent within it; un-completing uses the plain mutation.
+      let mutation: LocalTaskMutation
+      if completed && task.repeatsDaily {
+        mutation = .completeRepeating(taskID: taskID, completedAt: completedAt)
+      } else {
+        mutation = .setCompleted(taskID: taskID, completed: completed)
+      }
+      _ = await performMutation(
+        mutation, operation: operation,
+        completionIntent: LocalTaskCompletionIntent(
+          taskID: taskID, completed: completed, repeatsDaily: task.repeatsDaily,
+          completedAt: completedAt))
+    }
+  }
+
+  private func matching(_ tasks: [LocalTask], filter: LocalTaskFilter) -> [LocalTask] {
+    switch filter {
+    case .all: return tasks
+    case .untagged: return tasks.filter { $0.tagIDs.isEmpty }
+    case .tag(let id): return tasks.filter { $0.tagIDs.contains(id) }
+    }
+  }
 
   private func perform(_ mutation: LocalTaskMutation) async -> Bool {
     let operation = nextOperation()
@@ -99,14 +164,15 @@ final class LocalTaskController: ObservableObject {
   }
 
   private func performMutation(
-    _ mutation: LocalTaskMutation, operation: Int, completionIntent: (UUID, Bool)? = nil
+    _ mutation: LocalTaskMutation, operation: Int,
+    completionIntent: LocalTaskCompletionIntent? = nil, clearsError: Bool = true
   ) async -> Bool {
     do {
       let snapshot = try await store.mutate(mutation)
       apply(snapshot)
-      if let (id, _) = completionIntent {
-        completionFailures.removeValue(forKey: id)
-      } else {
+      if let intent = completionIntent {
+        completionFailures.removeValue(forKey: intent.taskID)
+      } else if clearsError {
         updateError(nil, operation: operation)
       }
       return true
@@ -115,9 +181,10 @@ final class LocalTaskController: ObservableObject {
       // Verification can fail after replacement. Reload the real state instead
       // of rolling back a file or presenting an unconfirmed in-memory result.
       if let snapshot = try? await store.load() { apply(snapshot) }
-      if let (id, completed) = completionIntent {
-        completionFailures[id] = LocalTaskCompletionFailure(
-          taskID: id, completed: completed, message: failureMessage)
+      if let intent = completionIntent {
+        completionFailures[intent.taskID] = LocalTaskCompletionFailure(
+          taskID: intent.taskID, completed: intent.completed, repeatsDaily: intent.repeatsDaily,
+          completedAt: intent.completedAt, message: failureMessage)
       } else {
         updateError(failureMessage, operation: operation)
       }
@@ -156,4 +223,12 @@ final class LocalTaskController: ObservableObject {
     errorOperation = operation
     errorMessage = message
   }
+}
+
+/// What the user asked for, independent of which store mutation carried it.
+private struct LocalTaskCompletionIntent: Sendable {
+  let taskID: UUID
+  let completed: Bool
+  let repeatsDaily: Bool
+  let completedAt: Date
 }

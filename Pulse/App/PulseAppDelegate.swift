@@ -27,8 +27,6 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     provider: DeepSeekProvider(), refreshInterval: .seconds(600))
   private let vipConfiguration = VIPConfiguration()
   private let vipUsage = UsageController(provider: VIPProvider(), refreshInterval: .seconds(600))
-  private let tasks = DashboardTaskController(
-    configuration: DashboardConfiguration(defaults: PulseAppDelegate.runtimeDefaults))
   private let localTasks = LocalTaskController(
     store: LocalTaskStore(
       fileURL:
@@ -36,9 +34,24 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         ? FileManager.default.temporaryDirectory.appendingPathComponent(
           "PulseTestHost-\(ProcessInfo.processInfo.processIdentifier)/tasks.json")
         : LocalTaskStore.defaultFileURL))
-  private let taskSource = TaskSourceConfiguration(defaults: PulseAppDelegate.runtimeDefaults)
   private var taskEditorActive = false
   private let pages = PopoverPageController()
+  /// Updates are user-visible state, so the controller lives for the app's
+  /// lifetime and is shared by the popover and Settings.
+  private lazy var updates = UpdateController(
+    feed: GitHubUpdateFeed(),
+    downloader: URLSessionUpdateDownloader(),
+    installer: DetachedScriptInstaller(
+      scriptDirectory: UpdateController.defaultSupportDirectory.appendingPathComponent(
+        "Scripts", isDirectory: true)),
+    preferences: UpdatePreferences(defaults: PulseAppDelegate.runtimeDefaults),
+    // A restart while the user is editing a task would discard the draft, so
+    // the controller waits for the popover to be closed instead.
+    canApplyAutomatically: { [weak self] in
+      guard let self else { return false }
+      return !self.taskEditorActive && !self.popover.isShown
+    }
+  )
   private let popover = NSPopover()
   private var preferencesSubscription: AnyCancellable?
   private var usageSubscription: AnyCancellable?
@@ -50,31 +63,6 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     },
     close: { [weak self] in self?.popover.performClose(nil) }
   )
-  private lazy var dashboardPicker = DashboardFilePicker(
-    closePopover: { [weak self] in
-      guard let self else { return false }
-      guard self.popover.isShown || self.isPopoverWindowVisible else { return false }
-      // File selection is an explicit action. Ask AppKit directly rather than
-      // depending on the hover controller's potentially stale presentation state.
-      self.popover.performClose(nil)
-      return true
-    },
-    isPopoverVisible: { [weak self] in
-      guard let self else { return false }
-      return self.popover.isShown || self.isPopoverWindowVisible
-    },
-    onSelection: { [weak self] url in await self?.tasks.saveDashboard(url: url) },
-    onFinish: { [weak self] in
-      guard let self else { return }
-      self.pages.showSettings(.tasks)
-      // A failed handoff can leave the original popover visible. Do not begin
-      // another Opening cycle: an already-shown popover may not send didShow.
-      guard !self.popover.isShown && !self.isPopoverWindowVisible else { return }
-      self.hoverController.reset()
-      self.showPopover(settings: .tasks)
-    }
-  )
-
   private var isPopoverWindowVisible: Bool {
     popover.contentViewController?.view.window?.isVisible == true
   }
@@ -125,6 +113,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       usage.start()
       vipUsage.start()
       deepSeekUsage.start()
+      updates.start()
     }
   }
 
@@ -134,6 +123,9 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   func applicationWillTerminate(_ notification: Notification) {
     hoverController.reset()
+    // A staged update is applied here when the user quits before restarting;
+    // the installer does not relaunch in that case.
+    updates.applyOnTerminate()
     usage.stop()
     vipUsage.stop()
     deepSeekUsage.stop()
@@ -179,16 +171,11 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         deepSeekUsage: deepSeekUsage,
         deepSeekConfiguration: deepSeekConfiguration,
         vipConfiguration: vipConfiguration,
-        tasks: tasks,
         localTasks: localTasks,
-        taskSource: taskSource,
-        dashboardPicker: dashboardPicker,
+        updates: updates,
         pages: pages,
         onDeepSeekCredentialsChanged: { [weak self] in self?.deepSeekUsage.credentialsDidChange() },
         onVIPCredentialsChanged: { [weak self] in self?.vipUsage.credentialsDidChange() },
-        onSelectDashboardFile: { [weak self] in self?.dashboardPicker.requestSelection() },
-        onOpenDashboardFile: { [weak self] task in self?.openDashboardFileInObsidian(task) ?? false
-        },
         onQuit: { NSApp.terminate(nil) },
         onTaskEditingChanged: { [weak self] active in
           guard let self else { return }
@@ -245,10 +232,6 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   @objc private func togglePopover() {
-    if dashboardPicker.isSelecting {
-      dashboardPicker.requestSelection()
-      return
-    }
     guard hoverController.state != .closing else { return }
     if popover.isShown {
       hoverController.requestClose()
@@ -257,14 +240,18 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     }
   }
 
-  private func showPopover(settings: SettingsDestination? = nil) {
+  private func showPopover() {
     guard let button = statusItem.button, hoverController.state != .closing else { return }
     config.refreshLoginItemStatus()
     vipUsage.refreshIfStale(maxAge: 60)
     deepSeekUsage.refreshIfStale(maxAge: 60)
-    if taskSource.source == .apex { tasks.requestRefresh() }
-    Task { [weak self] in await self?.localTasks.refresh() }
-    if let settings { pages.showSettings(settings) } else { pages.reset() }
+    Task { [weak self] in
+      await self?.localTasks.refresh()
+      // A repeating task finished yesterday is re-armed when Pulse is actually
+      // opened, so the list never waits for a render to catch up with the date.
+      await self?.localTasks.resetRepeatingTasks()
+    }
+    pages.reset()
     hoverController.beginOpening()
     hoverController.setDismissalSuspended(taskEditorActive)
     updatePopoverMotion()
@@ -299,11 +286,5 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   func popoverDidClose(_ notification: Notification) {
     hoverController.reset()
     pages.reset()
-    dashboardPicker.popoverDidClose()
-  }
-
-  private func openDashboardFileInObsidian(_ task: DashboardTask) -> Bool {
-    guard let url = ObsidianURLOpener.url(for: task.sourceFileURL) else { return false }
-    return NSWorkspace.shared.open(url)
   }
 }

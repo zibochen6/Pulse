@@ -43,7 +43,8 @@ final class LocalTasksRenderingTests: XCTestCase {
             "A deliberately long fictional tag label kept inside the native menu"
           ]
           presentation.draft?.newTagText = "Another tag"
-          XCTAssertEqual(controller.tasks(matching: presentation.selectedFilter).count, 2)
+          // The default tab is the first tag, so only its task is listed.
+          XCTAssertEqual(controller.tasks(matching: presentation.selectedFilter).count, 1)
           XCTAssertNil(presentation.draft?.taskID)
         }
         // The actual task surface receives both completed and incomplete rows.
@@ -93,7 +94,8 @@ final class LocalTasksRenderingTests: XCTestCase {
     let deleted = await controller.deleteTag(id: tag.id)
     XCTAssertTrue(deleted)
     presentation.reconcileTags(controller.document?.tags ?? [])
-    XCTAssertEqual(presentation.selectedFilter, .all)
+    // With no tags left, the bar falls back to its guidance tab.
+    XCTAssertEqual(presentation.selectedFilter, .untagged)
     let draft = try XCTUnwrap(presentation.draft)
     XCTAssertEqual(draft.text, "Unsaved edited text")
     XCTAssertTrue(draft.tagIDs.isEmpty)
@@ -190,6 +192,8 @@ final class LocalTasksRenderingTests: XCTestCase {
     let work = try XCTUnwrap(controller.document?.tags.first)
     let presentation = LocalTaskPresentation()
     for filter in [LocalTaskFilter.tag(work.id), .untagged] {
+      // Mirrors what LocalTasksView does when the surface appears.
+      presentation.reconcileTags(controller.document?.tags ?? [])
       presentation.selectedFilter = filter
       presentation.beginAddingTask()
       var draft = try XCTUnwrap(presentation.draft)
@@ -208,7 +212,13 @@ final class LocalTasksRenderingTests: XCTestCase {
       let actual = try XCTUnwrap(
         controller.document?.tasks.first(where: { $0.id == draft.creationID }))
       presentation.didCreate(id: draft.creationID, task: actual)
-      XCTAssertEqual(presentation.selectedFilter, .all)
+      // Tags are the only tabs, so a task created outside the shown tag reveals
+      // that task's own tag instead of returning to an "All" list.
+      if case .tag = filter {
+        XCTAssertEqual(presentation.selectedFilter, .untagged)
+      } else {
+        XCTAssertEqual(presentation.selectedFilter, .tag(work.id))
+      }
       XCTAssertTrue(
         controller.tasks(matching: presentation.selectedFilter).contains(where: {
           $0.id == actual.id
@@ -303,6 +313,119 @@ final class LocalTasksRenderingTests: XCTestCase {
     presentation.beginEditingTask(task)
     XCTAssertEqual(presentation.draft?.taskID, task.id)
   }
+
+  /// Evidence render for the redesigned surface: tag-only tabs with a filled
+  /// selection, open rows before completed ones, the daily-repeat marker, and
+  /// an empty vocabulary that still offers its guidance tab.
+  func testTagOnlySurfaceRendersCompletedRepeatingAndEmptyStatesInBothAppearances()
+    async throws
+  {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "PulseTagSurface-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let controller = LocalTaskController(
+      store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
+    await controller.refresh()
+    let work = try XCTUnwrap(TaskTag(name: "Work"))
+    let created = await controller.saveTask(
+      id: nil, text: "Open task", tagIDs: [], newTagNames: [work.name])
+    XCTAssertTrue(created)
+    let repeatable = try XCTUnwrap(controller.document?.tasks.first)
+    let saved = await controller.saveTask(
+      id: repeatable.id, text: "Daily stand-up", tagIDs: repeatable.tagIDs, newTagNames: [],
+      repeatsDaily: true)
+    XCTAssertTrue(saved)
+    let done = await controller.saveTask(
+      id: nil, text: "Shipped earlier", tagIDs: repeatable.tagIDs, newTagNames: [])
+    XCTAssertTrue(done)
+    let completed = try XCTUnwrap(
+      controller.document?.tasks.first(where: { $0.text == "Shipped earlier" }))
+    await controller.setCompleted(true, taskID: completed.id)?.value
+    XCTAssertTrue(
+      try XCTUnwrap(controller.document?.tasks.first(where: { $0.id == completed.id })).completed)
+    let repeated = try XCTUnwrap(
+      controller.document?.tasks.first(where: { $0.id == repeatable.id }))
+    XCTAssertFalse(repeated.completed, "A daily task opens unfinished")
+
+    let renderDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "PulseTaskSurfaceRender")
+    try FileManager.default.createDirectory(at: renderDirectory, withIntermediateDirectories: true)
+    let empty = LocalTaskController(
+      store: LocalTaskStore(
+        fileURL: directory.appendingPathComponent("empty-\(UUID()).json")))
+    await empty.refresh()
+    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+      let appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
+      let cases: [(String, LocalTaskController, LocalTaskPresentation)] = [
+        ("list", controller, { let p = LocalTaskPresentation()
+          p.selectedFilter = .tag(repeated.tagIDs.first ?? UUID())
+          return p }()),
+        ("empty", empty, LocalTaskPresentation()),
+      ]
+      for (name, target, presentation) in cases {
+        let host = NSHostingView(
+          rootView:
+            LocalTasksView(
+              controller: target, presentation: presentation, onEditingChanged: { _ in })
+            .frame(width: 360, height: 455)
+            .background(Color(nsColor: .windowBackgroundColor)))
+        host.appearance = appearance
+        host.frame = NSRect(x: 0, y: 0, width: 360, height: 455)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        XCTAssertEqual(bitmap.pixelsWide * 455, bitmap.pixelsHigh * 360)
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        try png.write(
+          to: renderDirectory.appendingPathComponent(
+            "\(appearanceName.rawValue)-\(name).png"))
+      }
+    }
+
+    // The surface keeps completed rows visible, dimmed, after the open ones.
+    XCTAssertEqual(
+      controller.incompleteTasks(matching: .tag(repeated.tagIDs.first ?? UUID())).map(\.text),
+      ["Daily stand-up"])
+    XCTAssertEqual(
+      controller.completedTasks(matching: .tag(repeated.tagIDs.first ?? UUID())).map(\.text),
+      ["Shipped earlier"])
+    // An empty tag vocabulary falls back to the single guidance tab, not "All".
+    XCTAssertEqual(empty.document?.tags.isEmpty, true)
+    let guidance = LocalTaskPresentation()
+    XCTAssertEqual(guidance.selectedFilter, .untagged)
+    guidance.reconcileTags(empty.document?.tags ?? [])
+    XCTAssertEqual(guidance.selectedFilter, .untagged)
+  }
+
+  /// A task created from "New tag…" must not inherit the shown tag.
+  func testNewTagIntentStagesNoExistingTag() throws {
+    let tag = TaskTag(name: "Work")
+    let presentation = LocalTaskPresentation()
+    presentation.reconcileTags([tag])
+    XCTAssertEqual(presentation.selectedFilter, .tag(tag.id))
+    presentation.beginAddingTaskWithNewTag()
+    XCTAssertEqual(presentation.selectedFilter, .untagged)
+    XCTAssertEqual(presentation.draft?.tagIDs, [])
+    XCTAssertNil(presentation.draft?.taskID)
+  }
+  /// A multi-tag task must reveal the same tab on every launch: `Set` iteration
+  /// order is not a stable tie-breaker for selection.
+  func testRevealedTagIsOldestCreationRatherThanSetOrder() throws {
+    let first = TaskTag(name: "Work")
+    let second = TaskTag(name: "Home")
+    for _ in 0..<20 {
+      let presentation = LocalTaskPresentation()
+      presentation.reconcileTags([first, second])
+      let draft = LocalTaskDraft()
+      presentation.draft = draft
+      presentation.didCreate(
+        id: draft.creationID,
+        task: LocalTask(id: draft.creationID, text: "Multi", tagIDs: [first.id, second.id]))
+      XCTAssertEqual(presentation.selectedFilter, .tag(first.id))
+      XCTAssertNil(presentation.draft)
+    }
+  }
+
 }
 
 private struct FailingInlineLocalWriter: LocalTaskFileWriting {

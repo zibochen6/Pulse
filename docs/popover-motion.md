@@ -66,7 +66,7 @@ native callback test is not a substitute for those checks.
 
 1. Open the new build and click the status item; keep the pointer there for two
    seconds. The popover should stay open.
-2. Move into the popover and switch a column/filter or Settings. It stays open.
+2. Move into the popover and switch a tag tab or Settings. It stays open.
 3. Leave both regions; after a short grace, native dismissal should be visible.
    Return within the grace and confirm dismissal is cancelled.
 4. Repeatedly click the status item: a closing animation should finish without
@@ -76,45 +76,7 @@ native callback test is not a substitute for those checks.
 6. With the user's Reduce Motion preference enabled, opening/closing should
    have no motion. Do not change accessibility settings during automated tests.
 
-No task data, quota fetching, parser, source selection, typography or layout is
-changed by this update. Existing uncommitted built-in task work is retained.
-
-## Follow-up: Dashboard re-selection
-
-The existing Settings action called `NSOpenPanel.runModal()` directly from the
-transient popover, without activating Pulse or waiting for native dismissal.
-That left the file chooser competing with popover focus/closing. These are
-verified code risks; live failure reproduction remains unavailable because
-Computer Use times out on Pulse.
-
-`DashboardFilePicker.swift` now owns a small, testable handoff: request close,
-wait for `popoverDidClose`, activate the app, then present and retain a separate
-asynchronous `NSOpenPanel`. A repeated request focuses the same panel. After
-selection finishes saving, or cancellation, reopen Tasks settings. Cancel keeps
-the previous file. Settings reports actual loaded/missing/permission/parse
-state and errors rather than calling any stored bookmark “Connected”. Selecting
-a file does not implicitly change the user's built-in/Apex source choice; the
-settings explain how to display the selected Dashboard on Home.
-
-The new coordinator file isolates AppKit presentation from the existing task
-storage/parser and permits simulation without opening panels or changing real
-bookmarks. Six tests cover close-completion ordering, repeated requests,
-synchronous close callbacks, failure/retry, cancellation and asynchronous save,
-including temporary file re-selection and malformed Markdown. The combined
-picker/hover run passed all 25 tests. Build and complete regression passed:
-**119 tests, 117 passed, 2 existing accessibility tests skipped, 0 failures**.
-The native panel's foreground visibility and real mouse interaction still
-require desktop verification; simulated panel tests do not establish those.
-The new `PulseDashboardPicker` build was launched after stopping the exact
-previous process, and its executable was verified. Computer Use again returned
-`timeoutReached` for that exact application path. After the panel finishes, the
-existing hover policy can dismiss the restored Settings if the pointer remains
-outside; check this transition manually and reopen Settings if needed. This
-follow-up does not lengthen the departure grace or alter hover suspension.
-
-Manual follow-up: open Settings → Tasks, select Obsidian Dashboard and choose a
-test `.md` file. Confirm the independent chooser appears and returns to settings
-with a loaded filename. Repeat with another test file, cancel once to confirm
-the previous selection stays intact, then check Home's tasks. Invalid Markdown
-should show its parse reason in Settings. No private task file needs to be edited
-to verify this flow.
+No task data, quota fetching, typography or layout is changed by this update.
+An earlier follow-up about a Settings file-chooser handoff belonged to the task
+integration that has since been removed; the task surface is now the native
+local list only, so that handoff and its manual checks no longer apply.

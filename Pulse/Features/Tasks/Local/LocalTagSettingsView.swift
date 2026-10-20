@@ -17,7 +17,7 @@ struct LocalTagSettingsView: View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Tags")
         .font(.system(size: 13, weight: .medium))
-      Text("Create tags when editing a task. Removing a tag keeps its tasks.")
+      Text("Create tags from the tab bar’s + or a task’s tag field. Removing a tag keeps its tasks.")
         .font(.caption)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)

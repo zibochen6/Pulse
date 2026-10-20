@@ -15,6 +15,7 @@ struct PulseActionButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
+    @FocusState private var focused: Bool
 
     private var isDestructive: Bool { configuration.role == .destructive }
     private var tint: Color { isDestructive ? .red : .accentColor }
@@ -37,6 +38,11 @@ struct PulseActionButtonStyle: ButtonStyle {
         }
         .contentShape(RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
         .opacity(isEnabled ? 1 : 0.45)
+        .pulseFocusAffordance(
+          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
+        .focusable(true)
+        .focused($focused)
+        .pulseDisableSystemFocusRing()
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: isHovered)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: configuration.isPressed)

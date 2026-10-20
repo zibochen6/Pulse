@@ -1,24 +1,52 @@
 # Pulse
 
-Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services and Obsidian every day. The intended product brings AI usage status and Markdown tasks into one quick daily entry point.
+Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services every day. The intended product brings AI usage status and daily to-dos into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP and DeepSeek balance integrations, built-in tasks with multiple tags, and optional Apex Dashboard tasks with creation and checkbox completion saved to Markdown. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query user-configured 88VIP and DeepSeek account balances. The menu bar remains Codex-only; the popover header shows all three compact statuses, left aligned and wrapped when needed. Click any status for Usage details; Settings is another page in the same popover. A development-signed preview is available on GitHub.
+**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP and DeepSeek balance integrations, and one native to-do list with multiple tags, optional daily repeat, and completed tasks kept visible. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query user-configured 88VIP and DeepSeek account balances. The menu bar remains Codex-only; the popover header shows all three compact statuses, left aligned and wrapped when needed. Click any status for Usage details; Settings is another page in the same popover. A development-signed preview is available on GitHub.
 
 ## Download and install
 
-Download [Pulse 0.1.2](https://github.com/zibochen6/Pulse/releases/tag/v0.1.2)
+Download [Pulse 0.1.3](https://github.com/zibochen6/Pulse/releases/tag/v0.1.3)
 for macOS 13 or newer (Apple Silicon and Intel). Open the DMG and drag Pulse
 to Applications. Quit the previous Pulse instance before replacing it, then
 launch `/Applications/Pulse.app`; its settings and task storage are retained.
-The release includes a SHA-256 checksum for verifying the downloaded DMG.
+The release publishes `Pulse-0.1.3.dmg` with a SHA-256 checksum for manual
+installs, plus `Pulse-0.1.3.zip` and its checksum for the in-app updater; the
+DMG and ZIP contain the same signed app.
 
 This preview is signed with an Apple Development certificate, **not Developer ID
 signed or notarized**. macOS may block first launch. If you trust the downloaded
 build, use the available **Open Anyway** option in System Settings → Privacy &
 Security after attempting to launch; follow [Apple's guidance](https://support.apple.com/102445)
 and do not disable Gatekeeper. Source builds
-remain available below. See [0.1.2 release notes](docs/releases/0.1.2.md) for
+remain available below. See [0.1.3 release notes](docs/releases/0.1.3.md) for
 changes and current limits.
+
+## Automatic updates
+
+Pulse 0.1.3 and later check the public GitHub latest-release feed about ten
+seconds after launch and every six hours while running. Settings → Updates has
+a manual **Check Now** action, and automatic checks can be turned off there.
+Draft and prerelease releases are ignored.
+
+Before anything is staged, Pulse verifies the download over HTTPS, checks the
+redirect hosts, compares SHA-256 against the release `.sha256` asset and the
+GitHub asset digest, requires exactly one `Pulse.app` in the archive, checks
+the bundle identifier and embedded version, and verifies the Apple code
+signature (TeamIdentifier `9Y4B7WBUU2`, Apple Development authority). Any
+mismatch discards the download and leaves the installed app untouched.
+
+A verified update installs itself only when no task draft is open and the
+popover is closed; otherwise a "Pulse 0.1.x is ready" banner with **Restart**
+and **Later** appears above the task list, and quitting applies it. Tasks,
+preferences and Keychain items are not touched. The current app is backed up to
+`~/Library/Application Support/Pulse/Backups/` and restored if replacement
+fails; progress is logged to `~/Library/Logs/Pulse/update.log`.
+
+Updates work only when Pulse runs from a user-writable `/Applications/Pulse.app`;
+development builds report that updates are disabled. Updates are enabled from
+0.1.3 onward, so replacing 0.1.2 is a manual DMG install. The preview remains
+Apple Development signed, not Developer ID signed or notarized.
 
 ## Build and run
 
@@ -38,6 +66,33 @@ xcodebuild -project Pulse.xcodeproj -scheme Pulse -configuration Debug -destinat
 After rebuilding, quit any running Pulse instance and launch the new build. A menu bar app can keep displaying the previous icon and readout until its process restarts.
 
 `project.yml` is the [XcodeGen](https://github.com/yonaskolb/XcodeGen) source for the checked-in Xcode project. XcodeGen is only needed if you change project structure: run `xcodegen generate` and commit the updated `.xcodeproj` together with `project.yml`. The app has `App`, `Core`, `Features`, and `UI` source directories. Unit tests use synthetic usage responses, a mock usage provider, and a simulated login item service. The test scheme disables live provider refresh in its app host, so tests do not query a real account.
+
+## Publishing a release
+
+Releases are cut with one command:
+
+```sh
+./scripts/release.sh <version>
+```
+
+Run it from a clean `main` checkout with an authenticated `gh` account and the
+local Apple Development signing identity available; `--dry-run` runs the
+preflight checks without changing anything.
+
+The script runs the tests, bumps `MARKETING_VERSION` and
+`CURRENT_PROJECT_VERSION` in `project.yml`, regenerates `Pulse.xcodeproj` with
+XcodeGen, builds a universal Release app, signs it with the local Apple
+Development identity, packages and verifies the DMG and ZIP, then installs the
+verified build locally. Finally it commits, tags, pushes and creates the GitHub
+release with four assets: `Pulse-<version>.dmg` and
+`Pulse-<version>.dmg.sha256` for manual installs, and `Pulse-<version>.zip`
+plus `Pulse-<version>.zip.sha256` for the in-app updater.
+
+The verified build is installed before anything is pushed or tagged, so the
+locally installed app and the published assets are the same signed build. The
+DMG and ZIP contain that one app; the updater consumes the ZIP and rejects a
+bundle whose identifier, version or signature does not match. Release notes
+live in `docs/releases/<version>.md`.
 
 ## Current settings
 
@@ -80,97 +135,55 @@ and their decimal digits remain visible in full within the 360 × 510 popover.
 
 ## Built-in tasks
 
-New users start with built-in tasks: no Obsidian setup is required. Use **Add Task**
-at the bottom of Home to expand an inline input under the list. Enter text,
-select multiple tags or create tags, and Save; the task list stays visible.
-Click a checkbox to complete a task; click task text to edit it.
-After persistence is confirmed, completed tasks disappear from Home. No
-completed section, count or expansion control is shown. Completed tasks remain
-in local storage; hiding them never deletes their data.
-Deleting a task requires confirmation.
+Pulse has one task system: the native local to-do list. New users start with
+it; no connection, import or setup is required. The tab row shows only the
+saved tags in creation order — there is no **All** and no **Untagged** tab.
+With zero tags the bar shows a single guidance tab labeled **Todo**, and the
+empty list reads "No tasks yet"; an empty tag reads "No tasks in this tag". A
+selected tab is a filled, accent-tinted rounded capsule with semibold text;
+unselected tabs use secondary text with a light hover fill. The macOS square
+focus ring is suppressed, and keyboard focus draws a soft, shape-matched
+affordance instead.
 
-The compact filter row provides **All**, **Untagged**, and each named tag. Rename
-or remove tags through **Settings → Tasks**; deleting a tag never deletes its tasks.
+Use the centered `+` button under the list to expand the inline composer in
+place: enter text, pick tags from the Tags menu or type a new tag, optionally
+tick **Repeat daily**, then Add or Cancel; the list stays visible. The `+` menu
+at the right end of the tag row offers **Add task in tag** (one entry per saved
+tag) and **New tag…**, which starts a composer for a task that gets a
+brand-new tag. Click a checkbox to complete a task; click task text to open its
+editor.
+
+Completed tasks stay visible. They are dimmed and struck through under a small
+"Completed" heading, after the open tasks. Hovering a row reveals a trash
+button with a confirmation dialog; tasks can also be deleted from the editor,
+still confirmed. Nothing is hidden or auto-removed.
+
+Each task can repeat daily. Completing a repeating task records the local
+calendar day, and every time Pulse opens (popover open or task-surface
+appearance) it re-arms repeating tasks completed on an earlier day, so they are
+open again on a new day. Repeating tasks show a small circular-arrows marker
+next to their text. Rename or remove tags through **Settings → Tasks**, which
+now manages tags only; deleting a tag never deletes its tasks.
+
 Tasks are saved locally in `~/Library/Application Support/Pulse/tasks.json` and
-restored after restart. Persistence errors appear inline; failed saves retain the
-draft. Editing pauses pointer-departure close; outside clicks still dismiss, and
-unsaved task input is retained when reopening during the same app session.
-
-**Settings → Tasks → Task source** switches between Built-in tasks and Obsidian
-Dashboard. The sources remain independent; switching never merges, converts or
-deletes data. Existing users with a saved Dashboard keep it selected on upgrade. If Obsidian
-is not connected, its task page also offers **Use built-in tasks** directly.
+restored after restart. The schema-versioned document stays at version 1: the
+repeat keys are optional, so files written by older builds still load (and vice
+versa) with no migration. Persistence errors appear inline; failed saves retain
+the draft. Editing pauses pointer-departure close; outside clicks still dismiss,
+and unsaved task input is retained when reopening during the same app session.
 See [built-in task storage and acceptance](docs/builtin-tasks.md).
-
-## Apex Dashboard tasks
-
-Open **Settings → Tasks**, choose **Obsidian Dashboard**, and select one Apex Dashboard Markdown file. Pulse
-reads the verified Apex structure—frontmatter columns, `##` columns, `###`
-cards, and Markdown checkbox rows—and shows it in the Home task area.
-The file chooser opens as a separate window after the popover finishes closing.
-Selecting or cancelling returns to Tasks settings; cancelling keeps the previous
-file. Use **Choose another file** to reconnect a moved Dashboard. Settings shows
-the actual load/parse result, with a retryable explanation if connection fails.
-If the popover cannot close for the chooser, Pulse releases the waiting state
-and offers retry instead of leaving the button disabled. Reconnecting discards
-the old file's unsaved Apex draft, including when the new file cannot be parsed;
-ordinary refreshes and navigation retain the draft.
-Selecting a file while using built-in tasks does not switch sources; choose
-**Obsidian Dashboard** under **Task source** to show its tasks on Home.
-Use column tabs to browse. **Add task** expands the input directly beneath the
-list. Enter text, choose an existing column and group, optionally select or add
-ordinary `#tags`, then save directly to the Dashboard. No creation page is opened.
-No local copy is created. A failed save keeps the draft for retry; opening and
-closing the popover keeps unsaved input during the same app session. A column
-without groups needs a group created in Obsidian first, or choose another column.
-After saving, Pulse returns to the chosen column. **Click the checkbox to complete
-a task; click task text to open the source file in Obsidian.** Completion is
-confirmed after saving and rereading the original Markdown, then the completed
-row disappears from Home. No completed section, count or expansion control is
-shown. Completed tasks and their file order remain unchanged in the Dashboard.
-To undo completion, change the checkbox in Obsidian and reopen or refresh Pulse.
-
-For completion, only the selected checkbox state character is changed. UTF-8 BOM, LF/CRLF,
-metadata, indentation and the rest of the file are retained. Nested checkboxes
-use four-space/tab indentation; special task states remain read-only. Ambiguous
-external edits produce an inline error instead of a guessed update. Saving is
-local, asynchronous, and serialized; duplicate clicks on a pending task are
-ignored. New tasks are inserted into the selected group while retaining every
-existing byte. A separate hidden HTML comment carries Pulse's retry identifier,
-so Apex displays only the task text; genuine Obsidian block IDs remain separate.
-Detached or damaged retry comments do not hide the task list. If such a comment
-makes a save retry ambiguous, Pulse refuses that save instead of creating a
-duplicate or updating a guessed row.
-Tasks created by older Pulse versions may still show their `^pulse-...` suffix;
-this update does not rewrite existing Dashboard rows.
-Insertion uses a coordinated atomic replacement, which also requires permission
-to create a temporary file in the Dashboard's directory. File permissions still
-apply; choose the file again if access is lost.
-
-Pulse rereads the file on popover open, after saves, and through
-**Settings → Tasks → Refresh**. It does not scan a Vault, watch files, infer due
-dates, reorder tasks, or cascade completion to children. File coordination
-cannot fully prevent noncooperating external editors from racing with a save.
-See [task write-back and manual acceptance](docs/apex-task-writeback.md); the
-[read-only MVP document](docs/apex-dashboard-readonly-mvp.md) records the earlier
-foundation.
-See [Dashboard task creation and settings feedback](docs/apex-task-creation.md)
-for the current insertion safety and manual acceptance steps. Settings actions
-have visible primary, secondary and removal styles with short hover/press
-feedback; Reduce Motion disables these transitions.
 
 ## Direction
 
 - **AI status:** Codex, 88VIP, and DeepSeek are connected. Provider-specific capabilities for OpenAI API, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window are displayed as different kinds of information.
-- **Obsidian tasks:** Pulse can read one selected Apex Dashboard in the verified
-  format. Checkbox completion writes back to the selected Markdown; general Vault scanning and other task editing remain future work.
-- **Privacy:** the app runs locally. 88VIP and DeepSeek API keys are stored in macOS Keychain; ordinary preferences use UserDefaults. Built-in tasks are stored locally; Pulse stores no imported Vault content and has no analytics.
+- **Local to-dos:** the native list is Pulse's single task system — tag tabs, centered quick add, completed rows kept visible, and per-task daily repeat. Everything is stored locally in one JSON file on this Mac.
+- **Privacy:** the app runs locally. 88VIP and DeepSeek API keys are stored in macOS Keychain; ordinary preferences use UserDefaults. Tasks are stored locally; Pulse keeps no imported note content and has no analytics.
 
 See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
 
 ## 中文简介
 
-Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和 Obsidian Markdown 待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额与 DeepSeek 原币种余额，以及 Apex Dashboard 任务展示和完成状态写回：菜单栏只显示 Codex；在弹窗点击复选框可完成任务并保存到原 Markdown，点击正文打开 Obsidian。完成保存后任务直接从首页隐藏，不显示已完成分组或计数；原始文件和内置存储仍保留已完成任务。内置待办支持增删改、完成状态与多个标签，新用户无需 Obsidian 即可使用；两种任务来源在设置中切换，数据保持独立。通用 Vault 扫描和更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
+Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和本地待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额与 DeepSeek 原币种余额：菜单栏只显示 Codex，弹窗头部并排显示三项紧凑状态，点击可进入 Usage 详情，设置是同一弹窗中的另一页。任务区只有一套原生待办：标签即标签页，没有"全部"和"未分类"标签页，没有标签时显示单个指引标签 "Todo"，空状态为"暂无任务"或"此标签下暂无任务"；选中标签为填充的圆角胶囊样式，键盘焦点是与形状匹配的柔和描边而不是方框。列表下方居中的 `+` 就地展开内联新建（文本、标签菜单、新建标签、"每日重复"复选框、Add/Cancel），标签行右端的 `+` 可按标签新建任务或新建标签。已完成任务不会消失：它们变暗并加删除线，排在未完成任务之后的 "Completed" 分组下，悬停行可删除（需确认），也可在编辑页删除（同样需确认）。勾选"每日重复"的任务会记录本地日历日；每次打开 Pulse（弹窗打开或任务界面出现）都会把前一天已完成的重复任务恢复为未完成，任务正文旁有循环箭头小标记。任务保存在本地 `~/Library/Application Support/Pulse/tasks.json`，模式版本仍为 1，新增键为可选，旧版本文件无需迁移即可读写。设置中的 Tasks 页只管理标签（重命名/删除），没有任务来源选项，旧的连接与导入数据保持原样。更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
 
 ## License
 

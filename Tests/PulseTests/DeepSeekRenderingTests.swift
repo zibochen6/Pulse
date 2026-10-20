@@ -69,8 +69,10 @@ final class DeepSeekRenderingTests: XCTestCase {
         let codex = try XCTUnwrap(capture.frames["openUsageButton"])
         if count == 0 {
           let settings = try XCTUnwrap(capture.frames["openSettingsButton"])
+          // The gear is a fixed overlay so it survives the inline composer
+          // replacing the tag row; it must still sit on the brand row.
           XCTAssertEqual(
-            codex.midY, settings.midY, accuracy: 0.5, "Compact controls share the brand row")
+            codex.midY, settings.midY, accuracy: 3.5, "Compact controls share the brand row")
           XCTAssertLessThan(codex.minX, 140, "Flexible space follows the indicators")
         } else {
           XCTAssertEqual(
@@ -178,13 +180,10 @@ final class DeepSeekRenderingTests: XCTestCase {
         config: AppConfig(defaults: defaults, loginItemService: RenderLoginItems()),
         deepSeekConfiguration: DeepSeekConfiguration(secretStore: RenderSecrets()),
         vipConfiguration: VIPConfiguration(secretStore: RenderSecrets()),
-        tasks: DashboardTaskController(configuration: DashboardConfiguration(defaults: defaults)),
-        localTasks: localTasks, taskSource: TaskSourceConfiguration(defaults: defaults),
-        dashboardPicker: DashboardFilePicker(
-          closePopover: { false }, onSelection: { _ in }, onFinish: {}),
+        localTasks: localTasks,
+        updates: makeInactiveUpdateController(defaults: defaults),
         destination: .providers, onBack: {}, onDeepSeekCredentialsChanged: {},
-        onVIPCredentialsChanged: {},
-        onSelectDashboardFile: {}, onQuit: {})
+        onVIPCredentialsChanged: {}, onQuit: {})
       let host = NSHostingView(
         rootView: settings.background(Color(nsColor: .windowBackgroundColor)))
       let bitmap = try render(host, appearance: appearance, height: 1100)
@@ -203,12 +202,10 @@ final class DeepSeekRenderingTests: XCTestCase {
       usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
       deepSeekConfiguration: DeepSeekConfiguration(secretStore: RenderSecrets()),
       vipConfiguration: VIPConfiguration(secretStore: RenderSecrets()),
-      tasks: DashboardTaskController(configuration: DashboardConfiguration(defaults: defaults)),
-      localTasks: localTasks, taskSource: TaskSourceConfiguration(defaults: defaults),
-      dashboardPicker: DashboardFilePicker(
-        closePopover: { false }, onSelection: { _ in }, onFinish: {}),
+      localTasks: localTasks,
+      updates: makeInactiveUpdateController(defaults: defaults),
       pages: pages, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-      onSelectDashboardFile: {}, onOpenDashboardFile: { _ in true }, onQuit: {})
+      onQuit: {})
   }
 
   private func render<Content: View>(

@@ -18,10 +18,6 @@ final class HomeViewRenderingTests: XCTestCase {
     UsageController(provider: PreviewVIPUsageProvider())
   }
 
-  private func inactiveDashboardPicker() -> DashboardFilePicker {
-    DashboardFilePicker(closePopover: { false }, onSelection: { _ in }, onFinish: {})
-  }
-
   func testCodexMenuIconIsBundled() {
     XCTAssertNotNil(Bundle.main.url(forResource: "CodexMenuIcon", withExtension: "png"))
   }
@@ -79,15 +75,10 @@ final class HomeViewRenderingTests: XCTestCase {
             deepSeekUsage: inactiveDeepSeekUsage(),
             deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
             vipConfiguration: vipConfiguration,
-            tasks: DashboardTaskController(
-              configuration: DashboardConfiguration(defaults: defaults)),
             localTasks: isolatedLocalTasks(),
-            taskSource: TaskSourceConfiguration(defaults: defaults),
-            dashboardPicker: inactiveDashboardPicker(),
+            updates: makeInactiveUpdateController(defaults: defaults),
             pages: pages,
             onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-            onSelectDashboardFile: {},
-            onOpenDashboardFile: { _ in true },
             onQuit: {}
           )
         )
@@ -150,15 +141,10 @@ final class HomeViewRenderingTests: XCTestCase {
               deepSeekUsage: inactiveDeepSeekUsage(),
               deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
               vipConfiguration: vipConfiguration,
-              tasks: DashboardTaskController(
-                configuration: DashboardConfiguration(defaults: defaults)),
               localTasks: isolatedLocalTasks(),
-              taskSource: TaskSourceConfiguration(defaults: defaults),
-              dashboardPicker: inactiveDashboardPicker(),
+              updates: makeInactiveUpdateController(defaults: defaults),
               pages: pages,
               onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-              onSelectDashboardFile: {},
-              onOpenDashboardFile: { _ in true },
               onQuit: {}
             )
           )
@@ -214,15 +200,10 @@ final class HomeViewRenderingTests: XCTestCase {
             deepSeekUsage: inactiveDeepSeekUsage(),
             deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
             vipConfiguration: vipConfiguration,
-            tasks: DashboardTaskController(
-              configuration: DashboardConfiguration(defaults: defaults)),
             localTasks: isolatedLocalTasks(),
-            taskSource: TaskSourceConfiguration(defaults: defaults),
-            dashboardPicker: inactiveDashboardPicker(),
+            updates: makeInactiveUpdateController(defaults: defaults),
             pages: pages,
             onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-            onSelectDashboardFile: {},
-            onOpenDashboardFile: { _ in true },
             onQuit: {}
           )
         )
@@ -284,14 +265,10 @@ final class HomeViewRenderingTests: XCTestCase {
             deepSeekUsage: inactiveDeepSeekUsage(),
             deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
             vipConfiguration: vipConfiguration,
-            tasks: DashboardTaskController(
-              configuration: DashboardConfiguration(defaults: defaults)),
-            localTasks: localTasks, taskSource: TaskSourceConfiguration(defaults: defaults),
-            dashboardPicker: inactiveDashboardPicker(),
+            localTasks: localTasks,
+            updates: makeInactiveUpdateController(defaults: defaults),
             pages: pages,
-            onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-            onSelectDashboardFile: {},
-            onOpenDashboardFile: { _ in true }, onQuit: {}))
+            onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {}, onQuit: {}))
         host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
         host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
         host.layoutSubtreeIfNeeded()
@@ -306,91 +283,10 @@ final class HomeViewRenderingTests: XCTestCase {
     }
   }
 
-  func testTaskFirstSurfaceRendersLongAndCompletedTasksInBothAppearances() async throws {
-    let suiteName = "PulseApexRenderingTests.\(UUID().uuidString)"
-    guard let defaults = UserDefaults(suiteName: suiteName) else {
-      return XCTFail("Could not create isolated defaults")
-    }
-    defer { defaults.removePersistentDomain(forName: suiteName) }
-    guard
-      let fixtureURL = Bundle(for: Self.self).url(
-        forResource: "sample-apex-dashboard", withExtension: "md")
-    else {
-      return XCTFail("Could not load the Apex fixture")
-    }
-
-    let taskConfiguration = DashboardConfiguration(defaults: defaults)
-    try taskConfiguration.saveDashboard(url: fixtureURL)
-    let tasks = DashboardTaskController(configuration: taskConfiguration)
-    await tasks.refresh()
-    guard case .loaded = tasks.state else { return XCTFail("Expected loaded Apex Dashboard") }
-
-    let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
-    let usage = UsageController(provider: PreviewUsageProvider())
-    let vipUsage = UsageController(provider: PreviewVIPUsageProvider())
-    let vipConfiguration = VIPConfiguration(secretStore: PreviewSecretStore())
-    await usage.refresh()
-    await vipUsage.refresh()
-
-    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
-      guard let appearance = NSAppearance(named: appearanceName) else {
-        return XCTFail("Could not create \(appearanceName) appearance")
-      }
-      let host = NSHostingView(
-        rootView: HomeView(
-          config: config,
-          usage: usage,
-          vipUsage: vipUsage,
-          deepSeekUsage: inactiveDeepSeekUsage(),
-          deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
-          vipConfiguration: vipConfiguration,
-          tasks: tasks,
-          localTasks: isolatedLocalTasks(),
-          taskSource: TaskSourceConfiguration(defaults: defaults),
-          dashboardPicker: inactiveDashboardPicker(),
-          pages: PopoverPageController(),
-          onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-          onSelectDashboardFile: {},
-          onOpenDashboardFile: { _ in true },
-          onQuit: {}
-        )
-      )
-      host.appearance = appearance
-      host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
-      host.layoutSubtreeIfNeeded()
-      guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
-        return XCTFail("Could not render loaded Apex Dashboard")
-      }
-      host.cacheDisplay(in: host.bounds, to: bitmap)
-      XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
-      guard let topLeft = bitmap.colorAt(x: 2, y: 2),
-        let bottomRight = bitmap.colorAt(x: bitmap.pixelsWide - 2, y: bitmap.pixelsHigh - 2)
-      else {
-        return XCTFail("Missing loaded Dashboard render pixels")
-      }
-      XCTAssertEqual(topLeft.alphaComponent, 1, accuracy: 0.01)
-      XCTAssertEqual(bottomRight.alphaComponent, 1, accuracy: 0.01)
-      let renderDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
-        "PulseTaskWritebackRender")
-      try FileManager.default.createDirectory(
-        at: renderDirectory, withIntermediateDirectories: true)
-      let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-      try png.write(to: renderDirectory.appendingPathComponent("\(appearanceName.rawValue).png"))
-    }
-  }
-
   func testVisibleSettingsActionsRenderInBothAppearances() async throws {
     let suite = "PulseSettingsButtons.\(UUID())"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
-    let fixture = try XCTUnwrap(
-      Bundle(for: Self.self).url(forResource: "sample-apex-dashboard", withExtension: "md"))
-    let configuration = DashboardConfiguration(defaults: defaults)
-    try configuration.saveDashboard(url: fixture)
-    let tasks = DashboardTaskController(configuration: configuration)
-    await tasks.refresh()
-    let source = TaskSourceConfiguration(defaults: defaults)
-    source.setSource(.apex)
     let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
     let usage = UsageController(provider: PreviewUsageProvider())
     let vipUsage = UsageController(provider: PreviewVIPUsageProvider())
@@ -409,11 +305,9 @@ final class HomeViewRenderingTests: XCTestCase {
             deepSeekUsage: inactiveDeepSeekUsage(),
             deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
             vipConfiguration: VIPConfiguration(secretStore: PreviewConnectedSecretStore()),
-            tasks: tasks, localTasks: isolatedLocalTasks(), taskSource: source,
-            dashboardPicker: inactiveDashboardPicker(), pages: pages,
-            onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-            onSelectDashboardFile: {},
-            onOpenDashboardFile: { _ in true }, onQuit: {}))
+            localTasks: isolatedLocalTasks(),
+            updates: makeInactiveUpdateController(defaults: defaults), pages: pages,
+            onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {}, onQuit: {}))
         host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
         host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
         host.layoutSubtreeIfNeeded()
@@ -432,10 +326,10 @@ final class HomeViewRenderingTests: XCTestCase {
           config: config,
           deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
           vipConfiguration: VIPConfiguration(secretStore: PreviewConnectedSecretStore()),
-          tasks: tasks, localTasks: isolatedLocalTasks(), taskSource: source,
-          dashboardPicker: inactiveDashboardPicker(), destination: .general,
-          onBack: {}, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-          onSelectDashboardFile: {}, onQuit: {}
+          localTasks: isolatedLocalTasks(),
+          updates: makeInactiveUpdateController(defaults: defaults),
+          destination: .general,
+          onBack: {}, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {}, onQuit: {}
         )
         .background(Color(nsColor: .windowBackgroundColor)))
       fullSettings.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))

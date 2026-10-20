@@ -24,6 +24,20 @@ enum PulseDesignTokens {
   static let hoverFill: Color = Color(nsColor: .quaternaryLabelColor).opacity(0.16)
   static let pressedFill: Color = Color(nsColor: .quaternaryLabelColor).opacity(0.28)
 
-  // Selected pill (kept as a slightly stronger neutral so selection reads).
+  // Selected pill (a slightly stronger neutral so selection reads).
   static let selectedFill: Color = Color(nsColor: .selectedControlColor).opacity(0.16)
+
+  // Selected tab: an accent-tinted capsule so selection is the affordance
+  // itself instead of a focus ring. Adaptive for Aqua / Dark Aqua and follows
+  // the user's system accent.
+  static let accentSelectionFill: Color = Color.accentColor.opacity(0.16)
+  static let accentSelectionText: Color = Color(nsColor: .labelColor)
+
+  // Keyboard focus affordance. Drawn ourselves (shape-matched) after the system
+  // square ring is suppressed; see PulseFocusEffect.swift. Label color adapts
+  // for Aqua / Dark Aqua and is legible over every hover/press fill above.
+  static let focusStroke: Color = Color(nsColor: .labelColor).opacity(0.5)
+  static let focusStrokeWidth: CGFloat = 1.5
+  // Subtle rounded fill for focused rows (no outline, no box).
+  static let focusFill: Color = Color.accentColor.opacity(0.08)
 }

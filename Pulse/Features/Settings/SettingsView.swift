@@ -5,15 +5,12 @@ struct SettingsView: View {
   @ObservedObject var config: AppConfig
   @ObservedObject var deepSeekConfiguration: DeepSeekConfiguration
   @ObservedObject var vipConfiguration: VIPConfiguration
-  @ObservedObject var tasks: DashboardTaskController
   @ObservedObject var localTasks: LocalTaskController
-  @ObservedObject var taskSource: TaskSourceConfiguration
-  @ObservedObject var dashboardPicker: DashboardFilePicker
+  @ObservedObject var updates: UpdateController
   let destination: SettingsDestination
   let onBack: () -> Void
   let onDeepSeekCredentialsChanged: () -> Void
   let onVIPCredentialsChanged: () -> Void
-  let onSelectDashboardFile: () -> Void
   let onQuit: () -> Void
   var onTaskEditingChanged: (Bool) -> Void = { _ in }
 
@@ -54,6 +51,11 @@ struct SettingsView: View {
               tasksContent
             }
             .id(SettingsDestination.tasks)
+
+            PulseSection(title: "Updates", symbol: "arrow.triangle.2.circlepath") {
+              updatesContent
+            }
+            .id(SettingsDestination.updates)
 
             PulseSection(title: "About", symbol: "info.circle") {
               aboutContent
@@ -155,119 +157,80 @@ struct SettingsView: View {
     }
   }
 
+  /// Update settings show the verified status the controller owns; the view only
+  /// dispatches intents and never performs a check or install itself.
+  private var updatesContent: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        Text("Pulse \(updates.currentVersionText)")
+          .font(.system(size: 13, weight: .medium))
+        Spacer()
+        if updates.isBusy { ProgressView().controlSize(.mini) }
+      }
+      Toggle(
+        "Check for updates automatically",
+        isOn: Binding(
+          get: { updates.automaticChecksEnabled },
+          set: { updates.automaticChecksEnabled = $0 })
+      )
+      .toggleStyle(.switch)
+      .disabled(!updates.isUpdateSupported)
+      .accessibilityIdentifier("automaticUpdatesToggle")
+
+      Text(updates.statusText)
+        .font(.caption)
+        .foregroundStyle(statusColor)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityIdentifier("updateStatusText")
+
+      HStack(spacing: 8) {
+        Button("Check Now") {
+          Task { await updates.checkForUpdates() }
+        }
+        .disabled(updates.isBusy || !updates.isUpdateSupported)
+        .accessibilityIdentifier("checkForUpdatesButton")
+
+        if updates.canRestartToUpdate {
+          Button("Restart to Update") { updates.restartToUpdate() }
+            .accessibilityIdentifier("restartToUpdateButton")
+        }
+        if updates.offeredRelease != nil, !updates.canRestartToUpdate {
+          Button("Skip This Version") { updates.skipOfferedRelease() }
+            .disabled(updates.isBusy)
+            .accessibilityIdentifier("skipUpdateVersionButton")
+        }
+        Spacer(minLength: 0)
+      }
+      .buttonStyle(PulseActionButtonStyle())
+      .font(.caption.weight(.medium))
+
+      if let release = updates.offeredRelease, let pageURL = release.pageURL {
+        Button("Release notes") { NSWorkspace.shared.open(pageURL) }
+          .buttonStyle(.borderless)
+          .font(.caption.weight(.medium))
+          .accessibilityIdentifier("updateReleaseNotesButton")
+      }
+    }
+    .font(.subheadline)
+  }
+
+  private var statusColor: Color {
+    if case .failed = updates.phase { return .red }
+    return .secondary
+  }
+
+  /// Task settings own the tag vocabulary only. Creating, completing and
+  /// deleting tasks stays on Home so the popover never becomes a second editor.
   private var tasksContent: some View {
     VStack(alignment: .leading, spacing: 10) {
-      VStack(alignment: .leading, spacing: 6) {
-        Text("Task source")
-          .font(.subheadline.weight(.medium))
-        Picker(
-          "Task source",
-          selection: Binding(
-            get: { taskSource.source },
-            set: { taskSource.setSource($0) }
-          )
-        ) {
-          Text("Built-in tasks").tag(TaskSource.local)
-          Text("Obsidian Dashboard").tag(TaskSource.apex)
-        }
-        .labelsHidden()
-        .pickerStyle(.segmented)
-        .accessibilityIdentifier("taskSourcePicker")
-      }
-      Text("Each source keeps its own tasks. Switching never merges or deletes them.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-
-      if taskSource.source == .local {
-        LocalTagSettingsView(controller: localTasks, onEditingChanged: onTaskEditingChanged)
-      }
-      Divider()
-      HStack(spacing: 8) {
-        Image(systemName: "checklist")
-          .foregroundStyle(.secondary)
-        Text("Apex Dashboard")
-          .font(.subheadline.weight(.semibold))
-        Spacer()
-        Text(dashboardConnectionStatus)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-
+      LocalTagSettingsView(controller: localTasks, onEditingChanged: onTaskEditingChanged)
       Text(
-        "Add tasks or change their completion in Pulse. Click task text to open the Dashboard in Obsidian."
+        "Tasks live in Pulse only. Add them on Home, mark them done to dim them, set"
+          + " “Repeat daily” for a task that comes back each day, or hover a row to delete it."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
       .fixedSize(horizontal: false, vertical: true)
-
-      HStack(spacing: 10) {
-        Button(
-          dashboardPicker.isSelecting
-            ? "Opening file chooser…"
-            : tasks.configuration.hasDashboardSelection
-              ? "Choose another file" : "Select Dashboard File"
-        ) {
-          onSelectDashboardFile()
-        }
-        .buttonStyle(PulseActionButtonStyle())
-        .font(.caption.weight(.medium))
-        .accessibilityIdentifier("selectDashboardFileButton")
-        .disabled(dashboardPicker.isSelecting)
-
-        if tasks.configuration.hasDashboardSelection {
-          Button("Refresh") { tasks.requestRefresh() }
-            .disabled(tasks.isRefreshing)
-            .buttonStyle(PulseActionButtonStyle())
-            .font(.caption.weight(.medium))
-            .accessibilityIdentifier("refreshDashboardButton")
-          Button("Remove", role: .destructive) {
-            tasks.removeDashboard()
-          }
-          .buttonStyle(PulseActionButtonStyle())
-          .font(.caption.weight(.medium))
-          .accessibilityIdentifier("removeDashboardFileButton")
-        }
-      }
-
-      if let error = dashboardPicker.errorMessage ?? dashboardConnectionError {
-        Text(error)
-          .font(.caption)
-          .foregroundStyle(.red)
-          .fixedSize(horizontal: false, vertical: true)
-      } else if case .loaded(let dashboard) = tasks.state {
-        Text(dashboard.fileURL.lastPathComponent)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-      }
-      if taskSource.source == .local && tasks.configuration.hasDashboardSelection {
-        Text("Choose Obsidian Dashboard under Task source to show this file's tasks on Home.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-    }
-  }
-
-  private var dashboardConnectionStatus: String {
-    switch tasks.state {
-    case .notConfigured: "Not connected"
-    case .loading: tasks.isRefreshing ? "Loading…" : "Not loaded"
-    case .loaded: "Connected"
-    case .fileMissing: "File unavailable"
-    case .permissionDenied: "Cannot read"
-    case .readError, .parseError: "Connection error"
-    }
-  }
-
-  private var dashboardConnectionError: String? {
-    switch tasks.state {
-    case .readError(let message), .parseError(let message): message
-    case .permissionDenied:
-      "Pulse cannot read this Dashboard. Select the file again to restore access."
-    case .fileMissing: "The Dashboard was moved or deleted. Choose its current location."
-    default: nil
     }
   }
 
