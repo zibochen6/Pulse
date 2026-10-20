@@ -71,6 +71,7 @@
 		D53FCE80E27506B55F51E4E8 /* LocalTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD105F6FD073A53E8EE3CE6 /* LocalTaskStore.swift */; };
 		D7B982F5C6010AF39032C442 /* PulseDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CDEEA43A307EB361306B3A8 /* PulseDesignTokens.swift */; };
 		D801D10EF41A0B7F3C86C99A /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF51429D3A090E60FA1A9DE /* AppConfigTests.swift */; };
+		D87E9AD4374CCDB1DAE6E893 /* LocalTaskInteractionStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F72995BB71D773FCEF828671 /* LocalTaskInteractionStorageTests.swift */; };
 		DB042EEBE631A96D5A209658 /* CodexProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F293341995B6DF958E21987 /* CodexProviderIcon.swift */; };
 		DEB5B3FDB91867F1AC2C3E70 /* PopoverHoverControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 042EECB94368AEA980440D75 /* PopoverHoverControllerTests.swift */; };
 		EED8931DC294D2E343BC8ABB /* DailyRepeatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34978B23EACA2BD148421E33 /* DailyRepeatTests.swift */; };
@@ -162,6 +163,7 @@
 		F69D4C870D63B26C2433BCB4 /* PopoverPageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverPageController.swift; sourceTree = "<group>"; };
 		F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewRenderingTests.swift; sourceTree = "<group>"; };
 		F6FCB7F49CE2E7A36595D5B3 /* LocalTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTasksView.swift; sourceTree = "<group>"; };
+		F72995BB71D773FCEF828671 /* LocalTaskInteractionStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTaskInteractionStorageTests.swift; sourceTree = "<group>"; };
 		F779067F23C0C3971B44D899 /* PulseActionButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseActionButtonStyle.swift; sourceTree = "<group>"; };
 		FAA059DD49514947DEAEB889 /* LocalTaskControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTaskControllerTests.swift; sourceTree = "<group>"; };
 		FB4BDB885E509C12D7F665BB /* UpdateInstallScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateInstallScript.swift; sourceTree = "<group>"; };
@@ -352,6 +354,7 @@
 				C7D031446E76DE601D0D7B2F /* DeepSeekUsageTests.swift */,
 				F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */,
 				FAA059DD49514947DEAEB889 /* LocalTaskControllerTests.swift */,
+				F72995BB71D773FCEF828671 /* LocalTaskInteractionStorageTests.swift */,
 				B4AC82C04589E099C65A4FA9 /* LocalTasksRenderingTests.swift */,
 				21776204749CB9D05914233B /* LocalTaskStorageTests.swift */,
 				042EECB94368AEA980440D75 /* PopoverHoverControllerTests.swift */,
@@ -476,6 +479,7 @@
 				92526D6A0C60CAA531B5A941 /* DeepSeekUsageTests.swift in Sources */,
 				0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */,
 				68FA78572F380260FE065046 /* LocalTaskControllerTests.swift in Sources */,
+				D87E9AD4374CCDB1DAE6E893 /* LocalTaskInteractionStorageTests.swift in Sources */,
 				84E4BF6159673FA92DAAD65D /* LocalTaskStorageTests.swift in Sources */,
 				29E74F2638B20780595D298E /* LocalTasksRenderingTests.swift in Sources */,
 				DEB5B3FDB91867F1AC2C3E70 /* PopoverHoverControllerTests.swift in Sources */,

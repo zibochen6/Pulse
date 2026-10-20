@@ -28,7 +28,7 @@ final class LocalTaskControllerTests: XCTestCase {
     await controller.refresh()
     XCTAssertEqual(controller.document, LocalTaskDocument())
     let saved = await controller.saveTask(
-      id: nil, text: "Tagged", tagIDs: [], newTagNames: ["Work", "Home"])
+      id: nil, text: "Tagged", tagIDs: [], newTagNames: ["Work"])
     XCTAssertTrue(saved)
     let tagged = try XCTUnwrap(controller.document?.tasks.first)
     let tags = try XCTUnwrap(controller.document?.tags)
@@ -50,7 +50,7 @@ final class LocalTaskControllerTests: XCTestCase {
     XCTAssertTrue(renamed)
     let detached = await controller.deleteTag(id: tags[0].id)
     XCTAssertTrue(detached)
-    XCTAssertEqual(controller.document?.tasks.first?.tagIDs, [tags[1].id])
+    XCTAssertEqual(controller.document?.tasks.first?.tagIDs, [])
     let deleted = await controller.deleteTask(id: tagged.id)
     XCTAssertTrue(deleted)
     let reopened = LocalTaskController(store: store)
@@ -260,7 +260,10 @@ final class LocalTaskControllerTests: XCTestCase {
     XCTAssertTrue(retriedTag)
     XCTAssertEqual(controller.document?.tasks.count, 1)
     let deletedTask = await controller.deleteTask(id: original.tasks[0].id)
-    XCTAssertFalse(deletedTask)
+    // Reload confirmed the deletion despite byte-verification failure, so an
+    // editor can close and show its recovered Undo receipt immediately.
+    XCTAssertTrue(deletedTask)
+    XCTAssertEqual(controller.deletionHistory.count, 1)
     XCTAssertEqual(controller.document?.tasks.count, 0)
     let retriedTask = await controller.deleteTask(id: original.tasks[0].id)
     XCTAssertTrue(retriedTask)

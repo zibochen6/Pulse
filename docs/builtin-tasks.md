@@ -1,177 +1,129 @@
 # Built-in to-dos
 
-Pulse has one task system: the native local list in
-`Pulse/Features/Tasks/Local/` (`LocalTask`, `LocalTaskStore`,
-`LocalTaskController`, `LocalTasksView`, `LocalTagSettingsView`). Nothing is
-imported from or written back to a note file, and no connection, import step or
-source choice exists. This document is the current contract.
+Pulse uses one native local task system in `Pulse/Features/Tasks/Local/`.
+Tasks and tags live in `~/Library/Application Support/Pulse/tasks.json`;
+there is no account, import, source selector, database or network sync.
 
-## Tabs and selection
+## Independent lists and tags
 
-- The tab row shows only the saved tags, in creation order. There is **no
-  "All" tab and no "Untagged" tab**.
-- With zero tags the bar shows a single guidance tab labeled **Todo** (always
-  rendered as selected, with no action) and the empty list reads **"No tasks
-  yet"**. With tags, an empty tag reads **"No tasks in this tag"**.
-- Selection defaults to the first-created tag whenever tags exist; it is
-  presentation state owned by `LocalTaskPresentation`, kept above page
-  navigation so a popover close never discards it. It never edits a stored
-  task. When the selected tag is deleted, selection reconciles to the first
-  remaining tag, or back to the guidance state when no tags remain.
-- A selected tab is a filled rounded capsule (accent tint) with semibold text;
-  an unselected tab is secondary text with a light hover fill. Selection has no
-  focus box: the macOS square focus ring is suppressed
-  (`Pulse/UI/PulseFocusEffect.swift`, `Pulse/UI/PulseSharedControls.swift`) and
-  keyboard focus draws a soft shape-matched stroke instead of a rectangle
-  around the capsule.
-- A task with several tags appears under each of those tag tabs; stored order
-  is never changed by tab selection.
+- **Todo** is the permanent default list for tasks without a custom tag. It is
+  not an aggregate and cannot be renamed or deleted. Custom tags follow in
+  creation order. A task belongs to one list only; changing its tag moves it.
+- The selected tab has an accent-tinted capsule and a shape-matched keyboard
+  focus affordance. Custom tabs scroll horizontally; the trailing **+** stays
+  reachable. Selecting or creating a tag brings its tab into view.
+- **+** opens tag-name entry. Enter creates an empty tag, selects it and focuses
+  task entry. Cancel creates nothing. Names are trimmed and compared without
+  case; a duplicate offers the existing tag instead of creating another.
+- A tab's context menu offers **Rename** and **Remove**. Settings → Tasks offers
+  the same operations. Removing a custom tag requires confirmation, moves its
+  tasks to **Todo**, and never deletes tasks.
 
-## Quick add
+## Fast entry and editing
 
-- Under the list, centered, is a `+` icon button. It expands the inline
-  composer **in the same footer slot**, so the list does not jump between two
-  different footers.
-- The composer contains: a text field ("Add a task…"), a **Tags** menu with
-  saved-tag toggles and the count of chosen tags, a **New tag** field with its
-  own small `+`, a **Repeat daily** checkbox, and **Add** (`⌘S`) / **Cancel**
-  (Escape). The text field takes focus on appear; the list stays visible.
-- Submission is guarded at the button boundary, so a double click cannot queue
-  two creations. The new task and its new tags are persisted as one
-  transaction.
-- A confirmed task keeps the tab that already shows it; otherwise the tab moves
-  to the earliest-created tag of the new task (or stays in the guidance state
-  when there are no tags) so the row is visible.
+- A compact task input stays below the tabs, above the scrolling rows. It
+  names the destination list. Enter saves, clears confirmed input and retains
+  focus for continuous entry. Confirming Chinese IME marked text must not save
+  a task. Empty/whitespace-only titles cannot be submitted.
+- Additional options expose a single-choice list selector, new-tag entry and
+  **Repeat daily**. Both creation and editing can create and select a new tag.
+- Clicking a task opens its editor. Save confirms changes and reveals the
+  destination if the task moved. Cancel discards that edit, not another list's
+  quick-entry draft.
+- Quick-entry drafts are owned above navigation and kept separately per list.
+  Switching lists, visiting Settings or closing/reopening the popover does not
+  discard them. Pending saves capture their draft identity and destination;
+  late completion cannot clear a different or subsequently changed draft.
+- Explicit input focus, unfinished input and active editing suspend pointer
+  departure dismissal. An idle empty input does not. Outside-click and menu-bar
+  toggle dismissal retain their normal AppKit behavior.
 
-## Tag-bar add
+## Completion and deletion
 
-- At the right end of the tag row, a `+` menu offers **"Add task in tag"** —
-  one entry per saved tag, which opens the composer with that tag already
-  selected — and **"New tag…"**, which opens the composer for a task that gets
-  a brand-new tag typed into the New tag field.
-
-## Completed tasks stay visible
-
-- Open tasks come first; completed tasks follow under a small **"Completed"**
-  heading (11 pt semibold, tertiary). Completed rows are dimmed and struck
-  through. Nothing is hidden, auto-removed, or collapsed, and no count or
-  disclosure control exists.
-- While a toggle is pending the row shows a spinner and its checkbox is
-  disabled; state updates only after the store confirms the write.
-- Hovering any row reveals a trash button that opens a confirmation dialog
-  ("Delete …?", **Delete task** / **Keep task**, "This cannot be undone.").
-  Tasks can also be deleted from the editor page through its inline
-  confirmation. Deleting a task never touches its tags; deleting a tag in
-  **Settings → Tasks** only removes the association.
+- Open tasks precede a collapsible **Completed** section with a count, even
+  when every task is completed. It starts expanded. Completed rows stay dimmed
+  and struck through; collapsing changes presentation only.
+- Completion is published only after verified storage and disables duplicate
+  toggles while pending. Failures retain a task-specific retry intent.
+- Deleting from a row, its context menu or the editor removes the task without
+  another confirmation. Row controls reserve their width so hovering does not
+  shift text; keyboard users can reach the same action.
+- **Undo** restores the last deleted task, including its UUID, content,
+  completion/repeat data and position. The controller retains at most 20
+  deletions for the app session across tabs/pages/popover closure; there is no
+  countdown. Quit clears this in-memory history. If the original tag was
+  removed, restoration goes to **Todo**. Restoring a task never replaces the
+  whole document or overwrites unrelated subsequent changes.
+- Text input retains native Undo/Redo and Cut/Copy/Paste/Select All through the
+  AppKit responder chain. Task deletion does not hijack text undo.
 
 ## Daily repeat
 
-- Each task has an optional `repeatsDaily` flag and a `lastCompletedDay`.
-  The composer and the editor share one **"Repeat daily"** checkbox, and a
-  repeating task shows a small circular-arrows marker next to its text.
-- Completing a repeating task records the **local calendar day**
-  (`Calendar.current.startOfDay`) of the click. The instant is captured at the
-  click boundary — before the asynchronous mutation runs — so a slow save
-  cannot shift the completion to another day. Completion goes through
-  `.completeRepeating(taskID:completedAt:)`, which is idempotent within that
-  day: repeating the same day changes nothing. Un-completing uses the plain
-  mutation and clears the recorded day.
-- A non-repeating task never completes through the repeating path; the store
-  rejects that with `taskNotRepeating` (a stale UI state, not user error).
-- `LocalTaskController.resetRepeatingTasks()` runs when Pulse opens — the
-  popover-open path in `PulseAppDelegate` and the task-surface appearance in
-  `LocalTasksView`. It re-arms (checks off → open) any repeating task whose
-  recorded day is earlier than today, or whose day is unknown; a task finished
-  today stays finished and non-repeating tasks are untouched. It is idempotent
-  (a second run leaves the confirmed state unchanged) and the store writes
-  nothing when nothing is stale.
-- The reset is background maintenance, not a user save: it never raises
-  `isSaving` (so typing is never disabled mid-composition) and a successful run
-  never clears an error the user still has to act on. A failed reset reports
-  its own error and publishes confirmed state.
+`repeatsDaily` and optional `lastCompletedDay` describe daily tasks. Completing
+records the local calendar day of the click (captured before asynchronous
+work); repeating completion is idempotent within that day. Manual reopening
+clears the recorded day, as does disabling repeat.
 
-## Storage and schema
+On popover open and task-surface appearance, reset reopens repeating tasks
+completed before today or with an unknown day. Today/future completions and
+non-repeating tasks stay unchanged. No-op resets write nothing. Background
+reset does not raise `isSaving`, disable typing or clear another visible
+failure. Failed repeating completion retries with the original click day.
 
-- Tasks and tags use UUID identities in a schema-versioned JSON document at
-  `~/Library/Application Support/Pulse/tasks.json`. The schema version stays
-  **1**: `repeatsDaily` and `lastCompletedDay` are optional keys, so a file
-  written by an older build loads unchanged and vice versa. There is no
-  migration.
-- Day values are encoded as stable UTC ISO8601 whole seconds; `repeatsDaily`
-  is always written so a file states its repeat intent explicitly. Tag UUIDs
-  are sorted, and the encoder sorts keys, so equal documents serialize to
-  identical bytes for the store's byte-for-byte write verification.
-- One background serial queue covers all instances. Every transaction rereads
-  the latest document, validates the staged result, replaces the file
-  atomically, then rereads and compares bytes before the controller publishes
-  state. Snapshot replies are ordered by observation time, so a late reply
-  cannot roll the UI back.
-- A missing file is a valid empty store. Corrupt or newer-version documents
-  stay on disk unchanged and reject mutations; Pulse never silently replaces
-  them with an empty list. No account, database, telemetry or network sync is
-  involved.
+## Storage, compatibility and failures
 
-## Failure and retry
+Schema remains **1**. UUID identity, stored task order, optional repeat keys,
+stable UTC ISO8601 whole-second day encoding and sorted UUID/key encoding are
+preserved. One shared serial queue rereads the latest file for each transaction,
+validates a staged result, atomically writes and verifies the bytes before
+publishing. Monotonic observation timestamps reject older replies.
 
-- A failed save keeps the draft and shows an inline error with **Try again**
-  and **Dismiss**; Save again retries the same intent. Creation retries use the
-  stable creation UUID, so a write that committed but failed verification is
-  confirmed rather than duplicated.
-- A failed completion is recorded per task with the desired state, the repeat
-  flag and the completion instant it was asked at. Its inline failure offers
-  retry/dismiss, and another task's success never clears or redirects it;
-  deleting the task drops its record. `retryCompletion` replays the recorded
-  instant, so a retry after midnight still records the day the user clicked.
-- If verification fails after replacement, Pulse reloads the real file state
-  instead of rolling back or presenting an unconfirmed in-memory result.
+Legacy stored tags named **Todo** merge into the built-in default list. Legacy
+multiple-tag tasks keep the earliest-created matching tag. Normalization keeps
+task identity, text, order, completion and repeat state and saves the exact
+original file bytes as a backup before replacement. Repeated loads must not
+overwrite that backup or repeat a completed conversion. Future task writes
+accept at most one custom tag; zero tags mean **Todo**.
+
+Missing files are valid empty stores. Corrupt, unreadable or unsupported-version
+files are not empty lists and cannot be silently overwritten. Failed saves
+retain drafts for retry; stable intent UUIDs prevent duplicate tasks/tags when
+replacement succeeded but verification failed. Delete/restore retry must
+likewise retain the recovery information and confirm actual disk state.
+
+Tests use injected temporary files. The XCTest host disables live integrations
+and uses isolated preferences plus a temporary store. Runtime mouse and input
+method acceptance is recorded separately from unit and rendered-view checks.
 
 ## Manual acceptance
 
-With an isolated test installation:
+Use a disposable, isolated store; never make the real user's file read-only or
+change the machine clock to test failures/repeat.
 
-1. **Single task system:** no source picker or connection UI exists anywhere;
-   Settings → Tasks manages tags only (rename/remove), and removing a tag
-   keeps its tasks.
-2. **Tag-only tabs:** with zero tags the bar shows one **Todo** guidance tab
-   and the list reads "No tasks yet". Create two tags; the bar shows exactly
-   those two tags in creation order — no **All**, no **Untagged**. An empty
-   tag reads "No tasks in this tag".
-3. **Selection capsule:** the selected tab is a filled accent capsule with
-   semibold text; unselected tabs are plain secondary text with a hover fill.
-   Tab through the tabs: no square focus ring appears — focus is a soft
-   shape-matched stroke.
-4. **Quick add:** the centered `+` under the list expands the composer in
-   place (text field, Tags menu, New tag field, Repeat daily, Add/Cancel) and
-   the list does not jump. A confirmed task lands on a visible tab.
-5. **Tag-bar add:** the `+` at the right end of the tag row offers "Add task
-   in tag" per saved tag and "New tag…"; each starts the composer for that
-   tag, and the new-tag path creates the tag with the task.
-6. **Completed rows:** complete a task; it stays visible, dimmed and struck
-   through, under the "Completed" heading after the open tasks. Close and
-   reopen the app: it is still there.
-7. **Delete flows:** hover a row → trash button → confirmation dialog; cancel
-   first (task stays), then confirm. Delete another from the editor; both ask
-   for confirmation and both leave tags intact.
-8. **Daily repeat:** create a task with **Repeat daily**; complete it — it
-   shows the circular-arrows marker and stays completed today. Reopen the
-   popover the same day: still completed. Reopen on a later day (or change the
-   machine clock/date forward and reopen): it is open again. Completing it
-   again records the new day. A non-repeating task never re-arms.
-9. **Storage:** quit and restart Pulse; tasks, tags and repeat flags persist.
-   The file at `~/Library/Application Support/Pulse/tasks.json` still reports
-   `"schemaVersion": 1`; remove the two optional keys by hand and confirm the
-   file still loads with no migration prompt.
-10. **Failures:** make the file read-only or its directory unwritable and
-    confirm an inline error with retry, the draft retained, and typing still
-    enabled while the background reset runs; restore access and retry
-    successfully.
-11. **Regression pass:** keyboard operation, long text, dark appearance,
-    scrolling, the 300 ms opening guard plus presentation completion, the 180
-    ms pointer-departure close, and hover-suspension while an editor is open.
+1. Verify **Todo** remains visible with custom tags. Seed untagged tasks and a
+   legacy stored Todo tag; confirm every task appears in its single list after
+   conversion and the original byte backup exists.
+2. Create an empty tag using **+**, cancel another, retry a duplicate with
+   different capitalization and create enough tags to require scrolling.
+3. Add several tasks with Enter; verify destination, focus, whitespace rejection,
+   long text and Chinese IME candidate confirmation without submission.
+4. Expand options, create a new tag while adding/editing a task and move a task
+   to another list. The task appears only at its destination.
+5. Leave drafts in two lists, switch tabs, visit Settings, close/reopen and verify
+   both drafts. Submit then change tabs/input before a delayed save returns.
+6. Complete every task; verify a counted Completed heading, collapse/expand and
+   persistence after reload. Test daily reset with an injected clock in tests.
+7. Delete via mouse, context menu and keyboard. Verify no text reflow, immediate
+   feedback and multiple Undo operations. Remove the original tag, then undo a
+   task deletion and verify fallback to Todo.
+8. Rename/remove custom tags from both tab menus and Settings. Confirm removal
+   retains tasks and the default Todo cannot be removed or duplicated.
+9. Verify text Undo/Redo, clipboard editing, typing/dirty-draft hover suspension,
+   idle hover dismissal, outside click and the normal 300 ms opening guard /
+   180 ms departure delay.
+10. Inspect empty/populated/completed/editor/options/tag/undo states at the fixed
+    360 × 510 popover size in Aqua and Dark Aqua. Simulate storage failures with
+    injected writers and verify retry preserves input and confirmed data.
 
-## Removed integration
-
-The previous Apex Dashboard integration — Markdown parsing, the file picker,
-and checkbox write-back — was removed; the native list above is the only task
-system, and the old bookmark preference key is no longer read. Existing user
-files and bookmarks are left untouched.
+The previous Markdown dashboard integration was removed; native tasks are the
+only task system.

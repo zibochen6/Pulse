@@ -21,6 +21,11 @@ final class LocalTaskController: ObservableObject {
   @Published private(set) var errorMessage: String?
   @Published private(set) var completionFailures: [UUID: LocalTaskCompletionFailure] = [:]
 
+  @Published private(set) var deletionHistory: [LocalTaskDeletionReceipt] = []
+  @Published private(set) var isUndoing = false
+  private var uncertainDeletions: [UUID: LocalTaskDeletionReceipt] = [:]
+  private var pendingCreationIDs = Set<UUID>()
+
   private let store: any LocalTaskStoring
   private var appliedObservation: ContinuousClock.Instant?
   private var activeSaves = 0
@@ -59,7 +64,11 @@ final class LocalTaskController: ObservableObject {
     id: UUID?, text: String, tagIDs: Set<UUID>, newTagNames: [String], repeatsDaily: Bool = false,
     creationID: UUID = UUID()
   ) async -> Bool {
-    await perform(
+    let intentID = id ?? creationID
+    guard !pendingCreationIDs.contains(intentID) else { return false }
+    pendingCreationIDs.insert(intentID)
+    defer { pendingCreationIDs.remove(intentID) }
+    return await perform(
       .saveTask(
         id: id, text: text, tagIDs: tagIDs, newTagNames: newTagNames, repeatsDaily: repeatsDaily,
         creationID: creationID))
@@ -98,11 +107,40 @@ final class LocalTaskController: ObservableObject {
       .resetRepeatingTasks(today: .now), operation: operation, clearsError: false)
   }
 
+  func createTag(id: UUID, name: String) async -> Bool {
+    guard !pendingCreationIDs.contains(id) else { return false }
+    pendingCreationIDs.insert(id)
+    defer { pendingCreationIDs.remove(id) }
+    return await perform(.createTag(id: id, name: name))
+  }
+
   func deleteTask(id: UUID) async -> Bool {
+    guard !pendingTaskIDs.contains(id), !isUndoing else { return false }
+    pendingTaskIDs.insert(id)
+    defer { pendingTaskIDs.remove(id) }
     let saved = await perform(.deleteTask(id))
-    if saved { completionFailures.removeValue(forKey: id) }
+    let confirmedDeleted = document?.tasks.contains(where: { $0.id == id }) == false
+    if saved || confirmedDeleted { completionFailures.removeValue(forKey: id) }
+    return saved || confirmedDeleted
+  }
+
+  /// LIFO, app-session history. Failed restores retain their receipt for retry.
+  func undoDeletion() async -> Bool {
+    guard !isUndoing, !isSaving, let receipt = deletionHistory.last else { return false }
+    isUndoing = true
+    defer { isUndoing = false }
+    let saved = await perform(.restoreTask(receipt))
+    if saved { deletionHistory.removeAll { $0.id == receipt.id } }
     return saved
   }
+
+  private func rememberDeletion(_ receipt: LocalTaskDeletionReceipt) {
+    guard !deletionHistory.contains(where: { $0.id == receipt.id }) else { return }
+    deletionHistory.append(receipt)
+    deletionHistory.sort { $0.deletedAt < $1.deletedAt }
+    if deletionHistory.count > 20 { deletionHistory.removeFirst(deletionHistory.count - 20) }
+  }
+
   func renameTag(id: UUID, name: String) async -> Bool {
     await perform(.renameTag(id: id, name: name))
   }
@@ -169,6 +207,10 @@ final class LocalTaskController: ObservableObject {
   ) async -> Bool {
     do {
       let snapshot = try await store.mutate(mutation)
+      if let receipt = snapshot.deletionReceipt {
+        uncertainDeletions = uncertainDeletions.filter { $0.value.task.id != receipt.task.id }
+        rememberDeletion(receipt)
+      }
       apply(snapshot)
       if let intent = completionIntent {
         completionFailures.removeValue(forKey: intent.taskID)
@@ -177,6 +219,9 @@ final class LocalTaskController: ObservableObject {
       }
       return true
     } catch {
+      if let deletion = error as? LocalTaskDeletionError {
+        uncertainDeletions[deletion.receipt.id] = deletion.receipt
+      }
       let failureMessage = message(for: error)
       // Verification can fail after replacement. Reload the real state instead
       // of rolling back a file or presenting an unconfirmed in-memory result.
@@ -196,6 +241,16 @@ final class LocalTaskController: ObservableObject {
     guard appliedObservation.map({ snapshot.observedAt >= $0 }) ?? true else { return }
     appliedObservation = snapshot.observedAt
     document = snapshot.document
+    // If a deletion committed but verification failed, a confirmed subsequent
+    // read establishes that Undo is safe. Keep uncertain receipts if reads fail.
+    for receipt in uncertainDeletions.values {
+      if !snapshot.document.tasks.contains(where: { $0.id == receipt.task.id }) {
+        if !deletionHistory.contains(where: { $0.task.id == receipt.task.id }) {
+          rememberDeletion(receipt)
+        }
+      }
+      uncertainDeletions.removeValue(forKey: receipt.id)
+    }
   }
 
   private func beginSaving() {
@@ -209,7 +264,8 @@ final class LocalTaskController: ObservableObject {
   }
 
   private func message(for error: Error) -> String {
-    (error as? LocalTaskStoreError)?.localizedDescription
+    (error as? LocalTaskDeletionError)?.cause.localizedDescription
+      ?? (error as? LocalTaskStoreError)?.localizedDescription
       ?? "Pulse could not save or read your tasks. Check access and try again."
   }
 

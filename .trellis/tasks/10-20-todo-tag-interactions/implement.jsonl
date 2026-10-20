@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/builtin-tasks.md", "reason": "Existing storage invariants; approved PRD overrides multi-tag behavior."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Shared presentation lifecycle, hover suspension and native controls."}

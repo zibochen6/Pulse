@@ -2,7 +2,7 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services every day. The intended product brings AI usage status and daily to-dos into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP and DeepSeek balance integrations, and one native to-do list with multiple tags, optional daily repeat, and completed tasks kept visible. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query user-configured 88VIP and DeepSeek account balances. The menu bar remains Codex-only; the popover header shows all three compact statuses, left aligned and wrapped when needed. Click any status for Usage details; Settings is another page in the same popover. A development-signed preview is available on GitHub.
+**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP and DeepSeek balance integrations, and native to-do lists with one tag per task, independent tag creation, quick entry, deletion undo, optional daily repeat, and visible completed tasks. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query user-configured 88VIP and DeepSeek account balances. The menu bar remains Codex-only; the popover header shows all three compact statuses, left aligned and wrapped when needed. Click any status for Usage details; Settings is another page in the same popover. A development-signed preview is available on GitHub.
 
 ## Download and install
 
@@ -138,43 +138,20 @@ and their decimal digits remain visible in full within the 360 × 510 popover.
 
 ## Built-in tasks
 
-Pulse has one task system: the native local to-do list. New users start with
-it; no connection, import or setup is required. The tab row shows only the
-saved tags in creation order — there is no **All** and no **Untagged** tab.
-With zero tags the bar shows a single guidance tab labeled **Todo**, and the
-empty list reads "No tasks yet"; an empty tag reads "No tasks in this tag". A
-selected tab is a filled, accent-tinted rounded capsule with semibold text;
-unselected tabs use secondary text with a light hover fill. The macOS square
-focus ring is suppressed, and keyboard focus draws a soft, shape-matched
-affordance instead.
+Pulse has independent native to-do lists. **Todo** always holds tasks without a
+custom tag; each custom tag is another list, and each task belongs to one list.
+Use the tab bar's **+** to create an empty tag, then type into the quick input
+below the tabs and press Enter to add tasks continuously. More options expose
+single-list selection, a new tag and **Repeat daily**. Moving a task changes its
+list. Completed tasks remain in a counted, collapsible section.
 
-Use the centered `+` button under the list to expand the inline composer in
-place: enter text, pick tags from the Tags menu or type a new tag, optionally
-tick **Repeat daily**, then Add or Cancel; the list stays visible. The `+` menu
-at the right end of the tag row offers **Add task in tag** (one entry per saved
-tag) and **New tag…**, which starts a composer for a task that gets a
-brand-new tag. Click a checkbox to complete a task; click task text to open its
-editor.
-
-Completed tasks stay visible. They are dimmed and struck through under a small
-"Completed" heading, after the open tasks. Hovering a row reveals a trash
-button with a confirmation dialog; tasks can also be deleted from the editor,
-still confirmed. Nothing is hidden or auto-removed.
-
-Each task can repeat daily. Completing a repeating task records the local
-calendar day, and every time Pulse opens (popover open or task-surface
-appearance) it re-arms repeating tasks completed on an earlier day, so they are
-open again on a new day. Repeating tasks show a small circular-arrows marker
-next to their text. Rename or remove tags through **Settings → Tasks**, which
-now manages tags only; deleting a tag never deletes its tasks.
-
-Tasks are saved locally in `~/Library/Application Support/Pulse/tasks.json` and
-restored after restart. The schema-versioned document stays at version 1: the
-repeat keys are optional, so files written by older builds still load (and vice
-versa) with no migration. Persistence errors appear inline; failed saves retain
-the draft. Editing pauses pointer-departure close; outside clicks still dismiss,
-and unsaved task input is retained when reopening during the same app session.
-See [built-in task storage and acceptance](docs/builtin-tasks.md).
+Delete a task directly and use **Undo** to restore it. The last 20 deletions stay
+available until Pulse quits. Removing a tag requires confirmation and moves its
+tasks to Todo. Quick-entry drafts survive list/page switches and popover closure.
+Legacy data is normalized with an original-file backup, so previously hidden
+untagged tasks become reachable in Todo. Data stays local in schema-version-1
+JSON. See [the task interaction and storage contract](docs/builtin-tasks.md)
+for failure behavior, compatibility and manual acceptance.
 
 ## Direction
 

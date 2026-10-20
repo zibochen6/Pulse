@@ -32,15 +32,15 @@ final class LocalTaskStorageTests: XCTestCase {
     XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
   }
 
-  func testTaskLifecyclePersistsOrderIdentityAndMultipleTagsAcrossReload() async throws {
+  func testTaskLifecyclePersistsOrderIdentityAndSingleTagAcrossReload() async throws {
     let url = try storageURL()
     let store = LocalTaskStore(fileURL: url)
     var document = try await store.mutate(
-      .saveTask(id: nil, text: "  调研 🧭\n第二行  ", tagIDs: [], newTagNames: [" 工作 ", "个人"])
+      .saveTask(id: nil, text: "  调研 🧭\n第二行  ", tagIDs: [], newTagNames: [" 工作 "])
     ).document
     let first = try XCTUnwrap(document.tasks.first)
     XCTAssertEqual(first.text, "调研 🧭\n第二行")
-    XCTAssertEqual(document.tags.map(\.name), ["工作", "个人"])
+    XCTAssertEqual(document.tags.map(\.name), ["工作"])
     XCTAssertEqual(first.tagIDs, Set(document.tags.map(\.id)))
     let last = try await store.mutate(
       .saveTask(id: nil, text: "Second", tagIDs: [], newTagNames: [])
@@ -76,16 +76,16 @@ final class LocalTaskStorageTests: XCTestCase {
     let original = try Data(contentsOf: url)
     await assertStoreError(.duplicateTag) {
       try await store.mutate(
-        .saveTask(id: nil, text: "No partial save", tagIDs: [], newTagNames: ["New", " work "]))
+        .saveTask(id: nil, text: "No partial save", tagIDs: [], newTagNames: [" work "]))
     }
     XCTAssertEqual(try Data(contentsOf: url), original)
-    await assertStoreError(.duplicateTag) {
+    await assertStoreError(.multipleLists) {
       try await store.mutate(
         .saveTask(id: nil, text: "No partial save", tagIDs: [], newTagNames: ["Tag", "TAG"]))
     }
     await assertStoreError(.emptyTag) {
       try await store.mutate(
-        .saveTask(id: nil, text: "No partial save", tagIDs: [], newTagNames: ["New", " \n"]))
+        .saveTask(id: nil, text: "No partial save", tagIDs: [], newTagNames: [" \n"]))
     }
     await assertStoreError(.emptyTask) {
       try await store.mutate(.saveTask(id: nil, text: " \n", tagIDs: [], newTagNames: []))
@@ -99,11 +99,12 @@ final class LocalTaskStorageTests: XCTestCase {
   func testTagRenameAndDeleteKeepTasksAndOnlyDetachAssociations() async throws {
     let store = LocalTaskStore(fileURL: try storageURL())
     var document = try await store.mutate(
-      .saveTask(id: nil, text: "Tagged", tagIDs: [], newTagNames: ["Work", "Home"])
+      .saveTask(id: nil, text: "Tagged", tagIDs: [], newTagNames: ["Work"])
     ).document
     let task = document.tasks[0]
     let work = document.tags[0]
-    let home = document.tags[1]
+    let home = TaskTag(name: "Home")
+    _ = try await store.mutate(.createTag(id: home.id, name: home.name))
     _ = try await store.mutate(.setCompleted(taskID: task.id, completed: true))
     await assertStoreError(.duplicateTag) {
       try await store.mutate(.renameTag(id: work.id, name: " HOME "))
@@ -113,7 +114,7 @@ final class LocalTaskStorageTests: XCTestCase {
     document = try await store.mutate(.deleteTag(work.id)).document
     XCTAssertEqual(document.tasks.map(\.id), [task.id])
     XCTAssertTrue(document.tasks[0].completed)
-    XCTAssertEqual(document.tasks[0].tagIDs, [home.id])
+    XCTAssertEqual(document.tasks[0].tagIDs, [])
     XCTAssertEqual(document.tags, [home])
     document = try await store.mutate(.deleteTag(home.id)).document
     XCTAssertEqual(document.tasks[0].tagIDs, [])
@@ -334,9 +335,11 @@ final class LocalTaskStorageTests: XCTestCase {
       Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()))
     let yesterday = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: -1, to: today))
     document = try await store.mutate(
-      .completeRepeating(taskID: stale, completedAt: yesterday)).document
+      .completeRepeating(taskID: stale, completedAt: yesterday)
+    ).document
     document = try await store.mutate(
-      .completeRepeating(taskID: todayTask, completedAt: today)).document
+      .completeRepeating(taskID: todayTask, completedAt: today)
+    ).document
     document = try await store.mutate(.setCompleted(taskID: plain, completed: true)).document
     XCTAssertTrue(document.tasks.allSatisfy(\.completed))
 
@@ -375,7 +378,8 @@ final class LocalTaskStorageTests: XCTestCase {
     ).document
     let id = document.tasks[0].id
     document = try await store.mutate(
-      .completeRepeating(taskID: id, completedAt: Date())).document
+      .completeRepeating(taskID: id, completedAt: Date())
+    ).document
     XCTAssertTrue(document.tasks[0].completed)
     // Turning repetition off clears the day but keeps the user's completion.
     document = try await store.mutate(

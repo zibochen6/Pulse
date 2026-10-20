@@ -17,10 +17,12 @@ struct LocalTagSettingsView: View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Tags")
         .font(.system(size: 13, weight: .medium))
-      Text("Create tags from the tab bar’s + or a task’s tag field. Removing a tag keeps its tasks.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
+      Text(
+        "Create tags from the tab bar’s + or a task’s tag field. Removing a tag moves its tasks to Todo."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
 
       if let document = controller.document {
         if document.tags.isEmpty {
@@ -59,7 +61,7 @@ struct LocalTagSettingsView: View {
     if editingTagID == tag.id {
       VStack(alignment: .leading, spacing: 6) {
         if confirmsDeletion {
-          Text("Remove “\(tag.name)” from all tasks? Tasks will be kept.")
+          Text("Remove “\(tag.name)”? Its tasks will move to Todo.")
             .font(.caption)
             .fixedSize(horizontal: false, vertical: true)
           HStack {

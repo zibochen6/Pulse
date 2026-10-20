@@ -239,7 +239,7 @@ final class HomeViewRenderingTests: XCTestCase {
       id: nil,
       text:
         "Prepare a fictional demo 📝 with a deliberately long task title that wraps in the compact task list",
-      tagIDs: [], newTagNames: ["Work", "写作"])
+      tagIDs: [], newTagNames: ["Work"])
     XCTAssertTrue(added)
     let first = try XCTUnwrap(localTasks.document?.tasks.first)
     await localTasks.setCompleted(true, taskID: first.id)?.value

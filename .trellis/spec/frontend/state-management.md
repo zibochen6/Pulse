@@ -117,7 +117,14 @@ enum PopoverPage: Equatable {
 - The Home header contains Pulse identity, the Settings gear, and independent compact Codex, 88VIP, and DeepSeek controls. Codex uses the real icon and `UsageMenuFormatter.title(for:)`: one window yields a bare percentage, multiple windows yield short labeled values, and loading/unavailable/failure yield `…`/`--`/`!`. Money remains a native-currency balance, separate from quota percentages. Home has no reset time, update time, or refresh control; those belong to Usage. The AppKit menu bar continues to use only Codex state.
 - Header status controls begin beside the brand with flexible space after them, shifting them toward the leading edge. When they do not fit, place them in leading-aligned rows below the brand; wrap whole controls instead of clipping monetary decimals or overlapping Settings. Bound a single exceptionally wide quota control and make its text horizontally reachable. Use actual measured widths at the fixed 360 × 510 popover size. Keep the existing native colors, fonts, and task-region ownership.
 - Clicking a provider control requests that provider's refresh, calls `showUsage()`, and displays full `UsageView` in a separate scrollable page. Manual refresh remains in Usage. Add Provider routes to Settings → Providers, which owns separate 88VIP and DeepSeek Keychain forms. Back from Usage or Settings calls `showHome()`.
-- Tasks is Home's main region and has exactly one implementation: the native local list in `Pulse/Features/Tasks/Local/`. There is no source-switching configuration, no source picker, and no second surface; no UserDefaults preference decides where tasks come from. The tab row shows only saved tags in creation order (no `All`, no `Untagged` tab; zero tags render one `Todo` guidance tab), the centered `+` under the list expands the inline composer, completed rows stay visible dimmed and struck through under a `Completed` heading, and repeating tasks re-arm on popover open. Neither empty states nor loading states display fabricated sample tasks.
+- Tasks is Home's main region and has one native local implementation in
+  `Pulse/Features/Tasks/Local/`. The fixed tab row contains permanent default
+  Todo (untagged only) plus independent custom tags, with no All/aggregate tab.
+  Each task belongs to one logical list. A fixed + creates empty tags; quick
+  entry stays immediately below tabs and above scrolling rows. Completed tasks
+  have a counted collapsible section. Delete is immediate with controller-owned
+  Undo. Never fabricate sample tasks for empty/loading states. See Built-in
+  tasks below for the complete interaction contract.
 - `PopoverPageController` is presentation state only. It does not start an integration or change a UserDefaults key. `popoverDidClose` resets it to Home so a later open is task-first.
 - `NSTrackingArea` on both the status button and hosting view uses mouse entry/exit, active-always, and visible-rect tracking. `PulseAppDelegate` calls `beginOpening()` before `show`, then seeds tracked regions from actual geometry. Opening requires both a minimum 300 ms click guard and `popoverDidShow`; events record presence but cannot request hover close until both complete. Reread actual button, content and whole-window geometry at that boundary. While shown, reconcile all three regions every 50 ms, including the arrow, so missed exits cannot latch hover forever.
 - The controller has Closed, Opening, Interactive, PendingClose and Closing states. PendingClose waits 180 ms and rechecks actual pointer geometry before closure. Schedule only when no pending task exists: duplicate exits or reconciliation cannot extend the deadline. Returning to the button, content or arrow immediately cancels it; geometry alone can repair missed entry events.
@@ -184,73 +191,132 @@ func popoverDidClose(_ notification: Notification) {
 
 ## Built-in tasks
 
-The app delegate owns one `LocalTaskController`. The native local list in
-`Pulse/Features/Tasks/Local/` is the only task system: there is no
-source-switching configuration, no source picker, no second surface, and no
-UserDefaults preference that decides where tasks come from. Unit host
-initialization uses isolated defaults and a temporary task store.
+### 1. Scope / Trigger
 
-Local list rows use sibling completion/edit buttons, stable UUIDs and existing
-15/13-point task/tab typography. The tab row shows only saved tags in creation
-order — no `All` and no `Untagged` tab is rendered. Zero tags show one
-selected `Todo` guidance tab and the empty message "No tasks yet"; an empty tag
-shows "No tasks in this tag". Selection is presentation state in
-`LocalTaskPresentation`, kept above page navigation; `.untagged` remains only
-the internal filter behind the empty-vocabulary guidance state. Deleted tag
-IDs and invalid selections are reconciled when the task surface returns (to the
-first remaining tag, or back to the guidance state).
+The app delegate owns one `LocalTaskController`; Home owns a
+`LocalTaskPresentation` above page navigation. Tabs, quick entry, editing and
+Settings use that shared state. No task source preference/selector exists.
+Tests use isolated defaults and a temporary store.
 
-A selected tab is an accent-tinted filled capsule with semibold text; an
-unselected tab is secondary text with a light hover fill. Selection itself is
-the affordance — never a focus box. AppKit's square focus ring is suppressed
-(`PulseFocusRingSuppressor` in `PulseFocusEffect.swift`); keyboard focus draws
-a soft, shape-matched stroke or fill instead of a rectangle around the capsule
-(`PulsePillTab`, `PulseIconButtonStyle`, `PulseRowButtonStyle`).
+### 2. Interfaces and ownership
 
-Under the list, a centered `+` icon button expands the inline composer in the
-same footer slot: text field, Tags menu, New tag field, "Repeat daily"
-checkbox, Add/Cancel. The tag row's trailing `+` menu offers "Add task in tag"
-(one entry per saved tag, pre-selecting that tag) and "New tag…", which starts
-a composer for a task that gets a brand-new tag. Editing an existing task keeps
-its separate editor page, including its delete confirmation. A submission guard
-is set at the button boundary before scheduling asynchronous saves, preventing
-double creation clicks. Failed saves retain the draft. After confirmed
-creation, keep a tab that already shows the task or reveal the earliest-created
-tag of the new task so the row is visible. The draft is retained in the
-observable presentation owner above page navigation; draft text is not cleared
-on dismissal.
+- `LocalTaskController` owns confirmed document, pending operations, errors,
+  task-specific completion retries and bounded session deletion/undo history.
+- `LocalTaskPresentation` owns selection, separate per-list quick drafts,
+  existing-task edit state and tag-management input. Recreating a view or
+  closing the popover does not discard this owner.
+- `LocalTasksView` reports active editing through `onEditingChanged` to the
+  hover controller. Focus/unfinished input counts; an idle empty composer does
+  not suspend departure dismissal indefinitely.
+- `PulseApplicationMenu.makeMainMenu()` supplies nil-target native text
+  Undo/Redo/Cut/Copy/Paste/Select All commands. Text undo stays on AppKit's
+  responder chain, never a task-deletion shortcut. The actual NSTextField field
+  editor does not emit normal text-change delegate notifications for Undo/Redo:
+  while editing, observe that editor's undo manager DidUndo/DidRedo notifications
+  and synchronize the binding from its string. Detach observers on editing end
+  and representable dismantle, so a shared field editor cannot update an old
+  draft after focus moves.
 
-Completed tasks stay visible: dimmed, struck through, after the open tasks
-under a small `Completed` heading, in stored order. Nothing is hidden or
-auto-removed, and the JSON model always retains every task. While a toggle is
-pending, the row shows a spinner and its checkbox is disabled; state updates
-only after the store confirms the write, and a failed save follows the reloaded
-state. Hovering a row reveals a trash button whose confirmation dialog must be
-accepted before `deleteTask` runs; deletion from the editor is confirmed the
-same way. Settings → Tasks owns tags only (`LocalTagSettingsView`, rename and
-remove); removing a tag detaches its IDs and never deletes tasks.
+### 3. Contracts
 
-Daily repeat: each task carries an optional `repeatsDaily` flag and a
-`lastCompletedDay` (the local calendar day). The composer and editor share one
-"Repeat daily" checkbox, and repeating rows show a small circular-arrows
-marker. Completing a repeating task records the day of the click;
-`LocalTaskController.resetRepeatingTasks()` runs on popover open
-(`PulseAppDelegate`) and on task-surface appearance, re-arms repeating tasks
-completed on an earlier day, is idempotent, and writes nothing when nothing is
-stale. It is background maintenance: it must never raise `isSaving` (typing
-stays enabled) and a successful run must never clear a visible error.
+- Permanent Todo means untagged only; custom tags follow stored creation order.
+  No aggregate tab. Deleted selected custom tags fall back to Todo. Selection
+  does not mutate tasks. Selected capsules use accent fill and shape-matched
+  keyboard focus, retaining 15/13-point task/tab typography.
+- Put the + outside the tab ScrollView so overflow cannot hide it. Ensure the
+  selected/new tag is scrolled into view. + opens independent tag-name input;
+  Enter creates/selects an empty tag and focuses quick entry. Cancel writes
+  nothing. Duplicate canonical names offer selecting existing tags. Todo is
+  reserved and cannot be renamed/deleted/duplicated.
+- Tab context menus and Settings share tag rename/remove operations. Remove
+  requires confirmation explicitly stating tasks move to Todo and are kept.
+- Quick entry is fixed below tabs, outside the task ScrollView. Enter confirms
+  nonblank input, then clears and refocuses for continuous entry. Explicitly
+  guard AppKit marked-text composition so IME candidate confirmation cannot
+  trigger task submission. Empty input does not auto-focus on ordinary appear.
+  The AppKit bridge combines its explicit enabled flag with SwiftUI's inherited
+  `Environment(\.isEnabled)`; a parent's `.disabled` must disable its actual
+  NSTextField. Refresh the accessibility label when the destination changes.
+- List selection is single-choice; default is current list. Additional list/
+  new-tag/repeat options start collapsed. Create/edit may create/select one new
+  tag. Confirmed edits that move a task reveal its destination.
+- Capture stable creation ID, draft version and originating list before async
+  submission. Duplicate intent is blocked. A late reply may clear only the
+  exact saved version, not newer typing/another list. Switching lists stores
+  and restores their individual drafts. Failed save keeps retryable input and
+  its original creation ID. A successful save that finds newer retained input
+  must give that input a fresh creation ID; reusing a committed ID with divergent
+  content causes `taskConflict`. Editor/tag pending guards likewise survive
+  view remounts, and older results cannot clear newer versions of the intent.
+- Completed rows are dimmed/struck through after open rows, under a counted
+  disclosure heading even when no open tasks exist. Starts expanded; collapse
+  is presentation only. Checkbox is disabled/spinner shown while pending.
+- Reserve delete-control width; hover/focus changes visibility without text
+  reflow. Keyboard and context-menu actions reach delete. Row/editor delete
+  has no confirmation and exposes Undo after confirmed removal. Controller
+  history keeps 20 deletions through pages/popover closure until process exit.
+  Restoration reveals its task; missing original tags fall back to Todo.
+  Revealing a moved/restored completed task expands its destination's Completed
+  section and scrolls the target into view after the updated rows are present.
+- Use existing adaptive opaque backgrounds, Pulse action/icon/row styles and
+  fixed 360 × 510 popover. Respect Reduce Motion and do not animate whole pages
+  for row actions. Settings controls remain native and compact.
+- Daily repeat remains per-task. Popover open/surface appearance reset stale
+  days without raising `isSaving` or clearing another error. Task-specific
+  completion retry preserves original click day; draft-save errors retain the
+  corresponding draft. See backend spec for transaction guarantees.
 
-The visible task/tag editor reports editing state to the hover controller.
-`setDismissalSuspended` cancels only hover departure while editing; AppKit's
-transient outside click and status-item toggle remain immediate. Leaving a visible
-editor releases suspension, and returning to a retained local draft reinstates it.
-Editing retains the normal native motion lifecycle and 180 ms departure timing
-after suspension is released. Settings actions use `PulseActionButtonStyle`:
-compact borders/fills, primary emphasis for save, red tint for removal,
-accurate disabled opacity and short hover/press color transitions. Respect
-SwiftUI Reduce Motion, never scale/move the whole page for an action. General
-preferences use switches. Keep existing handler semantics, native keyboard
-focus and typography.
+### 4. Validation & Error Matrix
 
-See [built-in persistence](../backend/builtin-tasks.md) for storage guarantees and
-required failure, retry and schema-compatibility tests.
+| Condition | Required outcome |
+| --- | --- |
+| Custom tags exist with untagged tasks | Todo remains reachable and displays them. |
+| Tag-name cancel / duplicate | No empty task; no duplicate tag; existing choice offered. |
+| Enter during marked-text composition | Confirm text composition, do not save task. |
+| Save pending while switching lists | Submission uses captured destination; other draft survives. |
+| Later input before old save resolves | Old result cannot clear new text or redirect selection. |
+| Popover closes / Settings visited | Drafts remain; returning reinstates relevant editing protection. |
+| No input focus or unfinished text | Normal pointer dismissal resumes despite mounted quick entry. |
+| All rows completed | Counted Completed disclosure still appears. |
+| Delete then another edit then Undo | Restore target only; subsequent edit persists. |
+| Save/restore fails | Retain input/receipt and offer retry; no false success. |
+
+### 5. Good / Base / Bad Cases
+
+- Good: create an empty tag, enter multiple tasks with Enter, move one, delete
+  another and Undo without reflow or modal confirmation.
+- Base: Todo always holds untagged tasks; empty custom tabs allow immediate entry.
+- Bad: a late save returns after tab/draft changes. Preserve current input and
+  selection while updating only confirmed storage and the matching saved draft.
+
+### 6. Tests Required
+
+Exercise real presentation transitions across lists/recreated views and stale
+save responses, not duplicate copies of view logic. Assert default Todo plus
+independent single membership, create/edit new tag, matching-draft clearing,
+failed-save retention, completed count/collapse and editing-suspension state.
+Render empty/populated/completed/options/editor/tag-management/undo states in
+Aqua and Dark Aqua at the fixed size; inspect representative images. AppKit
+text-command tests exercise the actual TaskEntryField editor
+Undo/Redo (both visible string and binding) and the first-responder action
+contract. Marked-text unit coverage does not replace actual IME candidate
+acceptance. Record native mouse/keyboard validation separately and explicitly
+report when desktop automation is unavailable.
+
+### 7. Wrong vs Correct
+
+```swift
+// Wrong: default guidance disappears when a custom tag exists.
+if tags.isEmpty { showTodoTab() }
+
+// Correct: Todo is always a real destination for untagged tasks.
+showTodoTab()
+showCustomTagTabs(tags)
+```
+
+Never unconditionally clear the currently bound draft after an awaited save;
+match saved origin, identity and version first. Never restore a deleted task by
+replacing an old whole-document snapshot.
+
+See [built-in persistence](../backend/builtin-tasks.md) and
+[the user-facing contract](../../../docs/builtin-tasks.md).

@@ -1,139 +1,238 @@
+import AppKit
 import SwiftUI
 
-/// Kept above page navigation so an accidental popover close does not discard a draft.
-/// The tab selection is likewise presentation state: it never edits a stored task.
-@MainActor
-final class LocalTaskPresentation: ObservableObject {
-  /// Tags are the only visible tabs. `All` never appears, and an empty vocabulary
-  /// falls back to `.untagged` so new users can still add their first task.
-  @Published var selectedFilter: LocalTaskFilter = .untagged
-  @Published var draft: LocalTaskDraft?
-
-  /// The tags in creation order, mirrored from the document. Selection has to
-  /// follow that order rather than `Set` iteration, which would pick a
-  /// different tab for the same multi-tag task on every launch.
-  private var orderedTags: [TaskTag] = []
-
-  var isEditing: Bool { draft != nil }
-
-  /// The concrete tag currently shown, used to pre-fill new tasks and to place
-  /// the tag bar's `+` menu.
-  var selectedTagID: UUID? {
-    if case .tag(let tagID) = selectedFilter { return tagID }
-    return nil
-  }
-
-  func beginAddingTask() {
-    draft = LocalTaskDraft(tagIDs: selectedTagID.map { [$0] } ?? [])
-  }
-
-  /// The tag bar's `+` adds a task in the tag the user picked, not necessarily
-  /// the one on screen, so the new row is where the user expects it.
-  func beginAddingTask(in tagID: UUID) {
-    draft = LocalTaskDraft(tagIDs: [tagID])
-  }
-
-  /// The tag bar's "New tag…" intent. Leaving the shown tab first is what keeps
-  /// the current tag off the draft, whose whole point is a brand-new one.
-  func beginAddingTaskWithNewTag() {
-    selectedFilter = .untagged
-    beginAddingTask()
-  }
-
-  func beginEditingTask(_ task: LocalTask) {
-    // Existing rows stay visible during inline creation; an incidental text
-    // click must not replace that unsaved or pending creation intent.
-    guard draft == nil else { return }
-    draft = LocalTaskDraft(
-      taskID: task.id, text: task.text, tagIDs: task.tagIDs, repeatsDaily: task.repeatsDaily)
-  }
-
-  func finishDraft(id: UUID) {
-    guard draft?.creationID == id else { return }
-    draft = nil
-  }
-
-  /// A confirmed task keeps the tab that already shows it; otherwise the tab
-  /// moves so the user can see what they just created.
-  ///
-  /// `tags` is the document's current tags: a brand-new tag created by this
-  /// same submission may not have reached `reconcileTags` yet, and revealing it
-  /// is exactly when the new tag matters.
-  func didCreate(id: UUID, task: LocalTask?, tags: [TaskTag]? = nil) {
-    guard draft?.creationID == id else { return }
-    if let task {
-      if let tagID = selectedTagID {
-        if !task.tagIDs.contains(tagID) {
-          reveal(tagIDs: task.tagIDs, in: tags ?? orderedTags)
-        }
-      } else if !task.tagIDs.isEmpty {
-        reveal(tagIDs: task.tagIDs, in: tags ?? orderedTags)
-      }
-    }
-    draft = nil
-  }
-
-  /// The untagged filter exists only as the guidance state for an empty tag
-  /// vocabulary; any saved tag makes the first tag the default tab.
-  func reconcileTags(_ tags: [TaskTag]) {
-    orderedTags = tags
-    let availableIDs = Set(tags.map(\.id))
-    if let selectedTagID {
-      if !availableIDs.contains(selectedTagID) {
-        selectedFilter = tags.first.map { LocalTaskFilter.tag($0.id) } ?? .untagged
-      }
-    } else if let first = tags.first {
-      selectedFilter = .tag(first.id)
-    }
-    if var currentDraft = draft {
-      let remainingIDs = currentDraft.tagIDs.intersection(availableIDs)
-      if remainingIDs != currentDraft.tagIDs {
-        currentDraft.tagIDs = remainingIDs
-        draft = currentDraft
-      }
-    }
-  }
-
-  /// Reveals the earliest-created tag of the new task, so a multi-tag task
-  /// always lands on the same tab instead of whichever ID hashes first.
-  private func reveal(tagIDs: Set<UUID>, in tags: [TaskTag]) {
-    selectedFilter =
-      tags.first(where: { tagIDs.contains($0.id) }).map { LocalTaskFilter.tag($0.id) }
-      ?? .untagged
-  }
-}
-
-struct LocalTaskDraft {
-  let creationID = UUID()
+struct LocalTaskDraft: Equatable {
+  var creationID = UUID()
   var taskID: UUID?
   var text = ""
-  var tagIDs: Set<UUID> = []
+  var selectedTagID: UUID?
   var repeatsDaily = false
   var newTagNames: [String] = []
   var newTagText = ""
-  var confirmsDeletion = false
+  var optionsExpanded = false
 
-  /// Both the Add-tag button and task submission consume this field identically.
-  /// Selecting an already-staged tag is a no-op, not an error that blocks Save.
+  var tagIDs: Set<UUID> {
+    get { selectedTagID.map { [$0] } ?? [] }
+    set { selectedTagID = newValue.first }
+  }
+  var isDirty: Bool {
+    !text.isEmpty || repeatsDaily || !newTagText.isEmpty || !newTagNames.isEmpty
+  }
+  init(taskID: UUID? = nil, text: String = "", tagIDs: Set<UUID> = [], repeatsDaily: Bool = false) {
+    self.taskID = taskID
+    self.text = text
+    selectedTagID = tagIDs.first
+    self.repeatsDaily = repeatsDaily
+  }
+  mutating func choose(_ id: UUID?) {
+    selectedTagID = id
+    newTagNames = []
+    newTagText = ""
+  }
   mutating func acceptPendingTag(availableTags: [TaskTag]) {
     let name = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !name.isEmpty else { return }
-    let canonical = name.lowercased()
-    if let existing = availableTags.first(where: {
-      $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == canonical
+    let canonical = LocalTaskStore.canonicalName(name)
+    if canonical == "todo" {
+      choose(nil)
+    } else if let tag = availableTags.first(where: {
+      LocalTaskStore.canonicalName($0.name) == canonical
     }) {
-      tagIDs.insert(existing.id)
-    } else if !newTagNames.contains(where: {
-      $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == canonical
-    }) {
-      newTagNames.append(name)
+      choose(tag.id)
+    } else {
+      selectedTagID = nil
+      newTagNames = [name]
+      newTagText = ""
     }
-    newTagText = ""
   }
 }
 
-/// The Home task surface: tag tabs, the task list, and one inline composer that
-/// is opened either by the centered `+` under the list or by the tag bar's `+`.
+struct LocalTagIntent: Equatable {
+  enum Action: Equatable {
+    case create
+    case rename(UUID)
+    case delete(UUID)
+  }
+  let id = UUID()
+  var action: Action = .create
+  var name = ""
+}
+
+struct LocalTaskSubmission {
+  let origin: LocalTaskFilter
+  let draft: LocalTaskDraft
+  let selectionRevision: Int
+}
+
+/// Lives above page navigation and popover closure. Each list has its own
+/// creation intent; editing and tag management cannot replace those drafts.
+@MainActor
+final class LocalTaskPresentation: ObservableObject {
+  @Published var selectedFilter: LocalTaskFilter = .untagged {
+    didSet {
+      guard oldValue != selectedFilter else { return }
+      selectionRevision += 1
+      ensureQuickDraft()
+    }
+  }
+  @Published var quickDrafts: [LocalTaskFilter: LocalTaskDraft] = [.untagged: LocalTaskDraft()]
+  @Published var editDraft: LocalTaskDraft?
+  @Published var tagIntent: LocalTagIntent?
+  @Published var composerFocused = false
+  @Published var focusRequest = UUID()
+  @Published var revealedTaskID: UUID?
+  @Published var revealRequest = UUID()
+  @Published var submittingIDs = Set<UUID>()
+  @Published var collapsedCompleted = Set<LocalTaskFilter>()
+  private var selectionRevision = 0
+
+  var selectedTagID: UUID? {
+    if case .tag(let id) = selectedFilter { return id }
+    return nil
+  }
+  var quickDraft: LocalTaskDraft {
+    get { quickDrafts[selectedFilter] ?? LocalTaskDraft(tagIDs: selectedTagID.map { [$0] } ?? []) }
+    set { quickDrafts[selectedFilter] = newValue }
+  }
+  var isEditing: Bool {
+    editDraft != nil || tagIntent != nil || composerFocused || quickDraft.isDirty
+      || submittingIDs.contains(quickDraft.creationID)
+  }
+  func ensureQuickDraft() {
+    if quickDrafts[selectedFilter] == nil {
+      quickDrafts[selectedFilter] = LocalTaskDraft(tagIDs: selectedTagID.map { [$0] } ?? [])
+    }
+  }
+  func beginAddingTask() {
+    ensureQuickDraft()
+    focusRequest = UUID()
+  }
+  func beginCreatingTag() {
+    guard tagIntent == nil else { return }
+    tagIntent = LocalTagIntent()
+  }
+  func beginEditingTask(_ task: LocalTask) {
+    guard editDraft == nil else { return }
+    editDraft = LocalTaskDraft(
+      taskID: task.id, text: task.text, tagIDs: task.tagIDs, repeatsDaily: task.repeatsDaily)
+    composerFocused = false
+  }
+  func finishDraft(id: UUID) {
+    if editDraft?.creationID == id {
+      editDraft = nil
+    } else if quickDraft.creationID == id {
+      quickDraft = LocalTaskDraft(tagIDs: selectedTagID.map { [$0] } ?? [])
+    }
+  }
+  func captureEditSubmission() -> LocalTaskDraft? {
+    guard let snapshot = editDraft, !submittingIDs.contains(snapshot.creationID) else { return nil }
+    submittingIDs.insert(snapshot.creationID)
+    return snapshot
+  }
+  func finishEditSubmission(
+    _ snapshot: LocalTaskDraft, saved: Bool, task: LocalTask?, tags: [TaskTag]
+  ) {
+    submittingIDs.remove(snapshot.creationID)
+    guard saved else { return }
+    guard editDraft == snapshot else {
+      if editDraft?.creationID == snapshot.creationID,
+        let name = editDraft?.newTagNames.first,
+        let existing = tags.first(where: {
+          LocalTaskStore.canonicalName($0.name) == LocalTaskStore.canonicalName(name)
+        })
+      {
+        editDraft?.selectedTagID = existing.id
+        editDraft?.newTagNames = []
+      }
+      return
+    }
+    if let task { reveal(task, tags: tags) }
+    editDraft = nil
+  }
+  func captureTagSubmission() -> LocalTagIntent? {
+    guard let snapshot = tagIntent, !submittingIDs.contains(snapshot.id) else { return nil }
+    submittingIDs.insert(snapshot.id)
+    return snapshot
+  }
+  func finishTagSubmission(_ snapshot: LocalTagIntent, saved: Bool) {
+    submittingIDs.remove(snapshot.id)
+    guard saved, let current = tagIntent, current.id == snapshot.id else { return }
+    guard current == snapshot else {
+      if snapshot.action == .create {
+        tagIntent = LocalTagIntent(action: current.action, name: current.name)
+      }
+      return
+    }
+    tagIntent = nil
+    if snapshot.action == .create {
+      selectedFilter = .tag(snapshot.id)
+      beginAddingTask()
+    }
+  }
+  func captureSubmission() -> LocalTaskSubmission? {
+    ensureQuickDraft()
+    let current = quickDraft
+    guard !submittingIDs.contains(current.creationID),
+      !current.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else { return nil }
+    submittingIDs.insert(current.creationID)
+    return LocalTaskSubmission(
+      origin: selectedFilter, draft: current, selectionRevision: selectionRevision)
+  }
+  func finishSubmission(
+    _ submission: LocalTaskSubmission, saved: Bool, task: LocalTask?, tags: [TaskTag]
+  ) {
+    submittingIDs.remove(submission.draft.creationID)
+    guard saved else { return }
+    let unchanged = quickDrafts[submission.origin] == submission.draft
+    guard unchanged else {
+      // This ID has been consumed on disk; retain later input as a fresh
+      // creation instead of trapping its next save behind taskConflict.
+      if quickDrafts[submission.origin]?.creationID == submission.draft.creationID {
+        quickDrafts[submission.origin]?.creationID = UUID()
+        if let name = quickDrafts[submission.origin]?.newTagNames.first,
+          let existing = tags.first(where: {
+            LocalTaskStore.canonicalName($0.name) == LocalTaskStore.canonicalName(name)
+          })
+        {
+          quickDrafts[submission.origin]?.selectedTagID = existing.id
+          quickDrafts[submission.origin]?.newTagNames = []
+        }
+      }
+      return
+    }
+    let originID: UUID? = {
+      if case .tag(let id) = submission.origin { return id }
+      return nil
+    }()
+    quickDrafts[submission.origin] = LocalTaskDraft(tagIDs: originID.map { [$0] } ?? [])
+    if selectedFilter == submission.origin, selectionRevision == submission.selectionRevision {
+      if let task { reveal(task, tags: tags) }
+      focusRequest = UUID()
+    }
+  }
+  func reveal(_ task: LocalTask, tags: [TaskTag]) {
+    selectedFilter =
+      tags.first(where: { task.tagIDs.contains($0.id) }).map { .tag($0.id) } ?? .untagged
+    if task.completed { collapsedCompleted.remove(selectedFilter) }
+    revealedTaskID = task.id
+    revealRequest = UUID()
+  }
+  func reconcileTags(_ tags: [TaskTag]) {
+    let available = Set(tags.map(\.id))
+    if let selectedTagID, !available.contains(selectedTagID) { selectedFilter = .untagged }
+    if selectedFilter == .all { selectedFilter = .untagged }
+    // Reconcile destinations without replacing any retained creation intent.
+    for key in Array(quickDrafts.keys) {
+      if let id = quickDrafts[key]?.selectedTagID, !available.contains(id) {
+        quickDrafts[key]?.selectedTagID = nil
+      }
+    }
+    if let id = editDraft?.selectedTagID, !available.contains(id) { editDraft?.selectedTagID = nil }
+    ensureQuickDraft()
+  }
+}
+
 @MainActor
 struct LocalTasksView: View {
   @ObservedObject var controller: LocalTaskController
@@ -142,33 +241,30 @@ struct LocalTasksView: View {
 
   var body: some View {
     Group {
-      if let draft = presentation.draft, draft.taskID != nil {
+      if let draft = presentation.editDraft {
         LocalTaskEditor(
-          controller: controller,
+          controller: controller, presentation: presentation,
           draft: Binding(
-            get: { presentation.draft ?? draft },
-            set: { presentation.draft = $0 }
-          ),
-          onClose: { presentation.finishDraft(id: draft.creationID) }
-        )
+            get: { presentation.editDraft ?? draft }, set: { presentation.editDraft = $0 }))
       } else {
         taskList
       }
     }
     .onAppear {
-      if let tags = controller.document?.tags { presentation.reconcileTags(tags) }
+      presentation.reconcileTags(controller.document?.tags ?? [])
       onEditingChanged(presentation.isEditing)
     }
     .task {
       if controller.document == nil { await controller.refresh() }
-      // Popover opens are the reliable clock tick for repeating tasks: a task
-      // finished yesterday returns unchecked the first time Pulse is opened.
       await controller.resetRepeatingTasks()
     }
     .onChange(of: presentation.isEditing) { onEditingChanged($0) }
-    .onDisappear { onEditingChanged(false) }
-    .onChange(of: controller.document?.tags) { tags in
-      if let tags { presentation.reconcileTags(tags) }
+    .onDisappear {
+      presentation.composerFocused = false
+      onEditingChanged(false)
+    }
+    .onChange(of: controller.document?.tags) {
+      if let tags = $0 { presentation.reconcileTags(tags) }
     }
   }
 
@@ -177,353 +273,470 @@ struct LocalTasksView: View {
       if let document = controller.document {
         tagBar(document.tags)
         Divider()
+        if presentation.tagIntent != nil {
+          LocalTagEntry(controller: controller, presentation: presentation)
+          Divider()
+        }
+        LocalTaskQuickComposer(controller: controller, presentation: presentation)
+        Divider()
       }
       errorBanner
-
       if controller.document != nil {
         taskScrollView
       } else if controller.isLoading {
-        ProgressView("Loading tasks")
-          .font(.caption)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ProgressView("Loading tasks").font(.caption).frame(
+          maxWidth: .infinity, maxHeight: .infinity)
       } else {
         Text("Tasks could not be loaded. Your saved file has not been cleared.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-          .padding(14)
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          .font(.caption).foregroundStyle(.secondary)
+          .padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      }
+      if let receipt = controller.deletionHistory.last {
+        Divider()
+        HStack(spacing: 8) {
+          Text("Deleted task").font(.caption).foregroundStyle(.secondary)
+          Spacer()
+          if controller.isUndoing { ProgressView().controlSize(.mini) }
+          Button("Undo") {
+            Task {
+              if await controller.undoDeletion(),
+                let restored = controller.document?.tasks.first(where: { $0.id == receipt.task.id })
+              {
+                presentation.reveal(restored, tags: controller.document?.tags ?? [])
+              }
+            }
+          }
+          .buttonStyle(PulseActionButtonStyle())
+          .disabled(controller.isSaving || controller.isUndoing)
+          .help("Restore the last deleted task (\(controller.deletionHistory.count) available)")
+          .accessibilityIdentifier("undoLocalTaskDeletionButton")
+        }
+        .padding(.horizontal, 14).padding(.vertical, 7)
       }
     }
   }
 
   private var taskScrollView: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: 2) {
-        let filter = presentation.selectedFilter
-        let incomplete = controller.incompleteTasks(matching: filter)
-        let completed = controller.completedTasks(matching: filter)
-        if incomplete.isEmpty && completed.isEmpty {
-          Text(emptyMessage)
-            .font(.system(size: 13))
-            .foregroundStyle(.secondary)
-            .padding(.vertical, 12)
-        }
-        ForEach(incomplete) { task in
-          taskRow(task)
-        }
-        if !completed.isEmpty {
-          if !incomplete.isEmpty {
-            Text("Completed")
-              .font(.system(size: 11, weight: .semibold))
-              .foregroundStyle(.tertiary)
-              .padding(.top, 8)
-              .padding(.bottom, 1)
-              .accessibilityIdentifier("completedTasksHeading")
+    ScrollViewReader { proxy in
+      ScrollView {
+        LazyVStack(alignment: .leading, spacing: 2) {
+          let filter = presentation.selectedFilter
+          let incomplete = controller.incompleteTasks(matching: filter)
+          let completed = controller.completedTasks(matching: filter)
+          if incomplete.isEmpty && completed.isEmpty {
+            Text(filter == .untagged ? "No tasks yet" : "No tasks in this tag")
+              .font(.system(size: 13)).foregroundStyle(.secondary).padding(.vertical, 12)
           }
-          ForEach(completed) { task in
-            taskRow(task)
+          ForEach(incomplete) { taskRow($0).id($0.id) }
+          if !completed.isEmpty {
+            Button {
+              if presentation.collapsedCompleted.contains(filter) {
+                presentation.collapsedCompleted.remove(filter)
+              } else {
+                presentation.collapsedCompleted.insert(filter)
+              }
+            } label: {
+              HStack(spacing: 5) {
+                Image(
+                  systemName: presentation.collapsedCompleted.contains(filter)
+                    ? "chevron.right" : "chevron.down")
+                Text("Completed (\(completed.count))")
+                Spacer()
+              }
+              .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+              .padding(.vertical, 6).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).accessibilityIdentifier("completedTasksHeading")
+            .accessibilityValue(
+              presentation.collapsedCompleted.contains(filter) ? "Collapsed" : "Expanded")
+            if !presentation.collapsedCompleted.contains(filter) {
+              ForEach(completed) { taskRow($0).id($0.id) }
+            }
           }
         }
-        // The add affordance sits directly under the last row, where the eye
-        // already is after reading the list, instead of pinned to the popover
-        // bottom across a large empty area.
-        footer
-          .padding(.top, 6)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .padding(.horizontal, 14)
-      .padding(.vertical, 8)
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .accessibilityIdentifier("localTaskList")
-  }
-
-  private var emptyMessage: String {
-    controller.document?.tags.isEmpty == true ? "No tasks yet" : "No tasks in this tag"
-  }
-
-  /// A failed completion stays reachable even while a draft is open, because
-  /// its retry is a different row's problem; ordinary save errors belong to the
-  /// composer or editor that holds the draft, so the banner only appears when
-  /// no draft is open.
-  @ViewBuilder
-  private var errorBanner: some View {
-    let completionFailure =
-      controller.document?.tasks.compactMap {
-        controller.completionFailures[$0.id]
-      }.first
-      ?? controller.completionFailures.sorted {
-        $0.key.uuidString < $1.key.uuidString
-      }.first?.value
-    if let completionFailure {
-      // Retry replays the recorded intent, so a daily task keeps the day it was
-      // clicked rather than being re-dated to the retry's day.
-      errorContent(
-        completionFailure.message,
-        onRetry: { controller.retryCompletion(completionFailure) },
-        onDismiss: {
-          controller.dismissCompletionFailure(taskID: completionFailure.taskID)
-        }
-      )
-      Divider()
-    } else if let errorMessage = controller.errorMessage, presentation.draft == nil {
-      errorContent(
-        errorMessage,
-        onRetry: { Task { await controller.refresh() } },
-        onDismiss: { controller.dismissError() }
-      )
-      Divider()
+      .accessibilityIdentifier("localTaskList")
+      .onAppear { scrollToRevealedTask(using: proxy) }
+      .onChange(of: presentation.revealRequest) { _ in scrollToRevealedTask(using: proxy) }
     }
   }
 
-  /// The centered `+` is the resting state; an active draft takes its place so
-  /// the composer appears exactly where the user just clicked, under the list.
-  @ViewBuilder
-  private var footer: some View {
-    if let draft = presentation.draft, draft.taskID == nil {
-      LocalTaskInlineComposer(
-        controller: controller, presentation: presentation,
-        draft: Binding(
-          get: { presentation.draft ?? draft }, set: { presentation.draft = $0 }))
-    } else if presentation.draft == nil {
-      Button {
-        controller.dismissError()
-        presentation.beginAddingTask()
-      } label: {
-        Image(systemName: "plus")
-          .font(.system(size: 13, weight: .semibold))
-          .frame(width: 28, height: 28)
-      }
-      .buttonStyle(PulseIconButtonStyle())
-      .help("Add task")
-      .accessibilityLabel("Add task")
-      .accessibilityIdentifier("addLocalTaskButton")
-      .frame(maxWidth: .infinity)
+  private func scrollToRevealedTask(using proxy: ScrollViewProxy) {
+    guard let id = presentation.revealedTaskID else { return }
+    let request = presentation.revealRequest
+    // Editor saves replace the editor with a new reader. Wait for its rows to
+    // mount, then consume this request exactly once across appearance/change.
+    DispatchQueue.main.async {
+      guard presentation.editDraft == nil,
+        presentation.revealRequest == request, presentation.revealedTaskID == id
+      else { return }
+      proxy.scrollTo(id, anchor: .center)
+      presentation.revealedTaskID = nil
     }
   }
 
   private func taskRow(_ task: LocalTask) -> some View {
     LocalTaskRow(
-      task: task,
-      isPending: controller.pendingTaskIDs.contains(task.id),
-      isEditingEnabled: presentation.draft == nil,
+      task: task, isPending: controller.pendingTaskIDs.contains(task.id),
       onToggle: { controller.setCompleted(!task.completed, taskID: task.id) },
       onEdit: { presentation.beginEditingTask(task) },
-      onDelete: { Task { _ = await controller.deleteTask(id: task.id) } }
-    )
+      onDelete: { Task { _ = await controller.deleteTask(id: task.id) } })
   }
 
-  /// Tabs are the saved tags in creation order. `All` and `Untagged` are not
-  /// offered; an empty vocabulary is represented by a single guidance tab.
   private func tagBar(_ tags: [TaskTag]) -> some View {
-    ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: 4) {
-        if tags.isEmpty {
-          PulsePillTab(
-            title: "Todo",
-            isSelected: true,
-            action: {}
-          )
-          .accessibilityIdentifier("localTaskFilter.todo")
-        }
-        ForEach(tags) { tag in
-          PulsePillTab(
-            title: tag.name,
-            isSelected: presentation.selectedFilter == .tag(tag.id),
-            action: { presentation.selectedFilter = .tag(tag.id) }
-          )
-          .accessibilityIdentifier("localTaskFilter.\(tag.id.uuidString)")
-        }
-        tagMenu(tags)
-      }
-      .padding(.horizontal, 14)
-      .padding(.vertical, 3)
-    }
-  }
-
-  /// One menu for both "add to an existing tag" and "create a tag with a task".
-  private func tagMenu(_ tags: [TaskTag]) -> some View {
-    Menu {
-      if !tags.isEmpty {
-        Section("Add task in tag") {
-          ForEach(tags) { tag in
-            Button(tag.name) {
-              controller.dismissError()
-              presentation.beginAddingTask(in: tag.id)
+    HStack(spacing: 2) {
+      ScrollViewReader { proxy in
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: 4) {
+            PulsePillTab(
+              title: "Todo", isSelected: presentation.selectedFilter == .untagged,
+              action: { presentation.selectedFilter = .untagged }
+            )
+            .id(LocalTaskFilter.untagged).accessibilityIdentifier("localTaskFilter.todo")
+            ForEach(tags) { tag in
+              PulsePillTab(
+                title: tag.name, isSelected: presentation.selectedFilter == .tag(tag.id),
+                action: { presentation.selectedFilter = .tag(tag.id) }
+              )
+              .id(LocalTaskFilter.tag(tag.id))
+              .accessibilityIdentifier("localTaskFilter.\(tag.id.uuidString)")
+              .contextMenu {
+                Button("Rename…") {
+                  presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
+                }
+                Button("Remove tag…", role: .destructive) {
+                  presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
+                }
+              }
             }
-            .accessibilityIdentifier("addTaskInTag.\(tag.id.uuidString)")
           }
+          .padding(.leading, 14).padding(.vertical, 3)
+        }
+        .onAppear { proxy.scrollTo(presentation.selectedFilter, anchor: .center) }
+        .onChange(of: presentation.selectedFilter) { proxy.scrollTo($0, anchor: .center) }
+        .onChange(of: tags.map(\.id)) { _ in
+          proxy.scrollTo(presentation.selectedFilter, anchor: .center)
         }
       }
       Button {
-        controller.dismissError()
-        presentation.beginAddingTaskWithNewTag()
+        presentation.beginCreatingTag()
       } label: {
-        Label("New tag…", systemImage: "tag")
+        Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).frame(
+          width: 28, height: 28)
       }
-      .accessibilityIdentifier("addTaskWithNewTagButton")
-    } label: {
-      Image(systemName: "plus")
-        .font(.system(size: 12, weight: .semibold))
-        .frame(width: 26, height: 26)
-        .contentShape(Rectangle())
+      .buttonStyle(PulseIconButtonStyle()).help("New tag")
+      .accessibilityLabel("New tag").accessibilityIdentifier("addLocalTagButton")
+      .padding(.trailing, 10)
     }
-    .menuStyle(.borderlessButton)
-    .menuIndicator(.hidden)
-    .fixedSize()
-    .help("Add a task in a tag")
-    .accessibilityLabel("Add a task in a tag")
-    .accessibilityIdentifier("addTagTaskMenu")
   }
 
-  private func errorContent(
-    _ message: String, onRetry: @escaping () -> Void, onDismiss: @escaping () -> Void
-  ) -> some View {
-    PulseErrorBanner(
-      message: message,
-      accessibilityIdentifier: "localTaskError"
-    ) {
-      Button("Try again", action: onRetry)
-        .disabled(controller.isSaving || controller.isLoading)
-      Button("Dismiss", action: onDismiss)
+  @ViewBuilder private var errorBanner: some View {
+    if let failure = controller.completionFailures.values.sorted(by: {
+      $0.taskID.uuidString < $1.taskID.uuidString
+    }).first {
+      PulseErrorBanner(message: failure.message, accessibilityIdentifier: "localTaskError") {
+        Button("Try again") { controller.retryCompletion(failure) }
+        Button("Dismiss") { controller.dismissCompletionFailure(taskID: failure.taskID) }
+      }
+    }
+    if let message = controller.errorMessage {
+      PulseErrorBanner(message: message, accessibilityIdentifier: "localTaskSaveError") {
+        Button("Reload") { Task { await controller.refresh() } }.disabled(controller.isLoading)
+        Button("Dismiss") { controller.dismissError() }
+      }
     }
   }
 }
 
-/// New tasks are composed under the existing list. Existing-task edits retain
-/// their separate editor, including its deletion confirmation.
 @MainActor
-private struct LocalTaskInlineComposer: View {
+private struct LocalTagEntry: View {
   @ObservedObject var controller: LocalTaskController
   @ObservedObject var presentation: LocalTaskPresentation
-  @Binding var draft: LocalTaskDraft
-  @FocusState private var textFocused: Bool
-  @State private var isSubmitting = false
+  @State private var focusRequest = UUID()
+  private var isSubmitting: Bool { presentation.submittingIDs.contains(intent.id) }
 
-  private var isBusy: Bool { isSubmitting || controller.isSaving }
-  private var selectedTagCount: Int { draft.tagIDs.count + draft.newTagNames.count }
-
+  private var intent: LocalTagIntent { presentation.tagIntent ?? LocalTagIntent() }
+  private var existing: TaskTag? {
+    controller.document?.tags.first {
+      LocalTaskStore.canonicalName($0.name) == LocalTaskStore.canonicalName(intent.name)
+    }
+  }
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      HStack(alignment: .top, spacing: 6) {
-        TextField("Add a task…", text: $draft.text, axis: .vertical)
-          .font(.system(size: 15))
-          .textFieldStyle(.roundedBorder)
-          .lineLimit(1...2)
-          .focused($textFocused)
-          .onSubmit(submit)
-          .disabled(isBusy)
-          .accessibilityLabel("New task text")
-          .accessibilityIdentifier("localTaskTextField")
-        if isBusy { ProgressView().controlSize(.mini).padding(.top, 6) }
-        Button("Add", action: submit)
-          .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
-          .disabled(isBusy || draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-          .keyboardShortcut("s", modifiers: .command)
-          .accessibilityIdentifier("saveLocalTaskButton")
-        Button {
-          presentation.finishDraft(id: draft.creationID)
-        } label: {
-          Image(systemName: "xmark")
+      if case .delete = intent.action {
+        Text("Remove “\(intent.name)”? Its tasks will move to Todo.").font(.caption)
+        HStack {
+          Button("Keep tag") { presentation.tagIntent = nil }
+          Spacer()
+          Button("Remove tag", role: .destructive, action: submit)
+            .accessibilityIdentifier("confirmDeleteLocalTagButton")
         }
-        .buttonStyle(PulseActionButtonStyle())
-        .disabled(isBusy)
-        .keyboardShortcut(.cancelAction)
-        .accessibilityLabel("Cancel new task")
-        .accessibilityIdentifier("cancelLocalTaskEditButton")
-      }
-      HStack(spacing: 6) {
-        tagsMenu
-          .frame(maxWidth: 100)
-        TextField("New tag", text: $draft.newTagText)
-          .font(.system(size: 12))
-          .textFieldStyle(.roundedBorder)
-          .onSubmit(addTag)
-          .accessibilityIdentifier("localTaskNewTagField")
-        Button(action: addTag) {
-          Image(systemName: "plus")
+      } else {
+        HStack(spacing: 6) {
+          TaskEntryField(
+            text: Binding(get: { intent.name }, set: { presentation.tagIntent?.name = $0 }),
+            placeholder: "Tag name", identifier: "newLocalTagNameField", focusRequest: focusRequest,
+            isEnabled: !isSubmitting, onSubmit: submit, onFocusChanged: { _ in }
+          )
+          .frame(height: 24)
+          Button(intent.action == .create ? "Create" : "Save", action: submit)
+            .disabled(intent.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("saveLocalTagButton")
+          Button {
+            presentation.tagIntent = nil
+          } label: {
+            Image(systemName: "xmark")
+          }
+          .accessibilityLabel("Cancel tag").accessibilityIdentifier("cancelLocalTagButton")
         }
-        .buttonStyle(PulseActionButtonStyle())
-        .disabled(draft.newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        .accessibilityLabel("Add new tag")
-        .accessibilityIdentifier("addDraftTagButton")
+        if intent.action == .create, let existing {
+          HStack {
+            Text("This tag already exists.").font(.caption).foregroundStyle(.secondary)
+            Button("Use \(existing.name)") { useTag(existing.id) }
+          }
+        } else if LocalTaskStore.canonicalName(intent.name) == "todo" {
+          Button("Use Todo") { useTag(nil) }
+        }
       }
-      .disabled(isBusy)
-      RepeatDailyToggle(isOn: $draft.repeatsDaily)
-        .disabled(isBusy)
-      if let message = controller.errorMessage {
-        Text(message)
-          .font(.caption)
-          .foregroundStyle(.red)
-          .fixedSize(horizontal: false, vertical: true)
-          .accessibilityIdentifier("localTaskEditorError")
-      }
+      if isSubmitting { ProgressView().controlSize(.mini) }
     }
-    .controlSize(.small)
-    .padding(.horizontal, 14)
-    .padding(.vertical, 8)
-    .accessibilityIdentifier("localTaskInlineComposer")
-    .onAppear { textFocused = true }
+    .buttonStyle(PulseActionButtonStyle()).font(.system(size: 12))
+    .padding(.horizontal, 14).padding(.vertical, 8).disabled(isSubmitting)
+    .accessibilityIdentifier("localTagEntry")
+    .onAppear { focusRequest = UUID() }
   }
-
-  private var tagsMenu: some View {
-    Menu {
-      let tags = controller.document?.tags ?? []
-      if tags.isEmpty && draft.newTagNames.isEmpty {
-        Text("No tags yet")
-      }
-      ForEach(tags) { tag in
-        Toggle(
-          tag.name,
-          isOn: Binding(
-            get: { draft.tagIDs.contains(tag.id) },
-            set: { selected in
-              if selected { draft.tagIDs.insert(tag.id) } else { draft.tagIDs.remove(tag.id) }
-            })
-        )
-        .accessibilityIdentifier("localTaskTagChoice.\(tag.id.uuidString)")
-      }
-      if !tags.isEmpty && !draft.newTagNames.isEmpty { Divider() }
-      ForEach(draft.newTagNames, id: \.self) { name in
-        Button("Remove new tag: \(name)") { draft.newTagNames.removeAll(where: { $0 == name }) }
-      }
-    } label: {
-      Label(selectedTagCount == 0 ? "Tags" : "Tags (\(selectedTagCount))", systemImage: "tag")
-        .font(.system(size: 12))
-        .lineLimit(1)
-    }
-    .accessibilityLabel("Choose task tags")
-    .accessibilityIdentifier("localTaskTagsMenu")
+  private func useTag(_ id: UUID?) {
+    presentation.selectedFilter = id.map { .tag($0) } ?? .untagged
+    presentation.tagIntent = nil
+    presentation.beginAddingTask()
+    controller.dismissError()
   }
-
-  private func addTag() {
-    draft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
-  }
-
   private func submit() {
-    guard !isBusy,
-      !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    else { return }
-    addTag()
-    let snapshot = draft
-    isSubmitting = true
+    guard !isSubmitting else { return }
+    if intent.action == .create, existing != nil { return }
+    guard let snapshot = presentation.captureTagSubmission() else { return }
     Task {
-      defer { isSubmitting = false }
-      if await controller.saveTask(
+      let saved: Bool
+      switch snapshot.action {
+      case .create: saved = await controller.createTag(id: snapshot.id, name: snapshot.name)
+      case .rename(let id): saved = await controller.renameTag(id: id, name: snapshot.name)
+      case .delete(let id): saved = await controller.deleteTag(id: id)
+      }
+      presentation.finishTagSubmission(snapshot, saved: saved)
+    }
+  }
+}
+
+@MainActor
+private struct LocalTaskQuickComposer: View {
+  @ObservedObject var controller: LocalTaskController
+  @ObservedObject var presentation: LocalTaskPresentation
+  private var draft: Binding<LocalTaskDraft> {
+    Binding(get: { presentation.quickDraft }, set: { presentation.quickDraft = $0 })
+  }
+  private var isBusy: Bool {
+    presentation.submittingIDs.contains(presentation.quickDraft.creationID)
+  }
+  private var listName: String {
+    presentation.quickDraft.newTagNames.first
+      ?? controller.document?.tags.first(where: { $0.id == presentation.quickDraft.selectedTagID })?
+      .name ?? "Todo"
+  }
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 6) {
+        TaskEntryField(
+          text: draft.text, placeholder: "Add to \(listName)…", identifier: "localTaskTextField",
+          focusRequest: presentation.focusRequest, isEnabled: !isBusy, onSubmit: submit,
+          onFocusChanged: { presentation.composerFocused = $0 }
+        )
+        .frame(height: 26)
+        if isBusy { ProgressView().controlSize(.mini) }
+        Button(action: submit) { Image(systemName: "arrow.up").frame(width: 22, height: 24) }
+          .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
+          .disabled(
+            isBusy
+              || presentation.quickDraft.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+          )
+          .help("Add task (Return)").accessibilityLabel("Add task").accessibilityIdentifier(
+            "saveLocalTaskButton")
+        Button {
+          presentation.quickDraft.optionsExpanded.toggle()
+        } label: {
+          Image(systemName: "slider.horizontal.3").frame(width: 22, height: 24)
+        }
+        .buttonStyle(PulseIconButtonStyle()).disabled(isBusy).help("Task options")
+        .accessibilityLabel("Task options").accessibilityIdentifier("localTaskOptionsButton")
+      }
+      if presentation.quickDraft.optionsExpanded {
+        LocalTaskOptions(
+          controller: controller, draft: draft,
+          onFocusChanged: { presentation.composerFocused = $0 }
+        )
+        .disabled(isBusy)
+      }
+    }
+    .padding(.horizontal, 14).padding(.vertical, 9)
+    .accessibilityIdentifier("localTaskInlineComposer")
+  }
+  private func submit() {
+    guard !isBusy else { return }
+    presentation.quickDraft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
+    guard let submission = presentation.captureSubmission() else { return }
+    Task {
+      let snapshot = submission.draft
+      let saved = await controller.saveTask(
         id: nil, text: snapshot.text, tagIDs: snapshot.tagIDs,
         newTagNames: snapshot.newTagNames, repeatsDaily: snapshot.repeatsDaily,
         creationID: snapshot.creationID)
-      {
-        let task = controller.document?.tasks.first(where: { $0.id == snapshot.creationID })
-        presentation.didCreate(
-          id: snapshot.creationID, task: task, tags: controller.document?.tags)
-      }
+      let task = controller.document?.tasks.first { $0.id == snapshot.creationID }
+      presentation.finishSubmission(
+        submission, saved: saved, task: task, tags: controller.document?.tags ?? [])
     }
   }
 }
 
-/// A completed task stays visible but dimmed and struck through, and can be
-/// removed from its own row without opening the editor.
+@MainActor
+private struct LocalTaskOptions: View {
+  @ObservedObject var controller: LocalTaskController
+  @Binding var draft: LocalTaskDraft
+  var onFocusChanged: (Bool) -> Void = { _ in }
+  var body: some View {
+    VStack(alignment: .leading, spacing: 7) {
+      HStack(spacing: 8) {
+        Menu {
+          Button {
+            draft.choose(nil)
+          } label: {
+            if draft.selectedTagID == nil && draft.newTagNames.isEmpty {
+              Label("Todo", systemImage: "checkmark")
+            } else {
+              Text("Todo")
+            }
+          }
+          ForEach(controller.document?.tags ?? []) { tag in
+            Button {
+              draft.choose(tag.id)
+            } label: {
+              if draft.selectedTagID == tag.id {
+                Label(tag.name, systemImage: "checkmark")
+              } else {
+                Text(tag.name)
+              }
+            }
+          }
+        } label: {
+          Label(
+            draft.newTagNames.first ?? controller.document?.tags.first(where: {
+              $0.id == draft.selectedTagID
+            })?.name ?? "Todo", systemImage: "tag"
+          )
+          .lineLimit(1)
+        }
+        .accessibilityLabel("Choose task list").accessibilityIdentifier("localTaskTagsMenu")
+        Spacer(minLength: 0)
+        Toggle("Repeat daily", isOn: $draft.repeatsDaily)
+          .toggleStyle(.checkbox).fixedSize().accessibilityIdentifier("localTaskRepeatsDailyToggle")
+      }
+      HStack(spacing: 6) {
+        // Native field bridge also prevents an IME confirmation from staging a tag.
+        TaskEntryField(
+          text: $draft.newTagText, placeholder: "New tag", identifier: "localTaskNewTagField",
+          focusRequest: nil, isEnabled: true, onSubmit: addTag, onFocusChanged: onFocusChanged
+        )
+        .frame(height: 24)
+        Button("Use tag", action: addTag)
+          .buttonStyle(PulseActionButtonStyle())
+          .disabled(draft.newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          .accessibilityIdentifier("addDraftTagButton")
+      }
+      if let newName = draft.newTagNames.first {
+        Text("New list: \(newName)").foregroundStyle(.secondary).lineLimit(2)
+      }
+    }
+    .font(.system(size: 12)).controlSize(.small)
+  }
+  private func addTag() { draft.acceptPendingTag(availableTags: controller.document?.tags ?? []) }
+}
+
+@MainActor
+private struct LocalTaskEditor: View {
+  @ObservedObject var controller: LocalTaskController
+  @ObservedObject var presentation: LocalTaskPresentation
+  @Binding var draft: LocalTaskDraft
+  private var isSubmitting: Bool { presentation.submittingIDs.contains(draft.creationID) }
+  @FocusState private var textFocused: Bool
+  var body: some View {
+    VStack(spacing: 0) {
+      HStack {
+        Text("Edit task").font(.system(size: 14, weight: .semibold))
+        Spacer()
+        Button("Cancel") { presentation.editDraft = nil }
+          .keyboardShortcut(.cancelAction).accessibilityIdentifier("cancelLocalTaskEditButton")
+      }
+      .buttonStyle(.borderless).padding(.horizontal, 16).padding(.vertical, 10)
+      Divider()
+      ScrollView {
+        VStack(alignment: .leading, spacing: 10) {
+          Text("Task").font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+          TextEditor(text: $draft.text).font(.system(size: 15))
+            .frame(minHeight: 80, maxHeight: 120).padding(4)
+            .background(Color(nsColor: .textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor)))
+            .focused($textFocused).accessibilityLabel("Task text").accessibilityIdentifier(
+              "localTaskTextField")
+          DisclosureGroup("Task options", isExpanded: $draft.optionsExpanded) {
+            LocalTaskOptions(controller: controller, draft: $draft).padding(.top, 6)
+          }.font(.system(size: 12))
+          if let error = controller.errorMessage {
+            Text(error).font(.caption).foregroundStyle(.red).fixedSize(
+              horizontal: false, vertical: true)
+          }
+        }
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+      }
+      Divider()
+      HStack {
+        Button("Delete", role: .destructive) {
+          guard !isSubmitting, let id = draft.taskID else { return }
+          guard let snapshot = presentation.captureEditSubmission() else { return }
+          Task {
+            let saved = await controller.deleteTask(id: id)
+            presentation.finishEditSubmission(
+              snapshot, saved: saved, task: nil, tags: controller.document?.tags ?? [])
+          }
+        }.accessibilityIdentifier("deleteLocalTaskButton")
+        Spacer()
+        if isSubmitting { ProgressView().controlSize(.mini) }
+        Button("Save", action: save)
+          .disabled(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          .keyboardShortcut("s", modifiers: .command).accessibilityIdentifier("saveLocalTaskButton")
+      }
+      .buttonStyle(PulseActionButtonStyle()).font(.system(size: 13))
+      .padding(.horizontal, 16).padding(.vertical, 10)
+    }
+    .disabled(isSubmitting).onAppear { textFocused = true }
+  }
+  private func save() {
+    guard !isSubmitting else { return }
+    draft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
+    guard let snapshot = presentation.captureEditSubmission() else { return }
+    Task {
+      let saved = await controller.saveTask(
+        id: snapshot.taskID, text: snapshot.text, tagIDs: snapshot.tagIDs,
+        newTagNames: snapshot.newTagNames, repeatsDaily: snapshot.repeatsDaily,
+        creationID: snapshot.creationID)
+      let task = controller.document?.tasks.first(where: { $0.id == snapshot.taskID })
+      presentation.finishEditSubmission(
+        snapshot, saved: saved, task: task, tags: controller.document?.tags ?? [])
+    }
+  }
+}
+
 @MainActor
 struct LocalTaskRow: View {
   let task: LocalTask
@@ -532,9 +745,10 @@ struct LocalTaskRow: View {
   let onToggle: () -> Void
   let onEdit: () -> Void
   var onDelete: (() -> Void)?
-
   @State private var isHovered = false
-  @State private var confirmsDeletion = false
+  private enum Control: Hashable { case complete, edit, delete }
+  @FocusState private var focusedControl: Control?
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     HStack(alignment: .top, spacing: 2) {
@@ -544,298 +758,182 @@ struct LocalTaskRow: View {
             ProgressView().controlSize(.mini)
           } else {
             Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
-              .font(.system(size: 15, weight: .medium))
-              .symbolRenderingMode(.hierarchical)
+              .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
               .foregroundStyle(
                 task.completed ? Color.accentColor : Color(nsColor: .secondaryLabelColor))
           }
         }
-        .padding(.top, 2)
-        .frame(width: 28, height: 30, alignment: .top)
-        .contentShape(Rectangle())
+        .padding(.top, 2).frame(width: 28, height: 30, alignment: .top).contentShape(Rectangle())
       }
-      .buttonStyle(PulseRowButtonStyle(isHovered: isHovered))
-      .disabled(isPending)
+      .buttonStyle(PulseRowButtonStyle(isHovered: isHovered)).disabled(isPending)
+      .focused($focusedControl, equals: .complete)
       .help(task.completed ? "Mark incomplete" : "Mark complete")
       .accessibilityLabel("\(task.completed ? "Mark incomplete" : "Mark complete"): \(task.text)")
       .accessibilityValue(isPending ? "Saving" : (task.completed ? "Completed" : "Not completed"))
       .accessibilityIdentifier("localTaskCheckbox.\(task.id.uuidString)")
-
       Button(action: onEdit) {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-          Text(task.text)
-            .font(.system(size: 15, weight: .regular))
+          Text(task.text).font(.system(size: 15))
             .foregroundStyle(
-              task.completed
-                ? Color(nsColor: .secondaryLabelColor).opacity(0.7) : Color.primary
+              task.completed ? Color(nsColor: .secondaryLabelColor).opacity(0.7) : Color.primary
             )
             .strikethrough(task.completed, color: Color(nsColor: .tertiaryLabelColor))
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
           if task.repeatsDaily {
-            Image(systemName: "arrow.clockwise")
-              .font(.system(size: 10, weight: .semibold))
-              .foregroundStyle(.tertiary)
-              .padding(.top, 2)
-              .accessibilityHidden(true)
+            Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .semibold))
+              .foregroundStyle(.tertiary).accessibilityHidden(true)
           }
         }
-        .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
-        .contentShape(Rectangle())
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading).contentShape(Rectangle())
       }
-      .buttonStyle(PulseRowButtonStyle(isHovered: isHovered))
-      .disabled(!isEditingEnabled)
-      .help(
-        isEditingEnabled ? "Edit task" : "Add or cancel the new task before editing another task"
+      .buttonStyle(PulseRowButtonStyle(isHovered: isHovered)).disabled(
+        !isEditingEnabled || isPending
       )
-      .accessibilityLabel(
-        isEditingEnabled
-          ? "Edit task: \(task.text)"
-          : "\(task.text). Add or cancel the new task before editing"
-      )
+      .focused($focusedControl, equals: .edit)
+      .help("Edit task").accessibilityLabel("Edit task: \(task.text)")
       .accessibilityValue(task.repeatsDaily ? "Repeats daily" : "")
       .accessibilityIdentifier("localTaskText.\(task.id.uuidString)")
-
-      // Staying mounted while confirming matters: the dialog is attached to
-      // this button, so dropping it on mouse-out would dismiss an open confirm.
-      if let onDelete, (isHovered || confirmsDeletion), !isPending {
-        Button {
-          confirmsDeletion = true
-        } label: {
-          Image(systemName: "trash")
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
+      if let onDelete {
+        Button(action: onDelete) {
+          Image(systemName: "trash").font(.system(size: 12)).foregroundStyle(.secondary)
             .frame(width: 24, height: 24)
         }
-        .buttonStyle(PulseIconButtonStyle())
-        .help("Delete task")
-        .accessibilityLabel("Delete task: \(task.text)")
+        .buttonStyle(PulseIconButtonStyle()).disabled(isPending)
+        .focused($focusedControl, equals: .delete)
+        .opacity(isHovered || focusedControl != nil ? 1 : 0)
+        .help("Delete task").accessibilityLabel("Delete task: \(task.text)")
         .accessibilityIdentifier("deleteLocalTaskRowButton.\(task.id.uuidString)")
-        .confirmationDialog(
-          "Delete “\(task.text)”?",
-          isPresented: $confirmsDeletion,
-          titleVisibility: .visible
-        ) {
-          Button("Delete task", role: .destructive) { onDelete() }
-            .accessibilityIdentifier("confirmDeleteLocalTaskButton")
-          Button("Keep task", role: .cancel) {}
-        } message: {
-          Text("This cannot be undone.")
-        }
-        .transition(.opacity)
       }
     }
     .onHover { isHovered = $0 }
-    .animation(.easeOut(duration: 0.12), value: isHovered)
+    .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovered)
+    .contextMenu {
+      Button("Edit task", action: onEdit).disabled(isPending)
+      if let onDelete {
+        Button("Delete task", role: .destructive, action: onDelete).disabled(isPending)
+      }
+    }
+    .onDeleteCommand { if focusedControl != nil, !isPending { onDelete?() } }
   }
 }
 
-/// One switch shared by the inline composer and the full editor so the two
-/// creation paths cannot drift apart.
-private struct RepeatDailyToggle: View {
-  @Binding var isOn: Bool
+/// NSTextField delegates receive commands after the input manager has had its
+/// chance to confirm marked text. Never interpret a marked-text Return as save.
+@MainActor
+struct TaskEntryField: NSViewRepresentable {
+  @Environment(\.isEnabled) private var environmentEnabled
+  @Binding var text: String
+  let placeholder: String
+  let identifier: String
+  let focusRequest: UUID?
+  var isEnabled = true
+  let onSubmit: () -> Void
+  let onFocusChanged: (Bool) -> Void
 
-  var body: some View {
-    Toggle(isOn: $isOn) {
-      HStack(spacing: 4) {
-        Image(systemName: "arrow.clockwise")
-          .font(.system(size: 10, weight: .semibold))
-        Text("Repeat daily")
-          .font(.system(size: 12))
-      }
-      .foregroundStyle(.secondary)
+  func makeCoordinator() -> Coordinator { Coordinator(self) }
+  func makeNSView(context: Context) -> FocusableTaskTextField {
+    let field = FocusableTaskTextField()
+    field.delegate = context.coordinator
+    field.font = .systemFont(ofSize: identifier == "localTaskTextField" ? 15 : 13)
+    field.isBezeled = true
+    field.bezelStyle = .roundedBezel
+    field.focusRingType = .none
+    field.cell?.isScrollable = true
+    field.cell?.wraps = false
+    field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    field.setAccessibilityIdentifier(identifier)
+    field.setAccessibilityLabel(placeholder)
+    return field
+  }
+  func updateNSView(_ field: FocusableTaskTextField, context: Context) {
+    context.coordinator.parent = self
+    if field.stringValue != text { field.stringValue = text }
+    field.placeholderString = placeholder
+    field.setAccessibilityLabel(placeholder)
+    field.isEnabled = isEnabled && environmentEnabled
+    if context.coordinator.lastFocusRequest != focusRequest {
+      context.coordinator.lastFocusRequest = focusRequest
+      field.needsRequestedFocus = focusRequest != nil
+      field.applyRequestedFocus()
     }
-    .toggleStyle(.checkbox)
-    .help("Resets this task to unfinished each new day")
-    .accessibilityIdentifier("localTaskRepeatsDailyToggle")
+  }
+  static func dismantleNSView(_ field: FocusableTaskTextField, coordinator: Coordinator) {
+    coordinator.stopObservingEditorUndo()
+    field.delegate = nil
+  }
+  @MainActor
+  final class Coordinator: NSObject, NSTextFieldDelegate {
+    var parent: TaskEntryField
+    var lastFocusRequest: UUID?
+    private weak var activeEditor: NSTextView?
+    init(_ parent: TaskEntryField) {
+      self.parent = parent
+      lastFocusRequest = parent.focusRequest
+    }
+    func controlTextDidChange(_ notification: Notification) {
+      guard let field = notification.object as? NSTextField else { return }
+      parent.text = field.stringValue
+    }
+    func controlTextDidBeginEditing(_ notification: Notification) {
+      stopObservingEditorUndo()
+      if let editor = (notification.object as? NSTextField)?.currentEditor() as? NSTextView,
+        let manager = editor.undoManager
+      {
+        activeEditor = editor
+        NotificationCenter.default.addObserver(
+          self, selector: #selector(editorUndoDidChange(_:)),
+          name: .NSUndoManagerDidUndoChange, object: manager)
+        NotificationCenter.default.addObserver(
+          self, selector: #selector(editorUndoDidChange(_:)),
+          name: .NSUndoManagerDidRedoChange, object: manager)
+      }
+      parent.onFocusChanged(true)
+    }
+    func controlTextDidEndEditing(_ notification: Notification) {
+      if let field = notification.object as? NSTextField { parent.text = field.stringValue }
+      stopObservingEditorUndo()
+      parent.onFocusChanged(false)
+    }
+    // AppKit's shared field editor does not send controlTextDidChange when
+    // undo/redo changes its string. Sync that native edit before a SwiftUI
+    // update can put the stale binding back into the field.
+    @objc private func editorUndoDidChange(_ notification: Notification) {
+      if let activeEditor { parent.text = activeEditor.string }
+    }
+    func stopObservingEditorUndo() {
+      NotificationCenter.default.removeObserver(
+        self, name: .NSUndoManagerDidUndoChange, object: nil)
+      NotificationCenter.default.removeObserver(
+        self, name: .NSUndoManagerDidRedoChange, object: nil)
+      activeEditor = nil
+    }
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector)
+      -> Bool
+    {
+      guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
+      guard !textView.hasMarkedText() else { return false }
+      parent.onSubmit()
+      return true
+    }
   }
 }
 
 @MainActor
-private struct LocalTaskEditor: View {
-  @ObservedObject var controller: LocalTaskController
-  @Binding var draft: LocalTaskDraft
-  let onClose: () -> Void
-
-  @FocusState private var textFocused: Bool
-  @State private var isSubmitting = false
-
-  private var isBusy: Bool { isSubmitting || controller.isSaving }
-
-  var body: some View {
-    VStack(spacing: 0) {
-      HStack {
-        Text(draft.taskID == nil ? "New task" : "Edit task")
-          .font(.system(size: 14, weight: .semibold))
-        Spacer()
-        Button("Cancel", action: onClose)
-          .disabled(isBusy)
-          .keyboardShortcut(.cancelAction)
-          .accessibilityIdentifier("cancelLocalTaskEditButton")
-      }
-      .buttonStyle(.borderless)
-      .padding(.horizontal, 16)
-      .padding(.vertical, 10)
-      Divider()
-
-      ScrollView {
-        VStack(alignment: .leading, spacing: 10) {
-          Text("Task")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.secondary)
-          TextEditor(text: $draft.text)
-            .font(.system(size: 15))
-            .frame(minHeight: 64, maxHeight: 96)
-            .padding(4)
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor)))
-            .focused($textFocused)
-            .accessibilityLabel("Task text")
-            .accessibilityIdentifier("localTaskTextField")
-
-          RepeatDailyToggle(isOn: $draft.repeatsDaily)
-
-          Text("Tags")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.secondary)
-          ForEach(controller.document?.tags ?? []) { tag in
-            Toggle(
-              tag.name,
-              isOn: Binding(
-                get: { draft.tagIDs.contains(tag.id) },
-                set: { selected in
-                  if selected { draft.tagIDs.insert(tag.id) } else { draft.tagIDs.remove(tag.id) }
-                }
-              )
-            )
-            .toggleStyle(.checkbox)
-            .font(.system(size: 13))
-            .accessibilityIdentifier("localTaskTagChoice.\(tag.id.uuidString)")
-          }
-          ForEach(draft.newTagNames, id: \.self) { name in
-            HStack(spacing: 6) {
-              Image(systemName: "tag")
-                .foregroundStyle(.secondary)
-              Text(name)
-                .font(.system(size: 13))
-              Spacer()
-              Button {
-                draft.newTagNames.removeAll(where: { $0 == name })
-              } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-              }
-              .buttonStyle(.plain)
-              .accessibilityLabel("Remove new tag: \(name)")
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-              Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-          }
-          HStack(spacing: 8) {
-            TextField("New tag", text: $draft.newTagText)
-              .textFieldStyle(.roundedBorder)
-              .font(.system(size: 13))
-              .onSubmit(addDraftTag)
-              .accessibilityIdentifier("localTaskNewTagField")
-            Button("Add", action: addDraftTag)
-              .disabled(draft.newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-              .accessibilityIdentifier("addDraftTagButton")
-          }
-          .buttonStyle(.borderless)
-          if let errorMessage = controller.errorMessage {
-            Text(errorMessage)
-              .font(.caption)
-              .foregroundStyle(.red)
-              .fixedSize(horizontal: false, vertical: true)
-              .accessibilityIdentifier("localTaskEditorError")
-          }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-      }
-      .disabled(isBusy)
-
-      Divider()
-      footer
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-    .onAppear { textFocused = true }
+final class FocusableTaskTextField: NSTextField {
+  var needsRequestedFocus = false
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    applyRequestedFocus()
   }
-
-  private var footer: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      if draft.confirmsDeletion {
-        Text("Delete this task? This cannot be undone.")
-          .font(.caption)
-          .fixedSize(horizontal: false, vertical: true)
-        HStack {
-          Button("Keep task") { draft.confirmsDeletion = false }
-          Spacer()
-          if isBusy { ProgressView().controlSize(.mini) }
-          Button("Delete task", role: .destructive) {
-            guard !isBusy else { return }
-            guard let taskID = draft.taskID else { return }
-            isSubmitting = true
-            Task {
-              defer { isSubmitting = false }
-              if await controller.deleteTask(id: taskID) { onClose() }
-            }
-          }
-          .accessibilityIdentifier("confirmDeleteLocalTaskButton")
-        }
-        .disabled(isBusy)
-      } else {
-        HStack {
-          if draft.taskID != nil {
-            Button("Delete", role: .destructive) { draft.confirmsDeletion = true }
-              .disabled(isBusy)
-              .accessibilityIdentifier("deleteLocalTaskButton")
-          }
-          Spacer()
-          if isBusy {
-            ProgressView().controlSize(.mini)
-          }
-          Button("Save") {
-            guard !isBusy else { return }
-            if !draft.newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-              addDraftTag()
-              guard draft.newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                return
-              }
-            }
-            let snapshot = draft
-            isSubmitting = true
-            Task {
-              defer { isSubmitting = false }
-              if await controller.saveTask(
-                id: snapshot.taskID,
-                text: snapshot.text,
-                tagIDs: snapshot.tagIDs,
-                newTagNames: snapshot.newTagNames,
-                repeatsDaily: snapshot.repeatsDaily,
-                creationID: snapshot.creationID
-              ) {
-                onClose()
-              }
-            }
-          }
-          .disabled(
-            isBusy
-              || draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-          )
-          .keyboardShortcut("s", modifiers: .command)
-          .accessibilityIdentifier("saveLocalTaskButton")
-        }
-      }
+  func applyRequestedFocus() {
+    guard needsRequestedFocus, let window else { return }
+    needsRequestedFocus = false
+    // AppKit responder changes may invoke delegates. Defer beyond SwiftUI's
+    // update pass so focus reporting never publishes from updateNSView.
+    DispatchQueue.main.async { [weak self, weak window] in
+      guard let self, self.window === window else { return }
+      window?.makeFirstResponder(self)
     }
-    .buttonStyle(.borderless)
-    .font(.system(size: 13, weight: .medium))
-  }
-
-  private func addDraftTag() {
-    draft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
   }
 }

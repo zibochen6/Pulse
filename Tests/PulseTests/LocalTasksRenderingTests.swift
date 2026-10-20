@@ -6,428 +6,517 @@ import XCTest
 
 @MainActor
 final class LocalTasksRenderingTests: XCTestCase {
-  func testLocalTasksAndEditorRenderAtPopoverSizeInBothAppearances() async throws {
+  private func controller() async throws -> LocalTaskController {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "PulseLocalRender-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
+      "PulseTaskUI-\(UUID())")
+    addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
     let controller = LocalTaskController(
       store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
     await controller.refresh()
-    let added = await controller.saveTask(
-      id: nil,
-      text:
-        "写一份虚构示例 📝 with a long title that wraps across multiple lines in a compact menu bar task list",
-      tagIDs: [], newTagNames: ["Work", "写作"])
-    XCTAssertTrue(added)
-    let first = try XCTUnwrap(controller.document?.tasks.first)
-    await controller.setCompleted(true, taskID: first.id)?.value
-    let secondAdded = await controller.saveTask(
-      id: nil, text: "Another fictional task", tagIDs: [], newTagNames: [])
-    XCTAssertTrue(secondAdded)
+    return controller
+  }
 
-    let renderDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "PulseBuiltinTaskRender")
+  func testDefaultTodoRemainsSelectedAndCanAlwaysFindUntaggedTasks() async throws {
+    let controller = try await controller()
+    let created = await controller.saveTask(
+      id: nil, text: "Visible in Todo", tagIDs: [], newTagNames: [])
+    XCTAssertTrue(created)
+    let tagID = UUID()
+    let addedTag = await controller.createTag(id: tagID, name: "Work")
+    XCTAssertTrue(addedTag)
+    let presentation = LocalTaskPresentation()
+    presentation.reconcileTags(controller.document?.tags ?? [])
+    XCTAssertEqual(presentation.selectedFilter, .untagged)
+    XCTAssertEqual(
+      controller.tasks(matching: presentation.selectedFilter).map(\.text), ["Visible in Todo"])
+    presentation.selectedFilter = .tag(tagID)
+    let removed = await controller.deleteTag(id: tagID)
+    XCTAssertTrue(removed)
+    presentation.reconcileTags(controller.document?.tags ?? [])
+    XCTAssertEqual(presentation.selectedFilter, .untagged)
+  }
+
+  func testIndependentTagIntentPreservesQuickDraftAndCancelWritesNothing() async throws {
+    let controller = try await controller()
+    let presentation = LocalTaskPresentation()
+    presentation.quickDraft.text = "Unsaved input"
+    let original = presentation.quickDraft
+    presentation.beginCreatingTag()
+    presentation.tagIntent?.name = "Empty list"
+    XCTAssertEqual(presentation.quickDraft, original)
+    XCTAssertNotNil(presentation.tagIntent)
+    presentation.tagIntent = nil
+    XCTAssertEqual(controller.document, LocalTaskDocument())
+    XCTAssertEqual(presentation.quickDraft, original)
+    presentation.beginCreatingTag()
+    let intent = try XCTUnwrap(presentation.tagIntent)
+    let saved = await controller.createTag(id: intent.id, name: "Empty list")
+    XCTAssertTrue(saved)
+    XCTAssertEqual(controller.document?.tasks, [])
+    XCTAssertEqual(controller.document?.tags.map(\.name), ["Empty list"])
+  }
+
+  func testDraftsSurviveSwitchingPagesRecreatedViewsAndRepeatedAdd() async throws {
+    let controller = try await controller()
+    let presentation = LocalTaskPresentation()
+    let work = UUID()
+    presentation.quickDraft.text = "Todo draft"
+    let original = presentation.quickDraft.creationID
+    presentation.beginAddingTask()
+    XCTAssertEqual(presentation.quickDraft.creationID, original)
+    presentation.selectedFilter = .tag(work)
+    presentation.quickDraft.text = "Work draft"
+    presentation.quickDraft.repeatsDaily = true
+    let workDraft = presentation.quickDraft
+    _ = LocalTasksView(
+      controller: controller, presentation: presentation, onEditingChanged: { _ in })
+    _ = LocalTasksView(
+      controller: controller, presentation: presentation, onEditingChanged: { _ in })
+    presentation.selectedFilter = .untagged
+    XCTAssertEqual(presentation.quickDraft.text, "Todo draft")
+    XCTAssertEqual(presentation.quickDraft.creationID, original)
+    presentation.selectedFilter = .tag(work)
+    XCTAssertEqual(presentation.quickDraft, workDraft)
+    XCTAssertEqual(presentation.quickDraft.selectedTagID, work)
+  }
+
+  func testEditingDoesNotOverwriteRetainedQuickDraft() throws {
+    let presentation = LocalTaskPresentation()
+    presentation.quickDraft.text = "Unsubmitted quick entry"
+    let original = presentation.quickDraft
+    let task = LocalTask(text: "Existing")
+    presentation.beginEditingTask(task)
+    XCTAssertEqual(presentation.editDraft?.taskID, task.id)
+    presentation.editDraft?.text = "Edited"
+    presentation.finishDraft(id: try XCTUnwrap(presentation.editDraft?.creationID))
+    XCTAssertNil(presentation.editDraft)
+    XCTAssertEqual(presentation.quickDraft, original)
+  }
+
+  func testSelectionIsSingleChoiceIncludingNewTagAndDefault() {
+    let work = TaskTag(name: "Work")
+    let home = TaskTag(name: "Home")
+    var draft = LocalTaskDraft(tagIDs: [work.id])
+    draft.newTagText = " Writing "
+    draft.acceptPendingTag(availableTags: [work, home])
+    XCTAssertEqual(draft.newTagNames, ["Writing"])
+    XCTAssertTrue(draft.tagIDs.isEmpty)
+    draft.newTagText = " HOME "
+    draft.acceptPendingTag(availableTags: [work, home])
+    XCTAssertEqual(draft.tagIDs, [home.id])
+    XCTAssertTrue(draft.newTagNames.isEmpty)
+    draft.newTagText = " todo "
+    draft.acceptPendingTag(availableTags: [work, home])
+    XCTAssertTrue(draft.tagIDs.isEmpty)
+    XCTAssertTrue(draft.newTagNames.isEmpty)
+  }
+
+  func testCaptureDeduplicatesAndSuccessClearsOnlyMatchingInputAndRefocuses() throws {
+    let presentation = LocalTaskPresentation()
+    presentation.quickDraft.text = "First"
+    let submission = try XCTUnwrap(presentation.captureSubmission())
+    XCTAssertNil(presentation.captureSubmission())
+    let oldFocus = presentation.focusRequest
+    let task = LocalTask(id: submission.draft.creationID, text: "First")
+    presentation.finishSubmission(submission, saved: true, task: task, tags: [])
+    XCTAssertEqual(presentation.quickDraft.text, "")
+    XCTAssertNotEqual(presentation.quickDraft.creationID, submission.draft.creationID)
+    XCTAssertNotEqual(presentation.focusRequest, oldFocus)
+    presentation.quickDraft.text = "Second"
+    XCTAssertNotNil(presentation.captureSubmission())
+  }
+
+  func testPendingSaveDoesNotSwitchTabsOrClearLaterInput() throws {
+    let presentation = LocalTaskPresentation()
+    let work = TaskTag(name: "Work")
+    presentation.quickDraft.text = "Todo pending"
+    let submission = try XCTUnwrap(presentation.captureSubmission())
+    presentation.selectedFilter = .tag(work.id)
+    presentation.quickDraft.text = "Later work input"
+    let later = presentation.quickDraft
+    presentation.finishSubmission(
+      submission, saved: true,
+      task: LocalTask(text: "Saved", tagIDs: []), tags: [work])
+    XCTAssertEqual(presentation.selectedFilter, .tag(work.id))
+    XCTAssertEqual(presentation.quickDraft, later)
+    XCTAssertEqual(presentation.quickDrafts[.untagged]?.text, "")
+    // A newer edit in the same creation intent must also survive a late reply.
+    let second = try XCTUnwrap(presentation.captureSubmission())
+    presentation.quickDraft.text = "Changed while saving"
+    presentation.finishSubmission(
+      second, saved: true,
+      task: LocalTask(text: "Saved earlier", tagIDs: [work.id]), tags: [work])
+    XCTAssertEqual(presentation.quickDraft.text, "Changed while saving")
+  }
+
+  func testSwitchAwayAndBackDuringSaveDoesNotRevealDifferentDestination() throws {
+    let presentation = LocalTaskPresentation()
+    let work = TaskTag(name: "Work")
+    presentation.quickDraft.text = "Move on create"
+    presentation.quickDraft.choose(work.id)
+    let submission = try XCTUnwrap(presentation.captureSubmission())
+    presentation.selectedFilter = .tag(work.id)
+    presentation.selectedFilter = .untagged
+    presentation.finishSubmission(
+      submission, saved: true,
+      task: LocalTask(text: "Created", tagIDs: [work.id]), tags: [work])
+    XCTAssertEqual(presentation.selectedFilter, .untagged)
+  }
+
+  func testFailureRetainsStableCreationIntentAndAllInputForRetry() throws {
+    let presentation = LocalTaskPresentation()
+    presentation.quickDraft.text = "Keep me"
+    presentation.quickDraft.newTagText = "Work"
+    presentation.quickDraft.acceptPendingTag(availableTags: [])
+    presentation.quickDraft.repeatsDaily = true
+    let submission = try XCTUnwrap(presentation.captureSubmission())
+    presentation.finishSubmission(submission, saved: false, task: nil, tags: [])
+    XCTAssertEqual(presentation.quickDraft, submission.draft)
+    let retry = try XCTUnwrap(presentation.captureSubmission())
+    XCTAssertEqual(retry.draft.creationID, submission.draft.creationID)
+  }
+
+  func testHoverSuspendsOnlyForFocusedDirtyOrActiveEditor() {
+    let presentation = LocalTaskPresentation()
+    XCTAssertFalse(presentation.isEditing)
+    presentation.quickDraft.optionsExpanded = true
+    XCTAssertFalse(presentation.isEditing)
+    presentation.composerFocused = true
+    XCTAssertTrue(presentation.isEditing)
+    presentation.composerFocused = false
+    presentation.quickDraft.text = "Draft"
+    XCTAssertTrue(presentation.isEditing)
+    presentation.quickDraft.text = ""
+    XCTAssertFalse(presentation.isEditing)
+    presentation.beginCreatingTag()
+    XCTAssertTrue(presentation.isEditing)
+  }
+
+  func testRevealingCompletedTaskExpandsDestinationAndRequestsScroll() {
+    let presentation = LocalTaskPresentation()
+    let tag = TaskTag(name: "Work")
+    let task = LocalTask(text: "Restored or moved", completed: true, tagIDs: [tag.id])
+    presentation.collapsedCompleted.insert(.tag(tag.id))
+    presentation.reveal(task, tags: [tag])
+    XCTAssertEqual(presentation.selectedFilter, .tag(tag.id))
+    XCTAssertFalse(presentation.collapsedCompleted.contains(.tag(tag.id)))
+    XCTAssertEqual(presentation.revealedTaskID, task.id)
+  }
+
+  func testReturningFromEditorScrollsNewlyMountedListToSavedTaskOnce() async throws {
+    let controller = try await controller()
+    for index in 0..<40 {
+      let saved = await controller.saveTask(
+        id: nil, text: "Task \(index)", tagIDs: [], newTagNames: [])
+      XCTAssertTrue(saved)
+    }
+    let target = try XCTUnwrap(controller.document?.tasks.last)
+    let presentation = LocalTaskPresentation()
+    presentation.beginEditingTask(target)
+    let root = LocalTasksView(
+      controller: controller, presentation: presentation, onEditingChanged: { _ in }
+    )
+    .frame(width: 360, height: 455)
+    let host = NSHostingView(rootView: root)
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 360, height: 455),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    window.orderFront(nil)
+    defer { window.orderOut(nil) }
+    host.layoutSubtreeIfNeeded()
+    try await Task.sleep(for: .milliseconds(30))
+    let submission = try XCTUnwrap(presentation.captureEditSubmission())
+    presentation.finishEditSubmission(submission, saved: true, task: target, tags: [])
+    for _ in 0..<50 {
+      host.layoutSubtreeIfNeeded()
+      if presentation.revealedTaskID == nil { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertNil(
+      presentation.revealedTaskID, "A newly mounted reader must consume the pending reveal")
+    func scrollViews(_ view: NSView) -> [NSScrollView] {
+      (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap { scrollViews($0) }
+    }
+    let listScroll = try XCTUnwrap(
+      scrollViews(host).first { $0.documentView?.frame.height ?? 0 > 455 })
+    XCTAssertGreaterThan(
+      listScroll.documentVisibleRect.minY, 100,
+      "The actual native scroll position must move beyond the initial viewport to the saved last row"
+    )
+    // Reconstructing the task surface must not create another reveal request.
+    host.rootView = root
+    host.layoutSubtreeIfNeeded()
+    XCTAssertNil(presentation.revealedTaskID)
+  }
+
+  func testNativeEntryInheritsDisabledStateAndUpdatesAccessibleDestination() throws {
+    func root(_ placeholder: String, disabled: Bool) -> some View {
+      TaskEntryField(
+        text: .constant(""), placeholder: placeholder, identifier: "nativeEntry",
+        focusRequest: nil, onSubmit: {}, onFocusChanged: { _ in }
+      )
+      .disabled(disabled).frame(width: 240, height: 30)
+    }
+    func nativeField(_ view: NSView) -> NSTextField? {
+      if let field = view as? NSTextField { return field }
+      return view.subviews.lazy.compactMap { nativeField($0) }.first
+    }
+    let host = NSHostingView(rootView: root("Add to Todo…", disabled: true))
+    host.frame = NSRect(x: 0, y: 0, width: 240, height: 30)
+    host.layoutSubtreeIfNeeded()
+    let field = try XCTUnwrap(nativeField(host))
+    XCTAssertFalse(field.isEnabled)
+    XCTAssertEqual(field.accessibilityLabel(), "Add to Todo…")
+    host.rootView = root("Add to Work…", disabled: false)
+    host.layoutSubtreeIfNeeded()
+    XCTAssertTrue(field.isEnabled)
+    XCTAssertEqual(field.accessibilityLabel(), "Add to Work…")
+  }
+
+  func testNewerInputGetsFreshIdentityAfterConsumedCreationAndCanActuallySave() async throws {
+    let controller = try await controller()
+    let presentation = LocalTaskPresentation()
+    presentation.quickDraft.text = "First saved text"
+    let submission = try XCTUnwrap(presentation.captureSubmission())
+    presentation.quickDraft.text = "Later unsaved input"
+    let saved = await controller.saveTask(
+      id: nil, text: submission.draft.text,
+      tagIDs: [], newTagNames: [], creationID: submission.draft.creationID)
+    XCTAssertTrue(saved)
+    presentation.finishSubmission(
+      submission, saved: true,
+      task: controller.document?.tasks.first, tags: [])
+    XCTAssertNotEqual(presentation.quickDraft.creationID, submission.draft.creationID)
+    let next = try XCTUnwrap(presentation.captureSubmission())
+    let nextSaved = await controller.saveTask(
+      id: nil, text: next.draft.text,
+      tagIDs: [], newTagNames: [], creationID: next.draft.creationID)
+    XCTAssertTrue(nextSaved)
+    XCTAssertEqual(
+      controller.document?.tasks.map(\.text), ["First saved text", "Later unsaved input"])
+  }
+
+  func testChangedInputReusesNewlyPersistedTagWithoutDuplicateNameFailure() async throws {
+    let controller = try await controller()
+    let presentation = LocalTaskPresentation()
+    presentation.quickDraft.text = "First saved text"
+    presentation.quickDraft.newTagText = "Work"
+    presentation.quickDraft.acceptPendingTag(availableTags: [])
+    let submission = try XCTUnwrap(presentation.captureSubmission())
+    presentation.quickDraft.text = "Later in same list"
+    let saved = await controller.saveTask(
+      id: nil, text: submission.draft.text,
+      tagIDs: [], newTagNames: submission.draft.newTagNames, creationID: submission.draft.creationID
+    )
+    XCTAssertTrue(saved)
+    presentation.finishSubmission(
+      submission, saved: true,
+      task: controller.document?.tasks.first, tags: controller.document?.tags ?? [])
+    let tag = try XCTUnwrap(controller.document?.tags.first)
+    XCTAssertEqual(presentation.quickDraft.selectedTagID, tag.id)
+    XCTAssertTrue(presentation.quickDraft.newTagNames.isEmpty)
+    let next = try XCTUnwrap(presentation.captureSubmission())
+    let nextSaved = await controller.saveTask(
+      id: nil, text: next.draft.text,
+      tagIDs: next.draft.tagIDs, newTagNames: next.draft.newTagNames,
+      creationID: next.draft.creationID)
+    XCTAssertTrue(nextSaved)
+    XCTAssertEqual(controller.document?.tasks.map(\.tagIDs), [[tag.id], [tag.id]])
+    XCTAssertEqual(controller.document?.tags.count, 1)
+  }
+
+  func testEditorSubmissionDeduplicatesAndDoesNotDiscardNewerEdits() async throws {
+    let controller = try await controller()
+    let presentation = LocalTaskPresentation()
+    let task = LocalTask(text: "Edit me")
+    presentation.beginEditingTask(task)
+    let snapshot = try XCTUnwrap(presentation.captureEditSubmission())
+    _ = LocalTasksView(
+      controller: controller, presentation: presentation, onEditingChanged: { _ in })
+    XCTAssertNil(presentation.captureEditSubmission(), "Remount cannot queue a second save")
+    presentation.editDraft?.text = "Later unsaved edit"
+    presentation.finishEditSubmission(snapshot, saved: true, task: task, tags: [])
+    XCTAssertEqual(presentation.editDraft?.text, "Later unsaved edit")
+    let next = try XCTUnwrap(presentation.captureEditSubmission())
+    presentation.finishEditSubmission(next, saved: false, task: nil, tags: [])
+    XCTAssertEqual(presentation.editDraft, next, "Failed save retains the retryable draft")
+    let retry = try XCTUnwrap(presentation.captureEditSubmission())
+    presentation.finishEditSubmission(retry, saved: true, task: task, tags: [])
+    XCTAssertNil(presentation.editDraft)
+  }
+
+  func testTagSubmissionDeduplicatesRetainsNewerNameAndSelectsOnlyMatchingSuccess() throws {
+    let presentation = LocalTaskPresentation()
+    presentation.beginCreatingTag()
+    presentation.tagIntent?.name = "First tag"
+    let snapshot = try XCTUnwrap(presentation.captureTagSubmission())
+    XCTAssertNil(presentation.captureTagSubmission())
+    presentation.tagIntent?.name = "Later tag"
+    presentation.finishTagSubmission(snapshot, saved: true)
+    XCTAssertEqual(presentation.tagIntent?.name, "Later tag")
+    XCTAssertNotEqual(presentation.tagIntent?.id, snapshot.id)
+    XCTAssertEqual(presentation.selectedFilter, .untagged)
+    let next = try XCTUnwrap(presentation.captureTagSubmission())
+    presentation.finishTagSubmission(next, saved: false)
+    XCTAssertEqual(presentation.tagIntent, next)
+    let retry = try XCTUnwrap(presentation.captureTagSubmission())
+    presentation.finishTagSubmission(retry, saved: true)
+    XCTAssertNil(presentation.tagIntent)
+    XCTAssertEqual(presentation.selectedFilter, .tag(retry.id))
+  }
+
+  func testNativeQuickEntryEditorUndoRedoRetainsTextEditingSemantics() throws {
+    var input = ""
+    let root = TaskEntryField(
+      text: Binding(get: { input }, set: { input = $0 }),
+      placeholder: "Add to Todo…", identifier: "actualQuickEntry", focusRequest: nil,
+      onSubmit: {}, onFocusChanged: { _ in }
+    ).frame(width: 240, height: 30)
+    let host = NSHostingView(rootView: root)
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 240, height: 30),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    host.layoutSubtreeIfNeeded()
+    func nativeField(_ view: NSView) -> NSTextField? {
+      if let field = view as? NSTextField { return field }
+      return view.subviews.lazy.compactMap { nativeField($0) }.first
+    }
+    let field = try XCTUnwrap(nativeField(host))
+    XCTAssertTrue(window.makeFirstResponder(field))
+    let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+    XCTAssertTrue(editor.allowsUndo)
+    editor.insertText("Draft text", replacementRange: NSRange(location: 0, length: 0))
+    XCTAssertEqual(field.stringValue, "Draft text")
+    XCTAssertEqual(input, "Draft text")
+    let menu = try XCTUnwrap(PulseApplicationMenu.makeMainMenu().items.first?.submenu)
+    let undo = try XCTUnwrap(menu.items.first { $0.title == "Undo" })
+    let redo = try XCTUnwrap(menu.items.first { $0.title == "Redo" })
+    XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(undo.action), to: window, from: undo))
+    XCTAssertEqual(field.stringValue, "")
+    XCTAssertEqual(input, "")
+    XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(redo.action), to: window, from: redo))
+    XCTAssertEqual(field.stringValue, "Draft text")
+    XCTAssertEqual(input, "Draft text")
+  }
+
+  func testIMEConfirmationDoesNotSubmitAndPlainReturnDoes() {
+    var input = "中文"
+    var submissions = 0
+    var focuses: [Bool] = []
+    let field = TaskEntryField(
+      text: Binding(get: { input }, set: { input = $0 }),
+      placeholder: "Add to Todo…", identifier: "test", focusRequest: nil,
+      onSubmit: { submissions += 1 }, onFocusChanged: { focuses.append($0) })
+    let delegate = field.makeCoordinator()
+    let textView = MarkedTaskTextView()
+    let control = NSTextField()
+    textView.marked = true
+    XCTAssertFalse(
+      delegate.control(
+        control, textView: textView, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+    XCTAssertEqual(submissions, 0)
+    textView.marked = false
+    XCTAssertTrue(
+      delegate.control(
+        control, textView: textView, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+    XCTAssertEqual(submissions, 1)
+    XCTAssertFalse(
+      delegate.control(
+        control, textView: textView, doCommandBy: #selector(NSResponder.insertTab(_:))))
+    delegate.controlTextDidBeginEditing(
+      Notification(name: NSControl.textDidBeginEditingNotification))
+    delegate.controlTextDidEndEditing(Notification(name: NSControl.textDidEndEditingNotification))
+    XCTAssertEqual(focuses, [true, false])
+  }
+
+  func testTaskStatesRenderAtPopoverSizeInBothAppearances() async throws {
+    let controller = try await controller()
+    let work = TaskTag(name: "Work")
+    let createTag = await controller.createTag(id: work.id, name: work.name)
+    XCTAssertTrue(createTag)
+    for text in [
+      "写一份示例 📝 with a long title that wraps across multiple lines", "Completed daily task",
+      "To delete",
+    ] {
+      let saved = await controller.saveTask(
+        id: nil, text: text, tagIDs: [work.id], newTagNames: [],
+        repeatsDaily: text.contains("daily"))
+      XCTAssertTrue(saved)
+    }
+    let completed = try XCTUnwrap(controller.document?.tasks[1])
+    await controller.setCompleted(true, taskID: completed.id)?.value
+    let removed = try XCTUnwrap(controller.document?.tasks.last)
+    let deleted = await controller.deleteTask(id: removed.id)
+    XCTAssertTrue(deleted)
+    let empty = try await self.controller()
+    let renderDirectory = URL(fileURLWithPath: "/tmp/PulseTaskInteractionRender", isDirectory: true)
     try FileManager.default.createDirectory(at: renderDirectory, withIntermediateDirectories: true)
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
-      let appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
-      for mode in ["list-incomplete", "editor", "inline-add"] {
+      for mode in [
+        "empty", "list", "completed-only", "collapsed", "options", "editor", "new-tag",
+        "rename-tag", "delete-tag", "tag-settings",
+      ] {
         let presentation = LocalTaskPresentation()
-        if mode == "editor" {
-          presentation.beginEditingTask(first)
-          presentation.draft?.newTagNames = ["Draft tag"]
-        } else if mode == "inline-add" {
-          presentation.beginAddingTask()
-          presentation.draft?.text = "新增虚构待办 👩‍💻 with text that wraps inside the compact footer"
-          presentation.draft?.tagIDs = Set(controller.document?.tags.map(\.id) ?? [])
-          presentation.draft?.newTagNames = [
-            "A deliberately long fictional tag label kept inside the native menu"
-          ]
-          presentation.draft?.newTagText = "Another tag"
-          // The default tab is the first tag, so only its task is listed.
-          XCTAssertEqual(controller.tasks(matching: presentation.selectedFilter).count, 1)
-          XCTAssertNil(presentation.draft?.taskID)
+        let target = mode == "empty" ? empty : controller
+        presentation.reconcileTags(target.document?.tags ?? [])
+        if mode != "empty" { presentation.selectedFilter = .tag(work.id) }
+        switch mode {
+        case "options":
+          presentation.quickDraft.text = "新增虚构待办 👩‍💻"
+          presentation.quickDraft.optionsExpanded = true
+          presentation.quickDraft.newTagText = "Writing"
+        case "editor":
+          presentation.beginEditingTask(try XCTUnwrap(controller.document?.tasks.first))
+          presentation.editDraft?.optionsExpanded = true
+        case "new-tag": presentation.tagIntent = LocalTagIntent(name: "New list")
+        case "rename-tag":
+          presentation.tagIntent = LocalTagIntent(action: .rename(work.id), name: work.name)
+        case "delete-tag":
+          presentation.tagIntent = LocalTagIntent(action: .delete(work.id), name: work.name)
+        case "collapsed": presentation.collapsedCompleted.insert(.tag(work.id))
+        case "completed-only":
+          presentation.selectedFilter = .untagged
+          let taskID = UUID()
+          let created = await empty.saveTask(
+            id: nil, text: "All done", tagIDs: [], newTagNames: [], creationID: taskID)
+          XCTAssertTrue(created)
+          await empty.setCompleted(true, taskID: taskID)?.value
+        default: break
         }
-        // The actual task surface receives both completed and incomplete rows.
-        // Home hides the completed one; storage still retains it for reload.
-        XCTAssertEqual(controller.document?.tasks.filter(\.completed).count, 1)
-        let rootView = LocalTasksView(
-          controller: controller, presentation: presentation, onEditingChanged: { _ in }
-        )
-        .frame(width: 360, height: 455)
-        .background(Color(nsColor: .windowBackgroundColor))
-        let host = NSHostingView(rootView: rootView)
-        host.appearance = appearance
+        let content: AnyView
+        if mode == "tag-settings" {
+          content = AnyView(
+            LocalTagSettingsView(controller: controller, onEditingChanged: { _ in }).padding(16))
+        } else {
+          content = AnyView(
+            LocalTasksView(
+              controller: mode == "completed-only" ? empty : target, presentation: presentation,
+              onEditingChanged: { _ in }))
+        }
+        let root = content.frame(width: 360, height: 455).background(
+          Color(nsColor: .windowBackgroundColor))
+        let host = NSHostingView(rootView: root)
+        host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
         host.frame = NSRect(x: 0, y: 0, width: 360, height: 455)
         host.layoutSubtreeIfNeeded()
         let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
         host.cacheDisplay(in: host.bounds, to: bitmap)
         XCTAssertEqual(bitmap.pixelsWide * 455, bitmap.pixelsHigh * 360)
         for point in [(2, 2), (bitmap.pixelsWide - 2, bitmap.pixelsHigh - 2)] {
-          let color = try XCTUnwrap(bitmap.colorAt(x: point.0, y: point.1))
-          XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01)
+          XCTAssertEqual(
+            try XCTUnwrap(bitmap.colorAt(x: point.0, y: point.1)).alphaComponent, 1, accuracy: 0.01)
         }
-        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-        try png.write(
-          to: renderDirectory.appendingPathComponent(
-            "\(appearanceName.rawValue)-\(mode).png"))
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(
+          to: renderDirectory.appendingPathComponent("\(appearanceName.rawValue)-\(mode).png"))
       }
     }
   }
-
-  func testReturningToDraftReconcilesDeletedTagsWithoutLosingInput() async throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "PulseDraftTags-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let controller = LocalTaskController(
-      store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
-    await controller.refresh()
-    let added = await controller.saveTask(
-      id: nil, text: "Original", tagIDs: [], newTagNames: ["Work"])
-    XCTAssertTrue(added)
-    let task = try XCTUnwrap(controller.document?.tasks.first)
-    let tag = try XCTUnwrap(controller.document?.tags.first)
-    let presentation = LocalTaskPresentation()
-    presentation.selectedFilter = .tag(tag.id)
-    presentation.beginEditingTask(task)
-    presentation.draft?.text = "Unsaved edited text"
-    presentation.draft?.newTagNames = ["New tag"]
-    let deleted = await controller.deleteTag(id: tag.id)
-    XCTAssertTrue(deleted)
-    presentation.reconcileTags(controller.document?.tags ?? [])
-    // With no tags left, the bar falls back to its guidance tab.
-    XCTAssertEqual(presentation.selectedFilter, .untagged)
-    let draft = try XCTUnwrap(presentation.draft)
-    XCTAssertEqual(draft.text, "Unsaved edited text")
-    XCTAssertTrue(draft.tagIDs.isEmpty)
-    let saved = await controller.saveTask(
-      id: draft.taskID, text: draft.text, tagIDs: draft.tagIDs, newTagNames: draft.newTagNames,
-      creationID: draft.creationID)
-    XCTAssertTrue(saved)
-    XCTAssertEqual(controller.document?.tasks.first?.text, "Unsaved edited text")
-  }
-
-  func testDraftRetainsInputAcrossRecreatedViewsAndDefaultsToSelectedTag() {
-    let presentation = LocalTaskPresentation()
-    let tagID = UUID()
-    presentation.selectedFilter = .tag(tagID)
-    presentation.beginAddingTask()
-    presentation.draft?.text = "Unsaved input"
-    presentation.draft?.newTagNames = ["Draft tag"]
-    XCTAssertTrue(presentation.isEditing)
-    XCTAssertEqual(presentation.draft?.tagIDs, [tagID])
-    // Pages may reconstruct the view; the draft owner outlives those pages.
-    let controller = LocalTaskController(
-      store: LocalTaskStore(
-        fileURL:
-          FileManager.default.temporaryDirectory.appendingPathComponent(
-            "UnusedRender-\(UUID()).json")))
-    _ = LocalTasksView(
-      controller: controller, presentation: presentation, onEditingChanged: { _ in })
-    _ = LocalTasksView(
-      controller: controller, presentation: presentation, onEditingChanged: { _ in })
-    XCTAssertEqual(presentation.draft?.text, "Unsaved input")
-    XCTAssertEqual(presentation.draft?.newTagNames, ["Draft tag"])
-  }
-
-  func testInlineCreationSavesExistingTagsAndPendingNewTagWithoutDuplicates() async throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "PulseInlineTags-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let fileURL = directory.appendingPathComponent("tasks.json")
-    let controller = LocalTaskController(store: LocalTaskStore(fileURL: fileURL))
-    await controller.refresh()
-    let seeded = await controller.saveTask(
-      id: nil, text: "Existing fictional task", tagIDs: [], newTagNames: ["Work", "Reference"])
-    XCTAssertTrue(seeded)
-    let work = try XCTUnwrap(controller.document?.tags.first(where: { $0.name == "Work" }))
-    let reference = try XCTUnwrap(
-      controller.document?.tags.first(where: { $0.name == "Reference" }))
-    let presentation = LocalTaskPresentation()
-    presentation.selectedFilter = .tag(work.id)
-    presentation.beginAddingTask()
-    var draft = try XCTUnwrap(presentation.draft)
-    let id = draft.creationID
-    XCTAssertEqual(draft.tagIDs, [work.id])
-    draft.text = "Inline fictional task 📝"
-    draft.newTagText = " Writing "
-    draft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
-    draft.newTagText = "writing"
-    draft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
-    XCTAssertEqual(draft.newTagNames, ["Writing"])
-    XCTAssertTrue(draft.newTagText.isEmpty, "A duplicate staged tag must not block task Save")
-    draft.newTagText = "reference"
-    draft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
-    XCTAssertEqual(draft.tagIDs, [work.id, reference.id])
-    // Direct task Save must consume the remaining new-tag field just like Add.
-    draft.newTagText = "Notes"
-    draft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
-    presentation.draft = draft
-    let saved = await controller.saveTask(
-      id: nil, text: draft.text, tagIDs: draft.tagIDs, newTagNames: draft.newTagNames,
-      creationID: draft.creationID)
-    XCTAssertTrue(saved)
-    let task = try XCTUnwrap(controller.document?.tasks.first(where: { $0.id == id }))
-    presentation.didCreate(id: id, task: task)
-    XCTAssertNil(presentation.draft)
-    XCTAssertEqual(presentation.selectedFilter, .tag(work.id))
-    XCTAssertEqual(controller.tasks(matching: .tag(work.id)).count, 2)
-    XCTAssertEqual(task.tagIDs.count, 4)
-    XCTAssertEqual(
-      Set(controller.document?.tags.map(\.name) ?? []), ["Work", "Reference", "Writing", "Notes"])
-    let restored = LocalTaskController(store: LocalTaskStore(fileURL: fileURL))
-    await restored.refresh()
-    XCTAssertEqual(restored.document?.tasks.first(where: { $0.id == id }), task)
-  }
-
-  func testConfirmedCreationRetainsMatchingFilterAndRevealsOtherwiseHiddenTask() async throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "PulseInlineFilter-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let controller = LocalTaskController(
-      store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
-    await controller.refresh()
-    let seeded = await controller.saveTask(
-      id: nil, text: "Seed", tagIDs: [], newTagNames: ["Work"])
-    XCTAssertTrue(seeded)
-    let work = try XCTUnwrap(controller.document?.tags.first)
-    let presentation = LocalTaskPresentation()
-    for filter in [LocalTaskFilter.tag(work.id), .untagged] {
-      // Mirrors what LocalTasksView does when the surface appears.
-      presentation.reconcileTags(controller.document?.tags ?? [])
-      presentation.selectedFilter = filter
-      presentation.beginAddingTask()
-      var draft = try XCTUnwrap(presentation.draft)
-      draft.text = "Task outside current category"
-      if case .tag = filter {
-        draft.tagIDs = []
-      } else {
-        draft.newTagText = "Work"
-        draft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
-      }
-      presentation.draft = draft
-      let saved = await controller.saveTask(
-        id: nil, text: draft.text, tagIDs: draft.tagIDs, newTagNames: draft.newTagNames,
-        creationID: draft.creationID)
-      XCTAssertTrue(saved)
-      let actual = try XCTUnwrap(
-        controller.document?.tasks.first(where: { $0.id == draft.creationID }))
-      presentation.didCreate(id: draft.creationID, task: actual)
-      // Tags are the only tabs, so a task created outside the shown tag reveals
-      // that task's own tag instead of returning to an "All" list.
-      if case .tag = filter {
-        XCTAssertEqual(presentation.selectedFilter, .untagged)
-      } else {
-        XCTAssertEqual(presentation.selectedFilter, .tag(work.id))
-      }
-      XCTAssertTrue(
-        controller.tasks(matching: presentation.selectedFilter).contains(where: {
-          $0.id == actual.id
-        }))
-    }
-  }
-
-  func testStaleSaveCannotClearLaterDraftOrChangeItsFilter() throws {
-    let presentation = LocalTaskPresentation()
-    presentation.beginAddingTask()
-    let earlier = try XCTUnwrap(presentation.draft)
-    presentation.selectedFilter = .untagged
-    presentation.beginAddingTask()
-    presentation.draft?.text = "Later unsaved input"
-    let later = try XCTUnwrap(presentation.draft)
-    presentation.didCreate(
-      id: earlier.creationID,
-      task: LocalTask(id: earlier.creationID, text: "Earlier", tagIDs: [UUID()]))
-    XCTAssertEqual(presentation.draft?.creationID, later.creationID)
-    XCTAssertEqual(presentation.draft?.text, "Later unsaved input")
-    XCTAssertEqual(presentation.selectedFilter, .untagged)
-    presentation.finishDraft(id: earlier.creationID)
-    XCTAssertNotNil(presentation.draft)
-  }
-
-  func testFailedInlineSaveRetainsDraftTextTagsAndStableCreationID() async throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "PulseInlineFailure-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let fileURL = directory.appendingPathComponent("tasks.json")
-    let controller = LocalTaskController(
-      store: LocalTaskStore(fileURL: fileURL, writer: FailingInlineLocalWriter()))
-    await controller.refresh()
-    let presentation = LocalTaskPresentation()
-    presentation.beginAddingTask()
-    presentation.draft?.text = "Retain this fictional input"
-    presentation.draft?.newTagText = "Work"
-    var draft = try XCTUnwrap(presentation.draft)
-    draft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
-    presentation.draft = draft
-    let saved = await controller.saveTask(
-      id: nil, text: draft.text, tagIDs: draft.tagIDs, newTagNames: draft.newTagNames,
-      creationID: draft.creationID)
-    if saved {
-      presentation.didCreate(id: draft.creationID, task: controller.document?.tasks.first)
-    }
-    XCTAssertFalse(saved)
-    XCTAssertNotNil(controller.errorMessage)
-    XCTAssertEqual(presentation.draft?.creationID, draft.creationID)
-    XCTAssertEqual(presentation.draft?.text, "Retain this fictional input")
-    XCTAssertEqual(presentation.draft?.newTagNames, ["Work"])
-    XCTAssertEqual(controller.document?.tasks.count, 0)
-    let retry = LocalTaskController(store: LocalTaskStore(fileURL: fileURL))
-    await retry.refresh()
-    let retried = await retry.saveTask(
-      id: nil, text: draft.text, tagIDs: draft.tagIDs, newTagNames: draft.newTagNames,
-      creationID: draft.creationID)
-    XCTAssertTrue(retried)
-    let task = try XCTUnwrap(retry.document?.tasks.first)
-    presentation.didCreate(id: draft.creationID, task: task)
-    XCTAssertNil(presentation.draft)
-    XCTAssertEqual(task.id, draft.creationID)
-  }
-
-  func testExistingRowCannotReplaceUnsavedCreationButCheckboxAndFiltersRemainAvailable()
-    async throws
-  {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "PulseInlineRowGuard-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let controller = LocalTaskController(
-      store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
-    await controller.refresh()
-    let seeded = await controller.saveTask(
-      id: nil, text: "Existing task", tagIDs: [], newTagNames: [])
-    XCTAssertTrue(seeded)
-    let task = try XCTUnwrap(controller.document?.tasks.first)
-    let presentation = LocalTaskPresentation()
-    presentation.beginAddingTask()
-    presentation.draft?.text = "Unsaved new task"
-    let id = try XCTUnwrap(presentation.draft?.creationID)
-    presentation.beginEditingTask(task)
-    XCTAssertEqual(presentation.draft?.creationID, id)
-    XCTAssertEqual(presentation.draft?.text, "Unsaved new task")
-    XCTAssertNil(presentation.draft?.taskID)
-    await controller.setCompleted(true, taskID: task.id)?.value
-    XCTAssertTrue(controller.document?.tasks.first?.completed == true)
-    presentation.selectedFilter = .untagged
-    XCTAssertEqual(presentation.draft?.creationID, id)
-    XCTAssertEqual(controller.tasks(matching: .untagged).count, 1)
-    presentation.finishDraft(id: id)
-    presentation.beginEditingTask(task)
-    XCTAssertEqual(presentation.draft?.taskID, task.id)
-  }
-
-  /// Evidence render for the redesigned surface: tag-only tabs with a filled
-  /// selection, open rows before completed ones, the daily-repeat marker, and
-  /// an empty vocabulary that still offers its guidance tab.
-  func testTagOnlySurfaceRendersCompletedRepeatingAndEmptyStatesInBothAppearances()
-    async throws
-  {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "PulseTagSurface-\(UUID())")
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let controller = LocalTaskController(
-      store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
-    await controller.refresh()
-    let work = try XCTUnwrap(TaskTag(name: "Work"))
-    let created = await controller.saveTask(
-      id: nil, text: "Open task", tagIDs: [], newTagNames: [work.name])
-    XCTAssertTrue(created)
-    let repeatable = try XCTUnwrap(controller.document?.tasks.first)
-    let saved = await controller.saveTask(
-      id: repeatable.id, text: "Daily stand-up", tagIDs: repeatable.tagIDs, newTagNames: [],
-      repeatsDaily: true)
-    XCTAssertTrue(saved)
-    let done = await controller.saveTask(
-      id: nil, text: "Shipped earlier", tagIDs: repeatable.tagIDs, newTagNames: [])
-    XCTAssertTrue(done)
-    let completed = try XCTUnwrap(
-      controller.document?.tasks.first(where: { $0.text == "Shipped earlier" }))
-    await controller.setCompleted(true, taskID: completed.id)?.value
-    XCTAssertTrue(
-      try XCTUnwrap(controller.document?.tasks.first(where: { $0.id == completed.id })).completed)
-    let repeated = try XCTUnwrap(
-      controller.document?.tasks.first(where: { $0.id == repeatable.id }))
-    XCTAssertFalse(repeated.completed, "A daily task opens unfinished")
-
-    let renderDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "PulseTaskSurfaceRender")
-    try FileManager.default.createDirectory(at: renderDirectory, withIntermediateDirectories: true)
-    let empty = LocalTaskController(
-      store: LocalTaskStore(
-        fileURL: directory.appendingPathComponent("empty-\(UUID()).json")))
-    await empty.refresh()
-    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
-      let appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
-      let cases: [(String, LocalTaskController, LocalTaskPresentation)] = [
-        ("list", controller, { let p = LocalTaskPresentation()
-          p.selectedFilter = .tag(repeated.tagIDs.first ?? UUID())
-          return p }()),
-        ("empty", empty, LocalTaskPresentation()),
-      ]
-      for (name, target, presentation) in cases {
-        let host = NSHostingView(
-          rootView:
-            LocalTasksView(
-              controller: target, presentation: presentation, onEditingChanged: { _ in })
-            .frame(width: 360, height: 455)
-            .background(Color(nsColor: .windowBackgroundColor)))
-        host.appearance = appearance
-        host.frame = NSRect(x: 0, y: 0, width: 360, height: 455)
-        host.layoutSubtreeIfNeeded()
-        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-        host.cacheDisplay(in: host.bounds, to: bitmap)
-        XCTAssertEqual(bitmap.pixelsWide * 455, bitmap.pixelsHigh * 360)
-        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-        try png.write(
-          to: renderDirectory.appendingPathComponent(
-            "\(appearanceName.rawValue)-\(name).png"))
-      }
-    }
-
-    // The surface keeps completed rows visible, dimmed, after the open ones.
-    XCTAssertEqual(
-      controller.incompleteTasks(matching: .tag(repeated.tagIDs.first ?? UUID())).map(\.text),
-      ["Daily stand-up"])
-    XCTAssertEqual(
-      controller.completedTasks(matching: .tag(repeated.tagIDs.first ?? UUID())).map(\.text),
-      ["Shipped earlier"])
-    // An empty tag vocabulary falls back to the single guidance tab, not "All".
-    XCTAssertEqual(empty.document?.tags.isEmpty, true)
-    let guidance = LocalTaskPresentation()
-    XCTAssertEqual(guidance.selectedFilter, .untagged)
-    guidance.reconcileTags(empty.document?.tags ?? [])
-    XCTAssertEqual(guidance.selectedFilter, .untagged)
-  }
-
-  /// A task created from "New tag…" must not inherit the shown tag.
-  func testNewTagIntentStagesNoExistingTag() throws {
-    let tag = TaskTag(name: "Work")
-    let presentation = LocalTaskPresentation()
-    presentation.reconcileTags([tag])
-    XCTAssertEqual(presentation.selectedFilter, .tag(tag.id))
-    presentation.beginAddingTaskWithNewTag()
-    XCTAssertEqual(presentation.selectedFilter, .untagged)
-    XCTAssertEqual(presentation.draft?.tagIDs, [])
-    XCTAssertNil(presentation.draft?.taskID)
-  }
-  /// A multi-tag task must reveal the same tab on every launch: `Set` iteration
-  /// order is not a stable tie-breaker for selection.
-  func testRevealedTagIsOldestCreationRatherThanSetOrder() throws {
-    let first = TaskTag(name: "Work")
-    let second = TaskTag(name: "Home")
-    for _ in 0..<20 {
-      let presentation = LocalTaskPresentation()
-      presentation.reconcileTags([first, second])
-      let draft = LocalTaskDraft()
-      presentation.draft = draft
-      presentation.didCreate(
-        id: draft.creationID,
-        task: LocalTask(id: draft.creationID, text: "Multi", tagIDs: [first.id, second.id]))
-      XCTAssertEqual(presentation.selectedFilter, .tag(first.id))
-      XCTAssertNil(presentation.draft)
-    }
-  }
-
 }
 
-private struct FailingInlineLocalWriter: LocalTaskFileWriting {
-  func write(_ data: Data, to fileURL: URL) throws { throw LocalTaskStoreError.saveFailed }
+@MainActor
+private final class MarkedTaskTextView: NSTextView {
+  var marked = false
+  override func hasMarkedText() -> Bool { marked }
 }

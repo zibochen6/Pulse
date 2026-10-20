@@ -13,6 +13,9 @@ enum LocalTaskStoreError: LocalizedError, Equatable {
   case tagMissing
   case saveFailed
   case verificationFailed
+  case multipleLists
+  case reservedTag
+  case backupFailed
 
   var errorDescription: String? {
     switch self {
@@ -21,6 +24,10 @@ enum LocalTaskStoreError: LocalizedError, Equatable {
       "The saved tasks could not be read. The file has been kept unchanged. Restore a valid copy and retry."
     case .unsupportedVersion:
       "These tasks were saved by a newer format. Update Pulse to read them; the file is unchanged."
+    case .multipleLists: "Choose one list for this task."
+    case .reservedTag: "Todo is the default list. Choose Todo instead."
+    case .backupFailed:
+      "Pulse could not back up the original tasks. The original file has not been changed. Check access and retry."
     case .emptyTask: "Enter a task before saving."
     case .emptyTag: "Enter a tag name."
     case .duplicateTag: "A tag with that name already exists."
@@ -48,9 +55,37 @@ enum LocalTaskMutation: Sendable {
   /// Re-arms daily tasks finished on an earlier day. Safe to call on every
   /// popover open: when nothing is stale the store writes nothing.
   case resetRepeatingTasks(today: Date)
+  case createTag(id: UUID, name: String)
+  case restoreTask(LocalTaskDeletionReceipt)
   case deleteTask(UUID)
   case renameTag(id: UUID, name: String)
   case deleteTag(UUID)
+}
+
+/// Captured from the transaction's reread, never from a possibly stale row.
+struct LocalTaskDeletionReceipt: Equatable, Identifiable, Sendable {
+  let id: UUID
+  let task: LocalTask
+  let index: Int
+  let previousID: UUID?
+  let nextID: UUID?
+  let deletedAt: ContinuousClock.Instant
+
+  init(task: LocalTask, index: Int, previousID: UUID?, nextID: UUID?) {
+    id = UUID()
+    self.task = task
+    self.index = index
+    self.previousID = previousID
+    self.nextID = nextID
+    deletedAt = .now
+  }
+}
+
+/// A replacement can commit before verification fails. Carry the receipt even
+/// through errors so the controller can reconcile with the actual file.
+struct LocalTaskDeletionError: Error, Sendable {
+  let receipt: LocalTaskDeletionReceipt
+  let cause: LocalTaskStoreError
 }
 
 /// Observation order comes from the storage queue, rather than the order in
@@ -58,9 +93,14 @@ enum LocalTaskMutation: Sendable {
 struct LocalTaskSnapshot: Sendable {
   let document: LocalTaskDocument
   let observedAt: ContinuousClock.Instant
+  let deletionReceipt: LocalTaskDeletionReceipt?
 
-  init(document: LocalTaskDocument, observedAt: ContinuousClock.Instant = .now) {
+  init(
+    document: LocalTaskDocument, observedAt: ContinuousClock.Instant = .now,
+    deletionReceipt: LocalTaskDeletionReceipt? = nil
+  ) {
     self.document = document
+    self.deletionReceipt = deletionReceipt
     self.observedAt = observedAt
   }
 }
@@ -112,38 +152,31 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
   func mutate(_ mutation: LocalTaskMutation) async throws -> LocalTaskSnapshot {
     try await onQueue {
       let original = try self.readDocument()
+      let receipt: LocalTaskDeletionReceipt?
+      if case .deleteTask(let id) = mutation,
+        let index = original.tasks.firstIndex(where: { $0.id == id })
+      {
+        receipt = LocalTaskDeletionReceipt(
+          task: original.tasks[index], index: index,
+          previousID: index > 0 ? original.tasks[index - 1].id : nil,
+          nextID: index + 1 < original.tasks.count ? original.tasks[index + 1].id : nil)
+      } else {
+        receipt = nil
+      }
       var updated = original
       try Self.apply(mutation, to: &updated)
-      try Self.validate(updated)
+      try Self.validate(updated, singleList: true)
       guard updated != original else { return LocalTaskSnapshot(document: original) }
-
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-      let bytes = try encoder.encode(updated)
       do {
-        let manager = FileManager.default
-        if manager.fileExists(atPath: self.fileURL.path),
-          let permissions = try manager.attributesOfItem(atPath: self.fileURL.path)[
-            .posixPermissions] as? NSNumber,
-          permissions.intValue & 0o222 == 0
-        {
-          throw LocalTaskStoreError.saveFailed
+        try self.writeVerified(updated)
+      } catch {
+        if let receipt {
+          throw LocalTaskDeletionError(
+            receipt: receipt, cause: error as? LocalTaskStoreError ?? .saveFailed)
         }
-        try manager.createDirectory(
-          at: self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try self.writer.write(bytes, to: self.fileURL)
-      } catch { throw LocalTaskStoreError.saveFailed }
-
-      // Do not report an in-memory change as saved merely because write returned.
-      let reread: Data
-      do { reread = try Data(contentsOf: self.fileURL) } catch {
-        throw LocalTaskStoreError.verificationFailed
+        throw error
       }
-      guard reread == bytes,
-        let verified = try? JSONDecoder().decode(LocalTaskDocument.self, from: reread),
-        verified == updated
-      else { throw LocalTaskStoreError.verificationFailed }
-      return LocalTaskSnapshot(document: verified)
+      return LocalTaskSnapshot(document: updated, deletionReceipt: receipt)
     }
   }
 
@@ -174,11 +207,71 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
     do { document = try JSONDecoder().decode(LocalTaskDocument.self, from: bytes) } catch {
       throw LocalTaskStoreError.corruptDocument
     }
+    // Validate the original before compatibility work. Corrupt/newer files
+    // are never normalized into a seemingly valid empty document.
     try Self.validate(document)
-    return document
+    let normalized = Self.normalized(document)
+    if normalized != document {
+      try backUpOriginal(bytes)
+      try writeVerified(normalized)
+    }
+    return normalized
   }
 
-  private static func validate(_ document: LocalTaskDocument) throws {
+  var compatibilityBackupURL: URL {
+    fileURL.deletingPathExtension().appendingPathExtension("before-single-list.json")
+  }
+
+  private func backUpOriginal(_ bytes: Data) throws {
+    do {
+      let backup = compatibilityBackupURL
+      if FileManager.default.fileExists(atPath: backup.path) {
+        guard try Data(contentsOf: backup) == bytes else { throw LocalTaskStoreError.backupFailed }
+      } else {
+        try writer.write(bytes, to: backup)
+      }
+      guard try Data(contentsOf: backup) == bytes else { throw LocalTaskStoreError.backupFailed }
+    } catch { throw LocalTaskStoreError.backupFailed }
+  }
+
+  private static func normalized(_ original: LocalTaskDocument) -> LocalTaskDocument {
+    var result = original
+    let defaultIDs = Set(original.tags.filter { canonicalName($0.name) == "todo" }.map(\.id))
+    result.tags.removeAll { defaultIDs.contains($0.id) }
+    for index in result.tasks.indices {
+      // Choose the first ORIGINAL tag, then merge a selected Todo into default.
+      let selected = original.tags.first { original.tasks[index].tagIDs.contains($0.id) }
+      result.tasks[index].tagIDs =
+        selected.flatMap { defaultIDs.contains($0.id) ? nil : $0.id }
+        .map { Set([$0]) } ?? []
+    }
+    return result
+  }
+
+  private func writeVerified(_ document: LocalTaskDocument) throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    let bytes = try encoder.encode(document)
+    do {
+      let manager = FileManager.default
+      if manager.fileExists(atPath: fileURL.path),
+        let permissions = try manager.attributesOfItem(atPath: fileURL.path)[.posixPermissions]
+          as? NSNumber,
+        permissions.intValue & 0o222 == 0
+      {
+        throw LocalTaskStoreError.saveFailed
+      }
+      try manager.createDirectory(
+        at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try writer.write(bytes, to: fileURL)
+    } catch { throw LocalTaskStoreError.saveFailed }
+    guard let reread = try? Data(contentsOf: fileURL), reread == bytes,
+      let verified = try? JSONDecoder().decode(LocalTaskDocument.self, from: reread),
+      verified == document
+    else { throw LocalTaskStoreError.verificationFailed }
+  }
+
+  private static func validate(_ document: LocalTaskDocument, singleList: Bool = false) throws {
     guard document.schemaVersion == LocalTaskDocument.currentSchemaVersion else {
       throw LocalTaskStoreError.unsupportedVersion
     }
@@ -192,6 +285,7 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
       document.tasks.allSatisfy({
         !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
           && $0.tagIDs.isSubset(of: tagIDs)
+          && (!singleList || $0.tagIDs.count <= 1)
       })
     else { throw LocalTaskStoreError.corruptDocument }
     // Repeating tasks deliberately add no validation: a daily task may stay
@@ -213,7 +307,7 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
     Calendar.current.isDate(lhs, inSameDayAs: rhs)
   }
 
-  private static func canonicalName(_ name: String) -> String {
+  static func canonicalName(_ name: String) -> String {
     name.trimmingCharacters(in: .whitespacesAndNewlines).folding(
       options: .caseInsensitive, locale: Locale(identifier: "en_US_POSIX"))
   }
@@ -223,6 +317,7 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
   {
     switch mutation {
     case .saveTask(let id, let rawText, var tagIDs, let newNames, let repeatsDaily, let creationID):
+      guard tagIDs.count + newNames.count <= 1 else { throw LocalTaskStoreError.multipleLists }
       let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !text.isEmpty else { throw LocalTaskStoreError.emptyTask }
       guard tagIDs.isSubset(of: Set(document.tags.map(\.id))) else {
@@ -250,6 +345,7 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
       for rawName in newNames {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw LocalTaskStoreError.emptyTag }
+        guard canonicalName(name) != "todo" else { throw LocalTaskStoreError.reservedTag }
         guard !document.tags.contains(where: { canonicalName($0.name) == canonicalName(name) })
         else {
           throw LocalTaskStoreError.duplicateTag
@@ -298,7 +394,9 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
       if document.tasks[index].completed,
         let lastDay = document.tasks[index].lastCompletedDay,
         isSameDay(lastDay, completedAt)
-      { return }
+      {
+        return
+      }
       document.tasks[index].completed = true
       document.tasks[index].lastCompletedDay = dayStart(completedAt)
     case .resetRepeatingTasks(let today):
@@ -310,6 +408,39 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
         if let lastDay = document.tasks[index].lastCompletedDay, lastDay >= todayStart { continue }
         document.tasks[index].completed = false
       }
+    case .createTag(let id, let rawName):
+      let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !name.isEmpty else { throw LocalTaskStoreError.emptyTag }
+      guard canonicalName(name) != "todo" else { throw LocalTaskStoreError.reservedTag }
+      if let existing = document.tags.first(where: { $0.id == id }) {
+        guard canonicalName(existing.name) == canonicalName(name) else {
+          throw LocalTaskStoreError.duplicateTag
+        }
+        return
+      }
+      guard !document.tags.contains(where: { canonicalName($0.name) == canonicalName(name) }) else {
+        throw LocalTaskStoreError.duplicateTag
+      }
+      document.tags.append(TaskTag(id: id, name: name))
+    case .restoreTask(let receipt):
+      var task = receipt.task
+      task.tagIDs.formIntersection(Set(document.tags.map(\.id)))
+      if let existing = document.tasks.first(where: { $0.id == task.id }) {
+        guard existing == task else { throw LocalTaskStoreError.taskConflict }
+        return
+      }
+      let insertion: Int
+      if let next = receipt.nextID, let index = document.tasks.firstIndex(where: { $0.id == next })
+      {
+        insertion = index
+      } else if let previous = receipt.previousID,
+        let index = document.tasks.firstIndex(where: { $0.id == previous })
+      {
+        insertion = index + 1
+      } else {
+        insertion = min(receipt.index, document.tasks.count)
+      }
+      document.tasks.insert(task, at: insertion)
     case .deleteTask(let id):
       guard let index = document.tasks.firstIndex(where: { $0.id == id }) else {
         return
@@ -321,6 +452,7 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
       }
       let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !name.isEmpty else { throw LocalTaskStoreError.emptyTag }
+      guard canonicalName(name) != "todo" else { throw LocalTaskStoreError.reservedTag }
       guard
         !document.tags.contains(where: {
           $0.id != id && canonicalName($0.name) == canonicalName(name)
