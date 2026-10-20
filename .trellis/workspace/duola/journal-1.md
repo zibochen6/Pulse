@@ -532,3 +532,26 @@ Implemented trailing centered add control with per-list retained expandable draf
 ### Status
 
 [OK] **Completed**
+
+
+## Session 22: Release Pulse 0.1.5
+<!-- trellis-session: v=2 fp=0678ef109230695a -->
+
+**Date**: 2026-10-21
+**Task**: Release Pulse 0.1.5
+**Branch**: `main`
+
+### Summary
+
+Published v0.1.5/build9 through canonical release.sh after 180 isolated tests. Signed universal arm64/x86_64 app verified in mounted DMG, extracted ZIP and local installation. Four GitHub assets/latest/tag/main verified; release source 031b71a273f037e6d49656a817e8b3bee29eb53b. Installed /Applications/Pulse.app with one process PID60489; old 0.1.4/build8 backed up. Executable SHA256 bd91aaec28e0b93ffab60d090a2d83cd80829b181d0f73ef85c685be84406a31. Real Todo file bytes unchanged. Log /tmp/Pulse-0.1.5-release.log; staging /var/folders/m9/q_604zm12glft_dyqknk7jbc0000gn/T/pulse-release-0.1.5.LobUCE. Existing live-desktop IME/mouse QA limitation remains.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4fbd57` | docs: prepare Pulse 0.1.5 release notes |
+| `031b71a` | release: prepare Pulse 0.1.5 |
+
+### Status
+
+[OK] **Completed**
