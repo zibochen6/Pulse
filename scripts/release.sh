@@ -416,6 +416,9 @@ case "$NOTES_FILE" in "$REPO_ROOT"/*) NOTES_REL="${NOTES_FILE#"$REPO_ROOT"/}" ;;
 
 step "1/10 Preflight"
 for tool in git gh xcodegen xcodebuild ditto hdiutil shasum codesign lipo plutil security osascript open pgrep ps awk sed mktemp; do need_cmd "$tool"; done
+if grep -qE '^[[:space:]]*- path: Tests/Fixtures' project.yml && [ ! -d Tests/Fixtures ]; then
+  die "project.yml lists 'Tests/Fixtures' as a source, but that directory does not exist (git does not track empty dirs). Run: mkdir -p Tests/Fixtures, or remove that source from project.yml. Refusing to fail later inside xcodegen."
+fi
 
 BRANCH="$(git branch --show-current)"
 [ "$BRANCH" = "main" ] || die "must run on branch main (currently: '${BRANCH:-detached HEAD}'). Check out main and rerun."
