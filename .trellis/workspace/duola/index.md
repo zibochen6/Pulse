@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 19
-- **Last Active**: 2026-10-20
+- **Total Sessions**: 20
+- **Last Active**: 2026-10-21
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~489 | Active |
+| `journal-1.md` | ~512 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 20 | 2026-10-21 | Release Pulse 0.1.4 | `983bbbd`, `69844f1` | `main` |
 | 19 | 2026-10-20 | Todo and tag interaction improvements | `f7f617c` | `codex/todo-tag-interactions` |
 | 17 | 2026-10-18 | DeepSeek monitoring and Pulse 0.1.2 release | `4b2a808` | `main` |
 | 16 | 2026-10-08 | Pulse 0.1.1 retry safety and preview release | `d986e9b`, `878ec52` | `main` |

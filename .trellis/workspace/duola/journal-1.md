@@ -487,3 +487,26 @@ Implemented independent single-tag lists with permanent Todo, empty-tag creation
 ### Status
 
 [OK] **Completed**
+
+
+## Session 20: Release Pulse 0.1.4
+<!-- trellis-session: v=2 fp=dcbff7b2bf52eca6 -->
+
+**Date**: 2026-10-21
+**Task**: Release Pulse 0.1.4
+**Branch**: `main`
+
+### Summary
+
+Published user-authorized Pulse0.1.4/build8 and replaced/relaunched /Applications/Pulse.app through scripts/release.sh. Preflight and175 tests passed. Universal arm64+x86_64 Apple Development-signed Release, mounted DMG and extracted updater ZIP verified; all4 GitHub asset digests match local artifacts. Release source69844f1 matches pushed main and v0.1.4. Exactly one installed process verified, executable SHA256 b9e90e29729e22003ef356ac25c3d2bd6ec12f75cda2614fd7c1d1626052f60a. Previous0.1.3/build7 backed up at ~/Library/Application Support/Pulse/Backups/Pulse-0.1.3-7.app. All4 existing tasks retain IDs/text/repeat fields and original bytes; compatibility backup not yet needed because task surface has not loaded. Release https://github.com/zibochen6/Pulse/releases/tag/v0.1.4 ; pipeline log /tmp/Pulse-0.1.4-release.log. Live desktop mouse/IME limitation remains recorded in release notes. Pre-existing .workbuddy and docs/images excluded.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `983bbbd` | docs: prepare Pulse 0.1.4 release notes |
+| `69844f1` | release: prepare Pulse 0.1.4 |
+
+### Status
+
+[OK] **Completed**
