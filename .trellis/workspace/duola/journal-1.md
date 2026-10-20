@@ -510,3 +510,25 @@ Published user-authorized Pulse0.1.4/build8 and replaced/relaunched /Application
 ### Status
 
 [OK] **Completed**
+
+
+## Session 21: Minimal Todo list and editor
+<!-- trellis-session: v=2 fp=a9ba0626a3a370a2 -->
+
+**Date**: 2026-10-21
+**Task**: Minimal Todo list and editor
+**Branch**: `codex/minimal-todo-editor`
+
+### Summary
+
+Implemented trailing centered add control with per-list retained expandable drafts and successful-save collapse, compact editor toolbar/content/property rows and conditional new-tag input. Added native focus/scroll, Escape and late end-edit callback protection. Independent quality gate passed; 180 tests, strict lint and diff checks pass. 28 Aqua/Dark Aqua previews inspected. Real task bytes unchanged. Native desktop mouse/IME QA limited by CUA -10005 timeout. Local feature branch only; no release or production replacement.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85ee083` | feat: simplify todo entry and task editor |
+
+### Status
+
+[OK] **Completed**
