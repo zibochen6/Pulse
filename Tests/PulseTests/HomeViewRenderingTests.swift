@@ -59,7 +59,7 @@ final class HomeViewRenderingTests: XCTestCase {
       }
       for page in [
         PopoverPage.home, .usage, .settings(.general), .settings(.providers),
-        .settings(.tasks), .settings(.about),
+        .settings(.tasks), .settings(.updates), .settings(.about),
       ] {
         let pages = PopoverPageController()
         switch page {
@@ -296,7 +296,9 @@ final class HomeViewRenderingTests: XCTestCase {
       "PulseSettingsActionRender")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
-      for destination in [SettingsDestination.general, .providers, .tasks] {
+      for destination in [
+        SettingsDestination.general, .providers, .tasks, .updates,
+      ] {
         let pages = PopoverPageController()
         pages.showSettings(destination)
         let host = NSHostingView(
