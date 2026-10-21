@@ -145,6 +145,16 @@ final class LocalTaskController: ObservableObject {
     await perform(.renameTag(id: id, name: name))
   }
   func deleteTag(id: UUID) async -> Bool { await perform(.deleteTag(id)) }
+
+  /// Reorders a tag. The same pending guard as tag creation stops a second
+  /// drag or a keyboard repeat from queueing a competing write for one tag.
+  func moveTag(id: UUID, toIndex: Int) async -> Bool {
+    guard !pendingCreationIDs.contains(id) else { return false }
+    pendingCreationIDs.insert(id)
+    defer { pendingCreationIDs.remove(id) }
+    return await perform(.moveTag(id: id, toIndex: toIndex))
+  }
+
   func dismissError() { errorMessage = nil }
   func dismissCompletionFailure(taskID: UUID) { completionFailures.removeValue(forKey: taskID) }
 

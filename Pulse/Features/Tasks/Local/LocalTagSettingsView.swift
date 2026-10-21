@@ -31,7 +31,9 @@ struct LocalTagSettingsView: View {
             .foregroundStyle(.secondary)
         }
         ForEach(document.tags) { tag in
-          tagContent(tag)
+          tagContent(
+            tag, index: document.tags.firstIndex(where: { $0.id == tag.id }) ?? 0,
+            count: document.tags.count)
         }
       } else if controller.isLoading {
         ProgressView().controlSize(.mini)
@@ -57,7 +59,7 @@ struct LocalTagSettingsView: View {
   }
 
   @ViewBuilder
-  private func tagContent(_ tag: TaskTag) -> some View {
+  private func tagContent(_ tag: TaskTag, index: Int, count: Int) -> some View {
     if editingTagID == tag.id {
       VStack(alignment: .leading, spacing: 6) {
         if confirmsDeletion {
@@ -103,22 +105,50 @@ struct LocalTagSettingsView: View {
           .foregroundStyle(.secondary)
         Text(tag.name)
           .font(.system(size: 13))
-        Spacer()
+          .lineLimit(1)
+          .truncationMode(.tail)
+          .layoutPriority(0)
+        Spacer(minLength: 4)
+        // Reordering is offered here too, so the Settings list can be arranged
+        // without going back to the tab bar. Icons keep the row inside the
+        // 360 pt popover; the tab bar's context menu names the same two
+        // commands in words.
+        Button {
+          moveTag(tag, to: index - 1)
+        } label: {
+          Image(systemName: "chevron.left")
+        }
+        .buttonStyle(PulseIconButtonStyle())
+        .disabled(isBusy || index == 0)
+        .help("Move left")
+        .accessibilityLabel("Move \(tag.name) left")
+        .accessibilityIdentifier("moveLocalTagLeft.\(tag.id.uuidString)")
+        Button {
+          moveTag(tag, to: index + 1)
+        } label: {
+          Image(systemName: "chevron.right")
+        }
+        .buttonStyle(PulseIconButtonStyle())
+        .disabled(isBusy || index >= count - 1)
+        .help("Move right")
+        .accessibilityLabel("Move \(tag.name) right")
+        .accessibilityIdentifier("moveLocalTagRight.\(tag.id.uuidString)")
         Button("Rename") {
           controller.dismissError()
           proposedName = tag.name
           confirmsDeletion = false
           editingTagID = tag.id
         }
+        .buttonStyle(PulseActionButtonStyle())
         .accessibilityIdentifier("renameLocalTag.\(tag.id.uuidString)")
         Button("Remove", role: .destructive) {
           controller.dismissError()
           confirmsDeletion = true
           editingTagID = tag.id
         }
+        .buttonStyle(PulseActionButtonStyle())
         .accessibilityIdentifier("deleteLocalTag.\(tag.id.uuidString)")
       }
-      .buttonStyle(PulseActionButtonStyle())
       .font(.caption)
       .disabled(isBusy)
     }
@@ -132,6 +162,15 @@ struct LocalTagSettingsView: View {
     Task {
       defer { isSubmitting = false }
       if await controller.renameTag(id: tag.id, name: name) { closeEditor() }
+    }
+  }
+
+  private func moveTag(_ tag: TaskTag, to index: Int) {
+    guard !isBusy, let tags = controller.document?.tags else { return }
+    let clamped = max(0, min(index, tags.count - 1))
+    guard clamped != tags.firstIndex(where: { $0.id == tag.id }) else { return }
+    Task {
+      _ = await controller.moveTag(id: tag.id, toIndex: clamped)
     }
   }
 

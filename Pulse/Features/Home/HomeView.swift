@@ -16,6 +16,7 @@ struct HomeView: View {
   /// "Later" hides the ready banner for this run only; the update stays staged
   /// and is still installed when Pulse quits.
   @State private var hidesUpdateBanner = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @ObservedObject var pages: PopoverPageController
   let onDeepSeekCredentialsChanged: () -> Void
   let onVIPCredentialsChanged: () -> Void
@@ -95,6 +96,9 @@ struct HomeView: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .accessibilityIdentifier("tasksRegion")
     }
+    .animation(
+      reduceMotion ? nil : PulseDesignTokens.insertionAnimation,
+      value: updates.stagedRelease != nil && !hidesUpdateBanner)
   }
 
   private var usageContent: some View {

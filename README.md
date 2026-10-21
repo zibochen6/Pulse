@@ -140,8 +140,11 @@ and their decimal digits remain visible in full within the 360 × 510 popover.
 
 Pulse has independent native to-do lists. **Todo** always holds tasks without a
 custom tag; each custom tag is another list, and each task belongs to one list.
-Use the tab bar's **+** to create an empty tag. A separate centered **+** at the
-end of the task list expands quick entry; Enter saves and collapses it again.
+Use the tab bar's **+** to create an empty tag. Drag any tab to set the order,
+or use **Move Left** / **Move Right** from its context menu and from Settings →
+Tasks; the order is saved and survives relaunch. A separate centered **+** at
+the end of the task list expands quick entry; Enter saves and collapses it
+again.
 Collapse without saving to retain a draft for later. Options expose single-list
 selection, **New tag…** and **Repeat daily**. The compact editor has explicit
 Cancel/Save actions and list/repeat settings. Moving a task changes its list.
@@ -158,14 +161,14 @@ for failure behavior, compatibility and manual acceptance.
 ## Direction
 
 - **AI status:** Codex, 88VIP, and DeepSeek are connected. Provider-specific capabilities for OpenAI API, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window are displayed as different kinds of information.
-- **Local to-dos:** the native list is Pulse's single task system — tag tabs, centered quick add, completed rows kept visible, and per-task daily repeat. Everything is stored locally in one JSON file on this Mac.
+- **Local to-dos:** the native list is Pulse's single task system — tag tabs you can drag into your own order, centered quick add, completed rows kept visible, and per-task daily repeat. Everything is stored locally in one JSON file on this Mac.
 - **Privacy:** the app runs locally. 88VIP and DeepSeek API keys are stored in macOS Keychain; ordinary preferences use UserDefaults. Tasks are stored locally; Pulse keeps no imported note content and has no analytics.
 
 See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
 
 ## 中文简介
 
-Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和本地待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额与 DeepSeek 原币种余额：菜单栏只显示 Codex，弹窗头部并排显示三项紧凑状态，点击可进入 Usage 详情，设置是同一弹窗中的另一页。任务区只有一套原生待办：标签即标签页，没有"全部"和"未分类"标签页，没有标签时显示单个指引标签 "Todo"，空状态为"暂无任务"或"此标签下暂无任务"；选中标签为填充的圆角胶囊样式，键盘焦点是与形状匹配的柔和描边而不是方框。列表下方居中的 `+` 就地展开内联新建（文本、标签菜单、新建标签、"每日重复"复选框、Add/Cancel），标签行右端的 `+` 可按标签新建任务或新建标签。已完成任务不会消失：它们变暗并加删除线，排在未完成任务之后的 "Completed" 分组下，悬停行可删除（需确认），也可在编辑页删除（同样需确认）。勾选"每日重复"的任务会记录本地日历日；每次打开 Pulse（弹窗打开或任务界面出现）都会把前一天已完成的重复任务恢复为未完成，任务正文旁有循环箭头小标记。任务保存在本地 `~/Library/Application Support/Pulse/tasks.json`，模式版本仍为 1，新增键为可选，旧版本文件无需迁移即可读写。设置中的 Tasks 页只管理标签（重命名/删除），没有任务来源选项，旧的连接与导入数据保持原样。更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
+Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和本地待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额与 DeepSeek 原币种余额：菜单栏只显示 Codex，弹窗头部并排显示三项紧凑状态，点击可进入 Usage 详情，设置是同一弹窗中的另一页。任务区只有一套原生待办：标签即标签页，没有"全部"和"未分类"标签页，没有标签时显示单个指引标签 "Todo"，空状态为"暂无任务"或"此标签下暂无任务"；选中标签为填充的圆角胶囊样式，键盘焦点是与形状匹配的柔和描边而不是方框。标签页可直接拖拽调序（拖动时会有插入位置提示），也可用右键菜单的 Move Left / Move Right（⌥⌘← / ⌥⌘→）或设置页调整，顺序保存在本地并重启后保持；"Todo" 始终在最左且不可拖动。列表下方居中的 `+` 就地展开内联新建（文本、标签菜单、新建标签、"每日重复"复选框、Add/Cancel），标签行右端的 `+` 可按标签新建任务或新建标签。已完成任务不会消失：它们变暗并加删除线，排在未完成任务之后的 "Completed" 分组下，悬停行可删除（需确认），也可在编辑页删除（同样需确认）。勾选"每日重复"的任务会记录本地日历日；每次打开 Pulse（弹窗打开或任务界面出现）都会把前一天已完成的重复任务恢复为未完成，任务正文旁有循环箭头小标记。任务保存在本地 `~/Library/Application Support/Pulse/tasks.json`，模式版本仍为 1，新增键为可选，旧版本文件无需迁移即可读写。设置中的 Tasks 页只管理标签（排序/重命名/删除），没有任务来源选项，旧的连接与导入数据保持原样。更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
 
 ## License
 

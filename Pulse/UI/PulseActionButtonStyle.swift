@@ -44,8 +44,9 @@ struct PulseActionButtonStyle: ButtonStyle {
         .focused($focused)
         .pulseDisableSystemFocusRing()
         .onHover { isHovered = $0 }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: isHovered)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: configuration.isPressed)
+        .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
+        .animation(
+          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed)
     }
 
     private var background: Color {

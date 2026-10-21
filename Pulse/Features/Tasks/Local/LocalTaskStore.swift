@@ -60,6 +60,10 @@ enum LocalTaskMutation: Sendable {
   case deleteTask(UUID)
   case renameTag(id: UUID, name: String)
   case deleteTag(UUID)
+  /// Moves a tag to `toIndex` in the *resulting* tag array: the tag is removed
+  /// first and then inserted there, so `toIndex` is the position it occupies
+  /// after the move and `tags.count - 1` is "last".
+  case moveTag(id: UUID, toIndex: Int)
 }
 
 /// Captured from the transaction's reread, never from a possibly stale row.
@@ -467,6 +471,21 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
       }
       document.tags.remove(at: index)
       for index in document.tasks.indices { document.tasks[index].tagIDs.remove(id) }
+    case .moveTag(let id, let toIndex):
+      // A tag removed while this drag was in flight is a stale request, not a
+      // mistake to punish: refusing leaves the file consistent and the view
+      // reconciles against the tags that actually exist.
+      guard let current = document.tags.firstIndex(where: { $0.id == id }) else {
+        throw LocalTaskStoreError.tagMissing
+      }
+      // An out-of-range destination is clamped rather than rejected. The array
+      // length is the only truth here, and a drag that raced a tag deletion
+      // must not turn into a hard failure over a count that drifted.
+      let lastIndex = document.tags.count - 1
+      let destination = max(0, min(toIndex, lastIndex))
+      guard destination != current else { return }
+      let moved = document.tags.remove(at: current)
+      document.tags.insert(moved, at: destination)
     }
   }
 }

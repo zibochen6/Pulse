@@ -276,6 +276,80 @@ final class LocalTasksRenderingTests: XCTestCase {
     XCTAssertEqual(presentation.revealedTaskID, task.id)
   }
 
+  func testTagDragReorderPublishesPreviewAndConvergesOnConfirmedOrder() {
+    let presentation = LocalTaskPresentation()
+    let work = TaskTag(name: "Work")
+    let home = TaskTag(name: "Home")
+    let writing = TaskTag(name: "Writing")
+    let tags = [work, home, writing]
+    presentation.beginTagDrag(writing.id)
+    XCTAssertEqual(presentation.draggingTagID, writing.id)
+    let toIndex = presentation.commitTagMove(
+      writing.id, to: LocalTagDropTarget(pillID: work.id, index: 0, edge: .leading),
+      tagIDs: tags.map(\.id))
+    XCTAssertEqual(toIndex, 0)
+    // The bar shows the drop immediately, before storage has confirmed it.
+    XCTAssertEqual(presentation.displayOrder(tags).map(\.id), [writing.id, work.id, home.id])
+    XCTAssertNil(presentation.draggingTagID, "the drag is over once it is committed")
+    // Storage confirms the same order, so the preview is dropped silently
+    // rather than animating a second time.
+    presentation.reconcileTagOrder([writing, work, home])
+    XCTAssertNil(presentation.pendingTagOrder)
+    XCTAssertEqual(
+      presentation.displayOrder([writing, work, home]).map(\.id), [writing.id, work.id, home.id])
+  }
+
+  func testTagMovesAreIgnoredForTheirOwnSlotUnknownTagsAndBadIndexes() {
+    let presentation = LocalTaskPresentation()
+    let work = TaskTag(name: "Work")
+    let home = TaskTag(name: "Home")
+    let tagIDs = [work.id, home.id]
+    presentation.beginTagDrag(home.id)
+    XCTAssertNil(presentation.commitTagMove(home.id, toIndex: 1, tagIDs: tagIDs))
+    XCTAssertNil(presentation.commitTagMove(home.id, toIndex: -3, tagIDs: tagIDs))
+    XCTAssertNil(presentation.commitTagMove(home.id, toIndex: 8, tagIDs: tagIDs))
+    XCTAssertNil(presentation.commitTagMove(UUID(), toIndex: 0, tagIDs: tagIDs))
+    XCTAssertNil(presentation.commitTagMove(home.id, to: nil, tagIDs: tagIDs))
+    XCTAssertNil(presentation.pendingTagOrder, "an ignored drop must not move anything")
+  }
+
+  func testFailedTagMoveAbandonsThePreview() {
+    let presentation = LocalTaskPresentation()
+    let work = TaskTag(name: "Work")
+    let home = TaskTag(name: "Home")
+    presentation.beginTagDrag(home.id)
+    XCTAssertEqual(presentation.commitTagMove(home.id, toIndex: 0, tagIDs: [work.id, home.id]), 0)
+    XCTAssertEqual(presentation.displayOrder([work, home]).map(\.id), [home.id, work.id])
+    presentation.abandonTagMove()
+    XCTAssertNil(presentation.pendingTagOrder)
+    XCTAssertEqual(presentation.displayOrder([work, home]).map(\.id), [work.id, home.id])
+  }
+
+  func testTagPreviewNeverHidesATagCreatedWhileAMoveIsPending() {
+    let presentation = LocalTaskPresentation()
+    let work = TaskTag(name: "Work")
+    let home = TaskTag(name: "Home")
+    presentation.beginTagDrag(home.id)
+    XCTAssertEqual(presentation.commitTagMove(home.id, toIndex: 0, tagIDs: [work.id, home.id]), 0)
+    let writing = TaskTag(name: "Writing")
+    XCTAssertEqual(
+      presentation.displayOrder([work, home, writing]).map(\.id),
+      [home.id, work.id, writing.id])
+  }
+
+  func testEngagedTagDropSuspendsPointerDismissalButABareDragDoesNot() {
+    let presentation = LocalTaskPresentation()
+    XCTAssertFalse(presentation.isInteractionActive)
+    presentation.beginTagDrag(UUID())
+    XCTAssertFalse(
+      presentation.isInteractionActive,
+      "a bare drag must not pin the popover open; a cancelled drag can go unnoticed")
+    presentation.updateTagDrop(LocalTagDropTarget(pillID: UUID(), index: 0, edge: .leading))
+    XCTAssertTrue(presentation.isInteractionActive)
+    presentation.updateTagDrop(nil)
+    XCTAssertFalse(presentation.isInteractionActive)
+  }
+
   func testReturningFromEditorScrollsNewlyMountedListToSavedTaskOnce() async throws {
     let controller = try await controller()
     for index in 0..<40 {
@@ -631,20 +705,30 @@ final class LocalTasksRenderingTests: XCTestCase {
       _ = await longList.saveTask(
         id: nil, text: "示例事项 \(index + 1)", tagIDs: [work.id], newTagNames: [])
     }
+    // Several tags on one bar, so the drag caret has a boundary to sit on.
+    let reorderList = try await self.controller()
+    let reorderTags = ["Work", "Home", "Writing"].map { TaskTag(name: $0) }
+    for tag in reorderTags {
+      _ = await reorderList.createTag(id: tag.id, name: tag.name)
+    }
     let renderDirectory = URL(fileURLWithPath: "/tmp/PulseMinimalTodoRender", isDirectory: true)
     try FileManager.default.createDirectory(at: renderDirectory, withIntermediateDirectories: true)
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
       for mode in [
         "empty", "list", "completed-only", "collapsed", "options", "editor", "new-tag",
         "rename-tag", "delete-tag", "tag-settings", "composer", "editor-new-tag", "editor-error",
-        "long-list",
+        "long-list", "tag-drag", "tag-reorder",
       ] {
         controller.dismissError()
         let presentation = LocalTaskPresentation()
-        let target =
-          mode == "empty"
-          ? empty
-          : mode == "completed-only" ? completedOnly : mode == "long-list" ? longList : controller
+        let target: LocalTaskController
+        switch mode {
+        case "empty": target = empty
+        case "completed-only": target = completedOnly
+        case "long-list": target = longList
+        case "tag-drag", "tag-reorder": target = reorderList
+        default: target = controller
+        }
         presentation.reconcileTags(target.document?.tags ?? [])
         if mode != "empty" { presentation.selectedFilter = .tag(work.id) }
         switch mode {
@@ -674,6 +758,20 @@ final class LocalTasksRenderingTests: XCTestCase {
         case "collapsed": presentation.collapsedCompleted.insert(.tag(work.id))
         case "completed-only":
           presentation.selectedFilter = .untagged
+        case "tag-drag":
+          // A live drag of the first tag towards the end of the bar: the
+          // dragged pill is dimmed and the caret sits on the last pill's
+          // trailing edge, half outside the capsule.
+          presentation.selectedFilter = .tag(reorderTags[0].id)
+          presentation.beginTagDrag(reorderTags[0].id)
+          presentation.updateTagDrop(
+            LocalTagDropTarget(pillID: reorderTags[2].id, index: 2, edge: .trailing))
+        case "tag-reorder":
+          // The optimistic order after that drop, before storage confirms it.
+          presentation.selectedFilter = .tag(reorderTags[0].id)
+          presentation.pendingTagOrder = [
+            reorderTags[1].id, reorderTags[2].id, reorderTags[0].id,
+          ]
         default: break
         }
         let content: AnyView

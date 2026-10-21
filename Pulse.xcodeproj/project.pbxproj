@@ -44,6 +44,7 @@
 		7DA5A5C4CA1C06CF699C8B92 /* UpdateArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D4228C05D50510CB51BF48D /* UpdateArchive.swift */; };
 		84E4BF6159673FA92DAAD65D /* LocalTaskStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21776204749CB9D05914233B /* LocalTaskStorageTests.swift */; };
 		85B40BEF67AA1C3909B2B0A7 /* LocalTaskController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A96382B34E302A7A4571435 /* LocalTaskController.swift */; };
+		884D1158FED36B0697BDED86 /* LocalTagReorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC0456615A31D8440AB8ECE /* LocalTagReorder.swift */; };
 		8B4E3BDB920735E58A0A4184 /* UpdateChecksum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE6098E5849B352D6A230BC /* UpdateChecksum.swift */; };
 		92526D6A0C60CAA531B5A941 /* DeepSeekUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D031446E76DE601D0D7B2F /* DeepSeekUsageTests.swift */; };
 		92AD78C730D8747970CAD1EA /* UpdatePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A78C1EC9187C29E8EB5C633 /* UpdatePreferences.swift */; };
@@ -67,6 +68,7 @@
 		C21628B1FB230845B6C498DA /* UpdateTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384B56134EB99E8DE097A9E9 /* UpdateTestSupport.swift */; };
 		C50F59AEDCE8E1F95D2EC428 /* PulseAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A965B055E0C77604352A1B2 /* PulseAppDelegate.swift */; };
 		C5D93053CF6CF9C2F860D56A /* DeepSeekStatusSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F8F59654EFDBD6A6BC4CD8 /* DeepSeekStatusSummary.swift */; };
+		C76F41A89EE4860FCCCEE76D /* LocalTagReorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 402C0DD8A31339CF72B6E6E2 /* LocalTagReorderTests.swift */; };
 		D0B2C24325FFB34F4EC3C153 /* DeepSeekProviderIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E73F80F3C7C6B0FCF5425EA /* DeepSeekProviderIcon.swift */; };
 		D53FCE80E27506B55F51E4E8 /* LocalTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD105F6FD073A53E8EE3CE6 /* LocalTaskStore.swift */; };
 		D7B982F5C6010AF39032C442 /* PulseDesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CDEEA43A307EB361306B3A8 /* PulseDesignTokens.swift */; };
@@ -113,6 +115,7 @@
 		36929D1609E33BD51819C9C7 /* LocalTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTask.swift; sourceTree = "<group>"; };
 		384B56134EB99E8DE097A9E9 /* UpdateTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateTestSupport.swift; sourceTree = "<group>"; };
 		3B6FE7FC418EBBA7521EEB4C /* PulseFocusEffect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseFocusEffect.swift; sourceTree = "<group>"; };
+		402C0DD8A31339CF72B6E6E2 /* LocalTagReorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTagReorderTests.swift; sourceTree = "<group>"; };
 		441866DB43F7C8459D8A210B /* PulseApplicationMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseApplicationMenuTests.swift; sourceTree = "<group>"; };
 		46F164972943AB9CCA0C495A /* SecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretStore.swift; sourceTree = "<group>"; };
 		488B789B49DD6ECF053238BD /* UpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateController.swift; sourceTree = "<group>"; };
@@ -120,6 +123,7 @@
 		4FBA30D234A433E58E16508B /* PulseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5763D22FF29A87447FD82E62 /* UsageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageController.swift; sourceTree = "<group>"; };
 		5823C23B8E4F0D4F7DA8E7A9 /* VIPConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPConfiguration.swift; sourceTree = "<group>"; };
+		5BC0456615A31D8440AB8ECE /* LocalTagReorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTagReorder.swift; sourceTree = "<group>"; };
 		5F293341995B6DF958E21987 /* CodexProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProviderIcon.swift; sourceTree = "<group>"; };
 		5FB59F65E0164FAEC859576B /* VIPProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPProviderIcon.swift; sourceTree = "<group>"; };
 		68A18956B27ACC01716A4841 /* DeepSeekProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekProvider.swift; sourceTree = "<group>"; };
@@ -275,6 +279,7 @@
 		811837C37E1A93395C36C17C /* Local */ = {
 			isa = PBXGroup;
 			children = (
+				5BC0456615A31D8440AB8ECE /* LocalTagReorder.swift */,
 				0FF340EC2F400E3D116F82B3 /* LocalTagSettingsView.swift */,
 				36929D1609E33BD51819C9C7 /* LocalTask.swift */,
 				1A96382B34E302A7A4571435 /* LocalTaskController.swift */,
@@ -353,6 +358,7 @@
 				D901E427033AC23A76278F78 /* DeepSeekRenderingTests.swift */,
 				C7D031446E76DE601D0D7B2F /* DeepSeekUsageTests.swift */,
 				F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */,
+				402C0DD8A31339CF72B6E6E2 /* LocalTagReorderTests.swift */,
 				FAA059DD49514947DEAEB889 /* LocalTaskControllerTests.swift */,
 				F72995BB71D773FCEF828671 /* LocalTaskInteractionStorageTests.swift */,
 				B4AC82C04589E099C65A4FA9 /* LocalTasksRenderingTests.swift */,
@@ -478,6 +484,7 @@
 				AAF52EB9E8D5324CA25B00ED /* DeepSeekRenderingTests.swift in Sources */,
 				92526D6A0C60CAA531B5A941 /* DeepSeekUsageTests.swift in Sources */,
 				0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */,
+				C76F41A89EE4860FCCCEE76D /* LocalTagReorderTests.swift in Sources */,
 				68FA78572F380260FE065046 /* LocalTaskControllerTests.swift in Sources */,
 				D87E9AD4374CCDB1DAE6E893 /* LocalTaskInteractionStorageTests.swift in Sources */,
 				84E4BF6159673FA92DAAD65D /* LocalTaskStorageTests.swift in Sources */,
@@ -508,6 +515,7 @@
 				D0B2C24325FFB34F4EC3C153 /* DeepSeekProviderIcon.swift in Sources */,
 				C5D93053CF6CF9C2F860D56A /* DeepSeekStatusSummary.swift in Sources */,
 				3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */,
+				884D1158FED36B0697BDED86 /* LocalTagReorder.swift in Sources */,
 				41EA3DB12BEA80C13861F06F /* LocalTagSettingsView.swift in Sources */,
 				BB0BC398F38CB7B8F9499C1D /* LocalTask.swift in Sources */,
 				85B40BEF67AA1C3909B2B0A7 /* LocalTaskController.swift in Sources */,

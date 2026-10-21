@@ -59,6 +59,52 @@ final class LocalTaskControllerTests: XCTestCase {
     XCTAssertEqual(reopened.document?.tasks.map(\.text), ["Untagged"])
   }
 
+  func testMoveTagReordersThroughStorageAndRejectsAStaleTag() async throws {
+    let store = try store()
+    let controller = LocalTaskController(store: store)
+    await controller.refresh()
+    let work = UUID()
+    let home = UUID()
+    let writing = UUID()
+    for (id, name) in [(work, "Work"), (home, "Home"), (writing, "Writing")] {
+      let created = await controller.createTag(id: id, name: name)
+      XCTAssertTrue(created)
+    }
+    let moved = await controller.moveTag(id: writing, toIndex: 0)
+    XCTAssertTrue(moved)
+    XCTAssertEqual(controller.document?.tags.map(\.id), [writing, work, home])
+    // A tag deleted while a drag was in flight is a stale request: nothing moves.
+    let stale = await controller.moveTag(id: UUID(), toIndex: 0)
+    XCTAssertFalse(stale)
+    XCTAssertNotNil(controller.errorMessage)
+    let reopened = LocalTaskController(store: store)
+    await reopened.refresh()
+    XCTAssertEqual(reopened.document?.tags.map(\.id), [writing, work, home])
+  }
+
+  func testMoveTagRefusesASecondIntentWhileOneIsInFlight() async throws {
+    let storage = ControlledLocalTaskStore()
+    let controller = LocalTaskController(store: storage)
+    let loading = Task { await controller.refresh() }
+    try await waitUntil { await storage.loadCount == 1 }
+    await storage.finishLoad(0, result: .success(LocalTaskSnapshot(document: LocalTaskDocument())))
+    await loading.value
+    let tag = UUID()
+    let first = Task { await controller.moveTag(id: tag, toIndex: 0) }
+    try await waitUntil { await storage.mutationCount == 1 }
+    // A second drag on the same tag is dropped instead of queueing a rival write.
+    let second = Task { await controller.moveTag(id: tag, toIndex: 2) }
+    let secondResult = await second.value
+    XCTAssertFalse(secondResult)
+    await storage.finishMutation(
+      0,
+      result: .success(
+        LocalTaskSnapshot(document: LocalTaskDocument(tags: [TaskTag(id: tag, name: "Work")]))))
+    let firstResult = await first.value
+    XCTAssertTrue(firstResult)
+    XCTAssertEqual(controller.document?.tags.map(\.id), [tag])
+  }
+
   func testPendingRejectsDuplicateAndNeverPublishesBeforeSave() async throws {
     let original = LocalTaskDocument(tasks: [LocalTask(text: "One")])
     let storage = ControlledLocalTaskStore()

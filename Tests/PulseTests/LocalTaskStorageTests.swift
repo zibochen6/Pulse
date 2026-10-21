@@ -121,6 +121,92 @@ final class LocalTaskStorageTests: XCTestCase {
     XCTAssertEqual(document.tasks[0].text, "Tagged")
   }
 
+  func testMovingTagsPersistsTheirOrderAcrossReload() async throws {
+    let url = try storageURL()
+    let store = LocalTaskStore(fileURL: url)
+    let work = TaskTag(name: "Work")
+    let home = TaskTag(name: "Home")
+    let writing = TaskTag(name: "Writing")
+    for tag in [work, home, writing] {
+      _ = try await store.mutate(.createTag(id: tag.id, name: tag.name))
+    }
+    var document = try await store.mutate(.moveTag(id: writing.id, toIndex: 0)).document
+    XCTAssertEqual(document.tags.map(\.id), [writing.id, work.id, home.id])
+    document = try await store.mutate(.moveTag(id: work.id, toIndex: 2)).document
+    XCTAssertEqual(document.tags.map(\.id), [writing.id, home.id, work.id])
+    let reloaded = try await LocalTaskStore(fileURL: url).load().document
+    XCTAssertEqual(reloaded.tags.map(\.id), [writing.id, home.id, work.id])
+    XCTAssertEqual(reloaded.tags.map(\.name), ["Writing", "Home", "Work"])
+  }
+
+  func testMovingToItsOwnSlotWritesNothing() async throws {
+    let url = try storageURL()
+    let store = LocalTaskStore(fileURL: url)
+    let work = TaskTag(name: "Work")
+    let home = TaskTag(name: "Home")
+    _ = try await store.mutate(.createTag(id: work.id, name: work.name))
+    _ = try await store.mutate(.createTag(id: home.id, name: home.name))
+    let writer = MoveCountingWriter()
+    let counting = LocalTaskStore(fileURL: url, writer: writer)
+    var document = try await counting.mutate(.moveTag(id: home.id, toIndex: 1)).document
+    XCTAssertEqual(document.tags.map(\.id), [work.id, home.id])
+    XCTAssertEqual(writer.count, 0)
+    // An index that only clamps back onto the same slot writes nothing either.
+    document = try await counting.mutate(.moveTag(id: home.id, toIndex: 900)).document
+    XCTAssertEqual(document.tags.map(\.id), [work.id, home.id])
+    XCTAssertEqual(writer.count, 0)
+  }
+
+  func testMovingClampsOutOfRangeDestinations() async throws {
+    let url = try storageURL()
+    let store = LocalTaskStore(fileURL: url)
+    let work = TaskTag(name: "Work")
+    let home = TaskTag(name: "Home")
+    let writing = TaskTag(name: "Writing")
+    for tag in [work, home, writing] {
+      _ = try await store.mutate(.createTag(id: tag.id, name: tag.name))
+    }
+    var document = try await store.mutate(.moveTag(id: work.id, toIndex: -50)).document
+    XCTAssertEqual(document.tags.map(\.id), [work.id, home.id, writing.id])
+    document = try await store.mutate(.moveTag(id: writing.id, toIndex: 900)).document
+    XCTAssertEqual(document.tags.map(\.id), [work.id, home.id, writing.id])
+    document = try await store.mutate(.moveTag(id: work.id, toIndex: 3)).document
+    XCTAssertEqual(document.tags.map(\.id), [home.id, writing.id, work.id])
+  }
+
+  func testMovingAnUnknownTagIsRejected() async throws {
+    let url = try storageURL()
+    let store = LocalTaskStore(fileURL: url)
+    let work = TaskTag(name: "Work")
+    _ = try await store.mutate(.createTag(id: work.id, name: work.name))
+    await assertStoreError(.tagMissing) {
+      try await store.mutate(.moveTag(id: UUID(), toIndex: 0))
+    }
+    let document = try await store.load().document
+    XCTAssertEqual(document.tags.map(\.id), [work.id])
+  }
+
+  func testMovingLeavesTaskMembershipOrderAndNamesUntouched() async throws {
+    let url = try storageURL()
+    let store = LocalTaskStore(fileURL: url)
+    _ = try await store.mutate(
+      .saveTask(id: nil, text: "Tagged", tagIDs: [], newTagNames: ["Work"])
+    )
+    let loaded = try await store.load().document
+    let work = try XCTUnwrap(loaded.tags.first)
+    let home = TaskTag(name: "Home")
+    _ = try await store.mutate(.createTag(id: home.id, name: home.name))
+    _ = try await store.mutate(.saveTask(id: nil, text: "Untagged", tagIDs: [], newTagNames: []))
+    var document = try await store.mutate(.moveTag(id: home.id, toIndex: 0)).document
+    XCTAssertEqual(document.tags.map(\.id), [home.id, work.id])
+    XCTAssertEqual(document.tags.map(\.name), ["Home", "Work"])
+    XCTAssertEqual(document.tasks.map(\.text), ["Tagged", "Untagged"])
+    XCTAssertEqual(document.tasks[0].tagIDs, [work.id])
+    XCTAssertEqual(document.tasks[1].tagIDs, [])
+    let reloaded = try await LocalTaskStore(fileURL: url).load().document
+    XCTAssertEqual(reloaded, document)
+  }
+
   func testConcurrentStoresSerializeAndDoNotLosePriorMutations() async throws {
     let url = try storageURL()
     let first = LocalTaskStore(fileURL: url)
@@ -444,5 +530,26 @@ private struct TrailingWhitespaceLocalWriter: LocalTaskFileWriting {
     // A valid but unexpected persisted document models a post-write validation
     // failure without accessing any real task configuration.
     try (data + Data("\n".utf8)).write(to: fileURL, options: .atomic)
+  }
+}
+
+/// Counts real writes so a no-op transaction can be proven to skip the file
+/// entirely instead of only proving that its bytes came back unchanged.
+/// The store serialises all writes on one queue, so a lock is enough here.
+private final class MoveCountingWriter: LocalTaskFileWriting, @unchecked Sendable {
+  private let lock = NSLock()
+  private var writes = 0
+
+  var count: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return writes
+  }
+
+  func write(_ data: Data, to fileURL: URL) throws {
+    lock.lock()
+    writes += 1
+    lock.unlock()
+    try data.write(to: fileURL, options: .atomic)
   }
 }

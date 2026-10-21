@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LocalTaskDraft: Equatable {
   var creationID = UUID()
@@ -93,6 +94,19 @@ final class LocalTaskPresentation: ObservableObject {
   @Published var collapsedCompleted = Set<LocalTaskFilter>()
   private var selectionRevision = 0
 
+  /// Tag drag state. `draggingTagID` also suspends pointer-departure dismissal,
+  /// so a drag that runs to the popover's edge is not cut short mid-move.
+  @Published var draggingTagID: UUID?
+  @Published var tagDropTarget: LocalTagDropTarget?
+  /// Optimistic order for a tag move that has not been confirmed yet. It only
+  /// previews the drop; the store's order still decides drafts, selection and
+  /// undo, and replaces this as soon as the write lands.
+  @Published var pendingTagOrder: [UUID]?
+  /// Measured pill centres of the tag bar. They live here rather than in view
+  /// state so the drop coordinator can read them live instead of freezing a
+  /// layout snapshot at the moment the drag started.
+  @Published var tagBarGeometry = TagBarGeometry()
+
   var selectedTagID: UUID? {
     if case .tag(let id) = selectedFilter { return id }
     return nil
@@ -106,6 +120,13 @@ final class LocalTaskPresentation: ObservableObject {
     editDraft != nil || tagIntent != nil
       || (isComposerExpanded && (composerFocused || quickDraft.isDirty))
       || submittingIDs.contains(quickDraft.creationID)
+  }
+  /// Editing and an engaged tag drop both hold the popover open. Only an
+  /// *engaged* drop counts, never a bare drag: `dropExited` and `performDrop`
+  /// both clear `tagDropTarget`, so a drag cancelled with Escape can never
+  /// leave the popover pinned open by a flag nothing resets.
+  var isInteractionActive: Bool {
+    isEditing || tagDropTarget != nil
   }
   func ensureQuickDraft() {
     if quickDrafts[selectedFilter] == nil {
@@ -126,6 +147,69 @@ final class LocalTaskPresentation: ObservableObject {
   func beginCreatingTag() {
     guard tagIntent == nil else { return }
     tagIntent = LocalTagIntent()
+  }
+
+  // MARK: - Tag drag and reorder
+
+  func beginTagDrag(_ id: UUID) {
+    draggingTagID = id
+    tagDropTarget = nil
+  }
+
+  func updateTagDrop(_ target: LocalTagDropTarget?) {
+    tagDropTarget = target
+  }
+
+  func endTagDrag() {
+    draggingTagID = nil
+    tagDropTarget = nil
+  }
+
+  /// Publishes the drop immediately and returns the store's `toIndex`.
+  /// `nil` means the drop changed nothing and must not be persisted.
+  func commitTagMove(_ id: UUID, to target: LocalTagDropTarget?, tagIDs: [UUID]) -> Int? {
+    guard draggingTagID == id, let target else {
+      endTagDrag()
+      return nil
+    }
+    return commitTagMove(id, toIndex: target.index, tagIDs: tagIDs)
+  }
+
+  /// The same optimistic publish for the keyboard and context-menu path, which
+  /// has no caret geometry to hand over. Returns the store's `toIndex`, or
+  /// `nil` when the requested slot is the tag's current one.
+  func commitTagMove(_ id: UUID, toIndex: Int, tagIDs: [UUID]) -> Int? {
+    defer { endTagDrag() }
+    guard tagIDs.contains(id), toIndex >= 0, toIndex < tagIDs.count,
+      toIndex != tagIDs.firstIndex(of: id)
+    else { return nil }
+    var order = tagIDs
+    order.removeAll { $0 == id }
+    order.insert(id, at: toIndex)
+    pendingTagOrder = order
+    return toIndex
+  }
+
+  /// The store's order replaces the preview once it matches it, so a confirmed
+  /// move is visually silent instead of animating twice.
+  func reconcileTagOrder(_ tags: [TaskTag]) {
+    if pendingTagOrder == tags.map(\.id) { pendingTagOrder = nil }
+  }
+
+  /// A move that never reached storage drops its preview rather than leaving
+  /// an order the file does not have.
+  func abandonTagMove() {
+    pendingTagOrder = nil
+    endTagDrag()
+  }
+
+  /// The order the tag bar renders: the preview while a move is pending, the
+  /// stored order otherwise. A tag created during a pending move is appended so
+  /// a stale preview can never hide it.
+  func displayOrder(_ tags: [TaskTag]) -> [TaskTag] {
+    guard let order = pendingTagOrder else { return tags }
+    let byID = Dictionary(tags.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
+    return order.compactMap { byID[$0] } + tags.filter { !order.contains($0.id) }
   }
   func beginEditingTask(_ task: LocalTask) {
     guard editDraft == nil else { return }
@@ -258,6 +342,14 @@ struct LocalTasksView: View {
   @ObservedObject var controller: LocalTaskController
   @ObservedObject var presentation: LocalTaskPresentation
   let onEditingChanged: (Bool) -> Void
+  @State private var dropCoordinator = TagBarDropCoordinator()
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// Rows arrive from the top and leave the same way, so switching lists reads
+  /// as content moving rather than as a list being torn down and rebuilt.
+  private var rowTransition: AnyTransition {
+    .opacity.combined(with: .move(edge: .top))
+  }
 
   var body: some View {
     Group {
@@ -272,19 +364,24 @@ struct LocalTasksView: View {
     }
     .onAppear {
       presentation.reconcileTags(controller.document?.tags ?? [])
-      onEditingChanged(presentation.isEditing)
+      presentation.reconcileTagOrder(controller.document?.tags ?? [])
+      onEditingChanged(presentation.isInteractionActive)
     }
     .task {
       if controller.document == nil { await controller.refresh() }
       await controller.resetRepeatingTasks()
     }
-    .onChange(of: presentation.isEditing) { onEditingChanged($0) }
+    .onChange(of: presentation.isInteractionActive) { onEditingChanged($0) }
     .onDisappear {
       presentation.composerFocused = false
+      presentation.endTagDrag()
       onEditingChanged(false)
     }
     .onChange(of: controller.document?.tags) {
-      if let tags = $0 { presentation.reconcileTags(tags) }
+      if let tags = $0 {
+        presentation.reconcileTags(tags)
+        presentation.reconcileTagOrder(tags)
+      }
     }
   }
 
@@ -299,6 +396,9 @@ struct LocalTasksView: View {
         }
       }
       errorBanner
+        .animation(
+          reduceMotion ? nil : PulseDesignTokens.insertionAnimation,
+          value: controller.errorMessage != nil || !controller.completionFailures.isEmpty)
       if controller.document != nil {
         taskScrollView
       } else if controller.isLoading {
@@ -330,8 +430,12 @@ struct LocalTasksView: View {
           .accessibilityIdentifier("undoLocalTaskDeletionButton")
         }
         .padding(.horizontal, 14).padding(.vertical, 7)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
       }
     }
+    .animation(
+      reduceMotion ? nil : PulseDesignTokens.insertionAnimation,
+      value: controller.deletionHistory.last?.id)
   }
 
   private var taskScrollView: some View {
@@ -345,7 +449,7 @@ struct LocalTasksView: View {
             Text(filter == .untagged ? "No tasks yet" : "No tasks in this tag")
               .font(.system(size: 13)).foregroundStyle(.secondary).padding(.vertical, 12)
           }
-          ForEach(incomplete) { taskRow($0).id($0.id) }
+          ForEach(incomplete) { taskRow($0).id($0.id).transition(rowTransition) }
           if !completed.isEmpty {
             Button {
               if presentation.collapsedCompleted.contains(filter) {
@@ -355,9 +459,11 @@ struct LocalTasksView: View {
               }
             } label: {
               HStack(spacing: 5) {
-                Image(
-                  systemName: presentation.collapsedCompleted.contains(filter)
-                    ? "chevron.right" : "chevron.down")
+                // One symbol that rotates reads as a disclosure control; two
+                // swapped chevrons only ever look like a glyph that changed.
+                Image(systemName: "chevron.down")
+                  .rotationEffect(
+                    .degrees(presentation.collapsedCompleted.contains(filter) ? -90 : 0))
                 Text("Completed (\(completed.count))")
                 Spacer()
               }
@@ -368,12 +474,21 @@ struct LocalTasksView: View {
             .accessibilityValue(
               presentation.collapsedCompleted.contains(filter) ? "Collapsed" : "Expanded")
             if !presentation.collapsedCompleted.contains(filter) {
-              ForEach(completed) { taskRow($0).id($0.id) }
+              ForEach(completed) { taskRow($0).id($0.id).transition(rowTransition) }
             }
           }
           if presentation.isComposerExpanded {
             LocalTaskQuickComposer(controller: controller, presentation: presentation)
               .id(presentation.selectedFilter)
+              // Asymmetric on purpose. The insertion may glide in, but the
+              // removal must be immediate: the composer owns a shared AppKit
+              // field editor, and lingering in the tree through a removal
+              // transition is exactly how a saved draft gets typed back into a
+              // field that should already be gone.
+              .transition(
+                .asymmetric(
+                  insertion: .opacity.combined(with: .move(edge: .bottom)),
+                  removal: .identity))
           } else {
             Button {
               presentation.beginAddingTask()
@@ -385,11 +500,25 @@ struct LocalTasksView: View {
             .buttonStyle(PulseIconButtonStyle()).help("Add task")
             .accessibilityLabel("Add task").accessibilityIdentifier("addLocalTaskButton")
             .frame(maxWidth: .infinity).padding(.top, 6)
+            .transition(.opacity.combined(with: .move(edge: .top)))
           }
           Color.clear.frame(height: 1).id("taskComposerEnd")
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Two values, two curves: rows change with the list, the disclosure is
+        // its own affordance. Both are set before the view ever mounts in the
+        // rendering tests, so neither animation can capture a mid-flight value
+        // in an off-window render.
+        .animation(
+          reduceMotion ? nil : PulseDesignTokens.insertionAnimation,
+          value: presentation.selectedFilter)
+        .animation(
+          reduceMotion ? nil : PulseDesignTokens.disclosureAnimation,
+          value: presentation.collapsedCompleted)
+        .animation(
+          reduceMotion ? nil : PulseDesignTokens.insertionAnimation,
+          value: presentation.isComposerExpanded)
       }
       .accessibilityIdentifier("localTaskList")
       .onAppear {
@@ -444,7 +573,9 @@ struct LocalTasksView: View {
   }
 
   private func tagBar(_ tags: [TaskTag]) -> some View {
-    HStack(spacing: 2) {
+    let displayed = presentation.displayOrder(tags)
+    let tagIDs = displayed.map(\.id)
+    return HStack(spacing: 2) {
       ScrollViewReader { proxy in
         ScrollView(.horizontal, showsIndicators: false) {
           HStack(spacing: 4) {
@@ -453,24 +584,15 @@ struct LocalTasksView: View {
               action: { presentation.selectedFilter = .untagged }
             )
             .id(LocalTaskFilter.untagged).accessibilityIdentifier("localTaskFilter.todo")
-            ForEach(tags) { tag in
-              PulsePillTab(
-                title: tag.name, isSelected: presentation.selectedFilter == .tag(tag.id),
-                action: { presentation.selectedFilter = .tag(tag.id) }
-              )
-              .id(LocalTaskFilter.tag(tag.id))
-              .accessibilityIdentifier("localTaskFilter.\(tag.id.uuidString)")
-              .contextMenu {
-                Button("Rename…") {
-                  presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
-                }
-                Button("Remove tag…", role: .destructive) {
-                  presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
-                }
-              }
+            .background(tagMidpointReporter { TagBarGeometry(todoMidX: $0) })
+            ForEach(displayed) { tag in
+              tagPill(tag, tagIDs: tagIDs)
             }
           }
           .padding(.leading, 14).padding(.vertical, 3)
+          .coordinateSpace(name: TagBarGeometry.spaceName)
+          .onPreferenceChange(TagBarGeometryKey.self) { presentation.tagBarGeometry = $0 }
+          .onDrop(of: [.text], delegate: dropCoordinator)
         }
         .onAppear { proxy.scrollTo(presentation.selectedFilter, anchor: .center) }
         .onChange(of: presentation.selectedFilter) { proxy.scrollTo($0, anchor: .center) }
@@ -487,6 +609,120 @@ struct LocalTasksView: View {
       .buttonStyle(PulseIconButtonStyle()).help("New tag")
       .accessibilityLabel("New tag").accessibilityIdentifier("addLocalTagButton")
       .padding(.trailing, 10)
+    }
+    .onAppear { configureDropCoordinator() }
+  }
+
+  /// One custom tag pill: selectable, draggable and a drop target, with the
+  /// insertion caret drawn on the edge the tag would leave through.
+  private func tagPill(_ tag: TaskTag, tagIDs: [UUID]) -> some View {
+    let isDragging = presentation.draggingTagID == tag.id
+    let dropEdge =
+      presentation.tagDropTarget?.pillID == tag.id ? presentation.tagDropTarget?.edge : nil
+    return PulsePillTab(
+      title: tag.name, isSelected: presentation.selectedFilter == .tag(tag.id),
+      action: { presentation.selectedFilter = .tag(tag.id) }
+    )
+    .id(LocalTaskFilter.tag(tag.id))
+    .accessibilityIdentifier("localTaskFilter.\(tag.id.uuidString)")
+    .contextMenu {
+      let index = tagIDs.firstIndex(of: tag.id)
+      Button("Move Left") { moveTag(tag, in: tagIDs, to: (index ?? 0) - 1) }
+        .disabled(index == nil || index == 0)
+        .keyboardShortcut(.leftArrow, modifiers: [.option, .command])
+      Button("Move Right") { moveTag(tag, in: tagIDs, to: (index ?? 0) + 1) }
+        .disabled(index == nil || index == tagIDs.count - 1)
+        .keyboardShortcut(.rightArrow, modifiers: [.option, .command])
+      Divider()
+      Button("Rename…") {
+        presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
+      }
+      Button("Remove tag…", role: .destructive) {
+        presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
+      }
+    }
+    .onDrag {
+      presentation.beginTagDrag(tag.id)
+      return NSItemProvider(object: tag.id.uuidString as NSString)
+    }
+    .overlay(alignment: .leading) {
+      if dropEdge == .leading {
+        tagDropCaret.offset(x: -1)
+      }
+    }
+    .overlay(alignment: .trailing) {
+      if dropEdge == .trailing {
+        tagDropCaret.offset(x: 1)
+      }
+    }
+    .background(tagMidpointReporter { TagBarGeometry(tagMidXByID: [tag.id: $0]) })
+    .opacity(isDragging ? 0.45 : 1)
+    .scaleEffect(isDragging ? 0.96 : 1)
+    .accessibilityHint("Drag to reorder")
+    .accessibilityAction(named: Text("Move left")) { moveTag(tag, in: tagIDs, to: (tagIDs.firstIndex(of: tag.id) ?? 0) - 1) }
+    .accessibilityAction(named: Text("Move right")) {
+      moveTag(tag, in: tagIDs, to: (tagIDs.firstIndex(of: tag.id) ?? 0) + 1)
+    }
+  }
+
+  private var tagDropCaret: some View {
+    Capsule()
+      .fill(Color.accentColor)
+      .frame(width: 2, height: 18)
+      .allowsHitTesting(false)
+  }
+
+  /// Reports this pill's centre into the bar's named coordinate space. The
+  /// report comes from a background geometry reader, so an animated offset
+  /// drawn on top of a pill can never feed back into the drop hit test.
+  private func tagMidpointReporter(_ build: @escaping (CGFloat) -> TagBarGeometry) -> some View {
+    GeometryReader { proxy in
+      Color.clear.preference(
+        key: TagBarGeometryKey.self,
+        value: build(proxy.frame(in: .named(TagBarGeometry.spaceName)).midX))
+    }
+  }
+
+  /// The coordinator is created once and its closures capture the two reference
+  /// types only, so they stay valid across body re-evaluations and SwiftUI
+  /// never has to replace a `DropDelegate` in the middle of a drag.
+  private func configureDropCoordinator() {
+    let presentation = presentation
+    let controller = controller
+    dropCoordinator.onLocation = { location in
+      presentation.updateTagDrop(
+        tagDropTarget(
+          draggedID: presentation.draggingTagID, locationX: location.x,
+          tags: controller.document?.tags ?? [], geometry: presentation.tagBarGeometry))
+    }
+    dropCoordinator.onCommit = { location in
+      let tags = controller.document?.tags ?? []
+      guard let draggedID = presentation.draggingTagID else {
+        presentation.endTagDrag()
+        return
+      }
+      let target = tagDropTarget(
+        draggedID: draggedID, locationX: location.x, tags: tags,
+        geometry: presentation.tagBarGeometry)
+      guard let toIndex = presentation.commitTagMove(draggedID, to: target, tagIDs: tags.map(\.id))
+      else { return }
+      Task {
+        let saved = await controller.moveTag(id: draggedID, toIndex: toIndex)
+        if !saved { presentation.abandonTagMove() }
+      }
+    }
+    dropCoordinator.onExit = { presentation.updateTagDrop(nil) }
+  }
+
+  /// Keyboard and context-menu reorder: the same optimistic publish as a drop,
+  /// without any caret geometry.
+  private func moveTag(_ tag: TaskTag, in tagIDs: [UUID], to index: Int) {
+    let clamped = max(0, min(index, tagIDs.count - 1))
+    guard let toIndex = presentation.commitTagMove(tag.id, toIndex: clamped, tagIDs: tagIDs)
+    else { return }
+    Task {
+      let saved = await controller.moveTag(id: tag.id, toIndex: toIndex)
+      if !saved { presentation.abandonTagMove() }
     }
   }
 
@@ -856,10 +1092,22 @@ struct LocalTaskRow: View {
           if isPending {
             ProgressView().controlSize(.mini)
           } else {
-            Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
-              .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
-              .foregroundStyle(
-                task.completed ? Color.accentColor : Color(nsColor: .secondaryLabelColor))
+            ZStack {
+              Image(systemName: "circle")
+                .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+              // The check pops in instead of swapping glyphs, which is what
+              // makes a completion feel acknowledged rather than merely
+              // updated. Both symbols stay mounted so the static appearance is
+              // unchanged; only the transition differs.
+              Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.accentColor)
+                .scaleEffect(task.completed ? 1 : 0.4)
+                .opacity(task.completed ? 1 : 0)
+            }
+            .animation(
+              reduceMotion ? nil : PulseDesignTokens.selectionAnimation, value: task.completed)
           }
         }
         .padding(.top, 2).frame(width: 28, height: 30, alignment: .top).contentShape(Rectangle())
@@ -900,12 +1148,14 @@ struct LocalTaskRow: View {
         .buttonStyle(PulseIconButtonStyle()).disabled(isPending)
         .focused($focusedControl, equals: .delete)
         .opacity(isHovered || focusedControl != nil ? 1 : 0)
+        .scaleEffect(isHovered || focusedControl != nil ? 1 : 0.8)
         .help("Delete task").accessibilityLabel("Delete task: \(task.text)")
         .accessibilityIdentifier("deleteLocalTaskRowButton.\(task.id.uuidString)")
       }
     }
     .onHover { isHovered = $0 }
-    .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovered)
+    .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
+    .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: focusedControl)
     .contextMenu {
       Button("Edit task", action: onEdit).disabled(isPending)
       if let onDelete {
@@ -1040,5 +1290,67 @@ final class FocusableTaskTextField: NSTextField {
       guard let self, self.window === window else { return }
       window?.makeFirstResponder(self)
     }
+  }
+}
+
+// MARK: - Tag bar drop geometry
+
+/// Pill centres of the tag bar, measured in the bar's own named coordinate
+/// space. The drop hit test reads them, so they must come from layout rather
+/// than from any animated offset drawn on top of the pills.
+struct TagBarGeometry: Equatable, Sendable {
+  static let spaceName = "pulseTagBar"
+  var todoMidX: CGFloat?
+  var tagMidXByID: [UUID: CGFloat] = [:]
+}
+
+struct TagBarGeometryKey: PreferenceKey {
+  static let defaultValue = TagBarGeometry()
+
+  static func reduce(value: inout TagBarGeometry, nextValue: () -> TagBarGeometry) {
+    let next = nextValue()
+    if let todoMidX = next.todoMidX { value.todoMidX = todoMidX }
+    value.tagMidXByID.merge(next.tagMidXByID, uniquingKeysWith: { $1 })
+  }
+}
+
+/// Resolves where a drop at `locationX` would land, or `nil` while the bar is
+/// still unmeasured or the drag is not one of our own tags.
+private func tagDropTarget(
+  draggedID: UUID?, locationX: CGFloat, tags: [TaskTag], geometry: TagBarGeometry
+) -> LocalTagDropTarget? {
+  guard let draggedID, let todoMidX = geometry.todoMidX else { return nil }
+  return LocalTagReorder.dropTarget(
+    draggedID: draggedID, locationX: locationX, tagIDs: tags.map(\.id), todoMidX: todoMidX,
+    midXByID: geometry.tagMidXByID)
+}
+
+/// Bridges SwiftUI's drag session to the tag bar's reorder state.
+///
+/// `DropDelegate.dropUpdated` is the only place SwiftUI reports a drag's live
+/// position, which is what keeps the insertion caret under the pointer instead
+/// of answering only at the moment of release.
+@MainActor
+final class TagBarDropCoordinator: DropDelegate {
+  var onLocation: (CGPoint) -> Void = { _ in }
+  var onCommit: (CGPoint) -> Void = { _ in }
+  var onExit: () -> Void = {}
+
+  func validateDrop(info: DropInfo) -> Bool {
+    !info.itemProviders(for: [.text]).isEmpty
+  }
+
+  func dropEntered(info: DropInfo) { onLocation(info.location) }
+
+  func dropUpdated(info: DropInfo) -> DropProposal? {
+    onLocation(info.location)
+    return DropProposal(operation: .move)
+  }
+
+  func dropExited(info: DropInfo) { onExit() }
+
+  func performDrop(info: DropInfo) -> Bool {
+    onCommit(info.location)
+    return true
   }
 }

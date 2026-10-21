@@ -7,17 +7,24 @@ there is no account, import, source selector, database or network sync.
 ## Independent lists and tags
 
 - **Todo** is the permanent default list for tasks without a custom tag. It is
-  not an aggregate and cannot be renamed or deleted. Custom tags follow in
-  creation order. A task belongs to one list only; changing its tag moves it.
+  not an aggregate and cannot be renamed or deleted. Custom tags keep the order
+  you set and always follow **Todo**. A task belongs to one list only; changing
+  its tag moves it.
 - The selected tab has an accent-tinted capsule and a shape-matched keyboard
   focus affordance. Custom tabs scroll horizontally; the trailing **+** stays
   reachable. Selecting or creating a tag brings its tab into view.
+- **Drag a tab to reorder it.** While dragging, the dragged tab dims and an
+  accent caret marks the slot the tag will land in. The new order is written on
+  drop and survives relaunch. Dropping on **Todo**, on the left half of the
+  first tab, or on the tag's own current slot changes nothing. The identical
+  move is available from a tab's context menu (**Move Left** / **Move Right**,
+  ⌥⌘← / ⌥⌘→) and from Settings → Tasks, so reordering never depends on dragging.
 - **+** opens tag-name entry. Enter creates an empty tag, selects it and focuses
   task entry. Cancel creates nothing. Names are trimmed and compared without
   case; a duplicate offers the existing tag instead of creating another.
-- A tab's context menu offers **Rename** and **Remove**. Settings → Tasks offers
-  the same operations. Removing a custom tag requires confirmation, moves its
-  tasks to **Todo**, and never deletes tasks.
+- A tab's context menu offers **Move Left**, **Move Right**, **Rename** and
+  **Remove**. Settings → Tasks offers the same operations. Removing a custom tag
+  requires confirmation, moves its tasks to **Todo**, and never deletes tasks.
 
 ## Fast entry and editing
 
@@ -131,6 +138,13 @@ change the machine clock to test failures/repeat.
 10. Inspect empty/populated/completed/editor/options/tag/undo states at the fixed
     360 × 510 popover size in Aqua and Dark Aqua. Simulate storage failures with
     injected writers and verify retry preserves input and confirmed data.
+11. Drag a tab to the far right, to the front and back again, then relaunch and
+    confirm the order survived. Verify **Todo** never moves, a drop on a tab's
+    own slot changes nothing, and the caret reads as a boundary rather than as a
+    selected tab. Confirm **Move Left** / **Move Right** from the tab menu and
+    from Settings → Tasks land the tag in the same slot as the equivalent drag.
+    With Reduce Motion on, no hover, press, disclosure, row or drag feedback
+    animates and every control still behaves the same.
 
 The previous Markdown dashboard integration was removed; native tasks are the
 only task system.

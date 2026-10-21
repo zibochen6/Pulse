@@ -20,6 +20,7 @@ enum LocalTaskMutation: Sendable {
   case restoreTask(LocalTaskDeletionReceipt)
   case renameTag(id: UUID, name: String)
   case deleteTag(UUID)
+  case moveTag(id: UUID, toIndex: Int)
   case setCompleted(taskID: UUID, completed: Bool)
   case completeRepeating(taskID: UUID, completedAt: Date)
   case resetRepeatingTasks(today: Date)
@@ -81,6 +82,28 @@ The main-actor controller owns `deletionHistory` and `undoDeletion()`.
 - Tag deletion detaches classification only; tasks become default Todo. It never
   deletes tasks or recreates removed tags during undo.
 
+### Tag order
+
+- Array order *is* display order; there is no separate position field and no
+  schema change. `moveTag(id:toIndex:)` removes the tag and inserts it at
+  `toIndex`, which is the index it occupies **after** the move, so
+  `tags.count - 1` means "last". Todo is virtual and always precedes every tag.
+- Out-of-range destinations clamp to the array instead of failing. A drag that
+  raced a tag deletion must not become a hard error over a count that drifted,
+  so clamping is a tolerance rule, not a way to express a bad request. A tag
+  that no longer exists is `tagMissing` and leaves the file untouched.
+- Reordering touches nothing else: task identity, stored task order, task text,
+  completion, repeat state and tag names are all preserved. Moving a tag to its
+  own slot is a no-op transaction and must not write.
+- A reorder is reachable three ways — drag in the tab bar, the tab's context
+  menu, and Settings → Tasks — and all three must produce the same stored
+  result. The drag's insertion caret is presentation only; the store never
+  reads it.
+- The bar may preview a drop optimistically before storage confirms it. The
+  stored order stays authoritative: drafts, selection, undo and filtering never
+  read the preview, and the preview is dropped as soon as the confirmed order
+  matches it or the write fails.
+
 ### Daily repeat and error ownership
 
 - `.completeRepeating` captures local-calendar completion day from the click
@@ -109,6 +132,9 @@ The main-actor controller owns `deletionHistory` and `undoDeletion()`.
 | Write succeeds but verification fails | Publish only reloaded confirmed state; retain stable retry/undo intent. |
 | Restore target tag disappeared | Restore task to default Todo. |
 | Restore UUID has different current contents | Conflict; retain undo receipt, preserve current task. |
+| Move a tag that was deleted mid-drag | `tagMissing`; file unchanged. |
+| Move a tag to its own slot | No-op transaction; do not write. |
+| Move to an index past either end of the array | Clamp to first/last; do not fail. |
 | Old asynchronous reply arrives late | Do not replace newer observed document. |
 
 ## 5. Good / Base / Bad Cases
@@ -128,7 +154,12 @@ concurrent stores, stable creation retry, postwrite verification, stale replies
 and pending deduplication. Delete tests assert transaction-current content,
 relative order, bounded LIFO history, intervening edits, missing-tag fallback,
 conflicting/already-restored IDs, failed writes and successful retry without
-duplicate history. Draft/render tests cover frontend contracts separately.
+duplicate history. Reorder tests cover both directions and both ends, ignored
+drops (own slot, left of Todo, unmeasured bar), clamped destinations, the
+no-write guarantee for a no-op move, `tagMissing`, and that membership, task
+order, text and tag names survive a move. Pure drop geometry is tested without
+any SwiftUI view so the caret rule can never regress silently. Draft/render
+tests cover frontend contracts separately.
 
 Keep daily-repeat coverage for flag/day persistence, original click day,
 same-day idempotence, stale/unknown-day reset, unchanged non-repeating/today

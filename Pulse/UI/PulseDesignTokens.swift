@@ -40,4 +40,23 @@ enum PulseDesignTokens {
   static let focusStrokeWidth: CGFloat = 1.5
   // Subtle rounded fill for focused rows (no outline, no box).
   static let focusFill: Color = Color.accentColor.opacity(0.08)
+
+  // MARK: - Motion
+  //
+  // One curve per kind of feedback, so hover, press, selection, disclosure,
+  // insertion and reorder all read as the same system instead of each surface
+  // inventing its own duration. `extraBounce` is what separates "a control
+  // acknowledged you" from "content moved somewhere", so spatial changes get
+  // a little overshoot and discrete acknowledgements get none.
+  //
+  // Every call site gates these on Reduce Motion; the tokens themselves stay
+  // unconditional so there is exactly one place to tune the feel.
+  static var hoverAnimation: Animation { .snappy(duration: 0.14, extraBounce: 0) }
+  static var pressAnimation: Animation { .snappy(duration: 0.10, extraBounce: 0) }
+  /// A discrete choice the user just made: a check, a tab becoming selected.
+  static var selectionAnimation: Animation { .snappy(duration: 0.20, extraBounce: 0.06) }
+  /// Reordering is spatial, so it may overshoot slightly as pills make room.
+  static var reorderAnimation: Animation { .snappy(duration: 0.26, extraBounce: 0.12) }
+  static var disclosureAnimation: Animation { .snappy(duration: 0.22, extraBounce: 0.10) }
+  static var insertionAnimation: Animation { .snappy(duration: 0.18, extraBounce: 0) }
 }

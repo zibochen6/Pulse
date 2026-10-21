@@ -27,6 +27,7 @@ struct PulseErrorBanner<Actions: View>: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(Color.red.opacity(0.05), in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
     .modifier(PulseAccessibilityIdentifier(identifier: accessibilityIdentifier))
+    .transition(.move(edge: .top).combined(with: .opacity))
   }
 }
 
@@ -77,16 +78,13 @@ struct PulseIconButtonStyle: ButtonStyle {
 }
 
 /// Unified capsule "tab" for the local task tag bar. Selection reads as a
-/// filled capsule (never a focus ring), and the
-/// keyboard focus affordance follows the capsule shape so it cannot look like a
-/// square box around a rounded control.
+/// filled capsule (never a focus ring), press gives a short scale-down so the
+/// tab feels physical, and the keyboard focus affordance follows the capsule
+/// shape so it cannot look like a square box around a rounded control.
 struct PulsePillTab: View {
   let title: String
   let isSelected: Bool
   let action: () -> Void
-
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var isHovered = false
 
   var body: some View {
     Button(action: action) {
@@ -98,23 +96,55 @@ struct PulsePillTab: View {
         .lineLimit(1)
         .padding(.horizontal, 9)
         .frame(height: 26)
-        .background(background, in: Capsule())
-        .contentShape(Capsule())
     }
-    .buttonStyle(.plain)
-    .pulseDisableSystemFocusRing()
-    .onHover { isHovered = $0 }
+    .buttonStyle(PulsePillTabStyle(isSelected: isSelected))
     .accessibilityValue(isSelected ? "Selected" : "Not selected")
-    .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
+  }
+}
+
+/// The pill's feedback lives in a ButtonStyle so it can read `isPressed`,
+/// which a plain-styled Button never exposes to the view around it.
+struct PulsePillTabStyle: ButtonStyle {
+  let isSelected: Bool
+
+  func makeBody(configuration: Configuration) -> some View {
+    PillBody(isSelected: isSelected, configuration: configuration)
   }
 
-  /// Selected: a filled capsule, so selection is the affordance itself.
-  /// Unselected: hover fill only. Focus is handled by the enclosing control.
-  /// The fill is not animated: selection is a discrete state change, and a
-  /// fade-in would also leave the tab blank in off-window renders.
-  private var background: Color {
-    if isSelected { return PulseDesignTokens.accentSelectionFill }
-    return isHovered ? PulseDesignTokens.hoverFill : .clear
+  private struct PillBody: View {
+    let isSelected: Bool
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+      configuration.label
+        .background(background, in: Capsule())
+        .contentShape(Capsule())
+        .scaleEffect(configuration.isPressed ? 0.97 : 1)
+        .pulseFocusAffordance(focused, shape: .capsule)
+        // Own the keyboard focus so the affordance can follow the capsule, and
+        // suppress AppKit's square ring instead of drawing two of them.
+        .focusable(true)
+        .focused($focused)
+        .pulseDisableSystemFocusRing()
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
+        .animation(
+          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed)
+        .animation(reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: focused)
+    }
+
+    /// Selected: a filled capsule, so selection is the affordance itself.
+    /// Unselected: hover/press fill only. The selection fill is deliberately
+    /// *not* animated: selection is a discrete state change, and fading it in
+    /// from `.clear` leaves the tab blank in off-window renders.
+    private var background: Color {
+      if isSelected { return PulseDesignTokens.accentSelectionFill }
+      if configuration.isPressed { return PulseDesignTokens.pressedFill }
+      return isHovered ? PulseDesignTokens.hoverFill : .clear
+    }
   }
 }
 
@@ -172,11 +202,6 @@ private struct PulseAccessibilityIdentifier: ViewModifier {
   }
 }
 
-extension PulseDesignTokens {
-  static var hoverAnimation: Animation { .easeOut(duration: 0.12) }
-  static var pressAnimation: Animation { .easeOut(duration: 0.08) }
-}
-
 /// Inline prompt for a staged update. Deliberately calm: the update has already
 /// been verified, so the only remaining action is a restart.
 struct PulseUpdateBanner: View {
@@ -209,5 +234,6 @@ struct PulseUpdateBanner: View {
     .padding(.horizontal, 10)
     .padding(.vertical, 6)
     .accessibilityIdentifier("updateReadyBanner")
+    .transition(.move(edge: .top).combined(with: .opacity))
   }
 }
