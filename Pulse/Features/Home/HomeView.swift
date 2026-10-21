@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct HomeView: View {
-  static let popoverSize = NSSize(width: 360, height: 510)
+  static let popoverSize = NSSize(width: 360, height: 380)
 
   @ObservedObject var config: AppConfig
   @ObservedObject var usage: UsageController
@@ -24,12 +24,18 @@ struct HomeView: View {
   var onTaskEditingChanged: (Bool) -> Void = { _ in }
 
   var body: some View {
-    Group {
+    // Pages swap inside a fixed frame: only the incoming page animates, and it
+    // arrives from the direction of travel (subpages from the right, Home from
+    // the left). The outgoing page leaves with `.identity` on purpose — a page
+    // that lingers through a removal transition keeps its AppKit field editor
+    // alive, which is exactly how a saved draft gets typed back into a field
+    // that should already be gone.
+    ZStack {
       switch pages.page {
       case .home:
-        homeContent
+        homeContent.transition(pageTransition(fromRight: false))
       case .usage:
-        usageContent
+        usageContent.transition(pageTransition(fromRight: true))
       case .settings(let destination):
         SettingsView(
           config: config,
@@ -44,40 +50,33 @@ struct HomeView: View {
           onQuit: onQuit,
           onTaskEditingChanged: onTaskEditingChanged
         )
+        .transition(pageTransition(fromRight: true))
       }
     }
     .frame(width: Self.popoverSize.width, height: Self.popoverSize.height)
-    // Cover the entire hosting surface with an adaptive opaque color.
+    // Cover the entire hosting surface with an adaptive opaque color, and keep
+    // a mid-transition page from painting past the popover's fixed bounds.
     .background(Color(nsColor: .windowBackgroundColor))
-    .overlay(alignment: .topTrailing) {
-      // The gear is pinned over the header rather than laid out inside it, so
-      // the composer can replace the tag row without taking Settings with it.
-      // Usage and Settings do not repeat it: those pages already sit behind it.
-      if case .home = pages.page {
-        settingsButton
-          .padding(.top, 4)
-          .padding(.trailing, 14)
-      }
-    }
+    .clipped()
+    // Scoped to the page value, never to the root view: typing a task while a
+    // page is settled cannot start a transition.
+    .animation(
+      reduceMotion ? nil : PulseDesignTokens.pageTransitionAnimation, value: pages.page)
+  }
+
+  /// Reduce Motion keeps the state change and drops only the movement: the
+  /// incoming page fades, nothing slides, nothing scales.
+  private func pageTransition(fromRight: Bool) -> AnyTransition {
+    guard !reduceMotion else { return .opacity }
+    return .asymmetric(
+      insertion: .opacity.combined(with: .offset(x: fromRight ? 18 : -18)),
+      removal: .identity)
   }
 
   private var homeContent: some View {
     VStack(spacing: 0) {
-      ViewThatFits(in: .horizontal) {
-        HStack(spacing: 7) {
-          brand.fixedSize()
-          statusSummaries.fixedSize(horizontal: true, vertical: false)
-          Spacer(minLength: 0)
-        }
-        VStack(alignment: .leading, spacing: 6) {
-          brand
-          statusSummaries
-        }
-      }
-      .padding(.leading, 14)
-      .padding(.trailing, 48)
-      .padding(.vertical, 7)
-
+      toolbar
+      statusStrip
       Divider()
 
       if let release = updates.stagedRelease, !hidesUpdateBanner {
@@ -101,6 +100,30 @@ struct HomeView: View {
       value: updates.stagedRelease != nil && !hidesUpdateBanner)
   }
 
+  /// Brand on the left, Settings on the right. The gear now lives in this row
+  /// instead of a pinned overlay: the row is stable across every Home state
+  /// (composer open, tag entry, empty list), so it cannot be displaced while
+  /// still keeping Settings reachable during editing.
+  private var toolbar: some View {
+    HStack(spacing: PulseDesignTokens.gap) {
+      brand
+      Spacer(minLength: 0)
+      settingsButton
+    }
+    .padding(.horizontal, PulseDesignTokens.contentInset)
+    .padding(.top, 6)
+    .padding(.bottom, 4)
+  }
+
+  /// Full-width usage strip on its own row. Separating it from the brand keeps
+  /// the header's height predictable: it no longer re-flows between "one row"
+  /// and "brand above statuses" when a balance grows.
+  private var statusStrip: some View {
+    statusSummaries
+      .padding(.horizontal, PulseDesignTokens.contentInset)
+      .padding(.bottom, 6)
+  }
+
   private var usageContent: some View {
     VStack(spacing: 0) {
       HStack(spacing: 8) {
@@ -116,12 +139,12 @@ struct HomeView: View {
         .accessibilityLabel("Back to Home")
         .accessibilityIdentifier("backToHomeButton")
         Text("Usage")
-          .font(.system(size: 16, weight: .semibold))
+          .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
         Spacer()
       }
-      .padding(.horizontal, 16)
-      .padding(.top, 16)
-      .padding(.bottom, 10)
+      .padding(.horizontal, PulseDesignTokens.contentInset)
+      .padding(.top, 6)
+      .padding(.bottom, 4)
 
       Divider()
 
@@ -132,21 +155,23 @@ struct HomeView: View {
           deepSeekUsage: deepSeekUsage,
           onAddProvider: { pages.showSettings(.providers) }
         )
-        .padding(16)
+        .padding(PulseDesignTokens.contentInset)
       }
       .accessibilityIdentifier("usageDetailRegion")
     }
   }
 
   private var brand: some View {
-    HStack(spacing: 7) {
+    HStack(spacing: 6) {
       Image(systemName: "waveform.path")
-        .font(.system(size: 13, weight: .semibold))
+        .font(.system(size: 12, weight: .semibold))
         .foregroundStyle(.tint)
-        .frame(width: 26, height: 26)
-        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+        .frame(width: PulseDesignTokens.brandMarkSize, height: PulseDesignTokens.brandMarkSize)
+        .background(
+          Color.accentColor.opacity(0.12),
+          in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
       Text("Pulse")
-        .font(.system(size: 19, weight: .semibold))
+        .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
     }
   }
 

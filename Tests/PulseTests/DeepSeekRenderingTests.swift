@@ -67,17 +67,15 @@ final class DeepSeekRenderingTests: XCTestCase {
           }
         }
         let codex = try XCTUnwrap(capture.frames["openUsageButton"])
-        if count == 0 {
-          let settings = try XCTUnwrap(capture.frames["openSettingsButton"])
-          // The gear is a fixed overlay so it survives the inline composer
-          // replacing the tag row; it must still sit on the brand row.
-          XCTAssertEqual(
-            codex.midY, settings.midY, accuracy: 3.5, "Compact controls share the brand row")
-          XCTAssertLessThan(codex.minX, 140, "Flexible space follows the indicators")
-        } else {
-          XCTAssertEqual(
-            codex.minX, 14, accuracy: 0.5, "Fallback indicators start at the leading inset")
-        }
+        let settings = try XCTUnwrap(capture.frames["openSettingsButton"])
+        // The gear shares the toolbar with the brand and the quota strip is its
+        // own band underneath, so the header's height no longer depends on how
+        // long the amounts happen to be.
+        XCTAssertGreaterThan(
+          codex.minY, settings.maxY, "The quota strip sits below the toolbar")
+        XCTAssertEqual(
+          codex.minX, 14, accuracy: 0.5, "Indicators start at the leading inset")
+        XCTAssertLessThan(codex.minX, 140, "The first indicator stays at the leading edge")
         let vip = try XCTUnwrap(capture.frames["openVIPUsageButton"])
         let deepSeek = try XCTUnwrap(capture.frames["openDeepSeekUsageButton"])
         for (frame, title) in [
@@ -161,7 +159,9 @@ final class DeepSeekRenderingTests: XCTestCase {
               defaults: defaults, localTasks: localTasks, usage: usage, vipUsage: vip,
               deepSeekUsage: controller, pages: pages))
           let bitmap = try render(host, appearance: appearance)
-          XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
+          XCTAssertEqual(
+            Double(bitmap.pixelsWide) * HomeView.popoverSize.height,
+            Double(bitmap.pixelsHigh) * HomeView.popoverSize.width, accuracy: 1)
           for point in [(2, 2), (bitmap.pixelsWide - 2, bitmap.pixelsHigh - 2)] {
             XCTAssertEqual(
               try XCTUnwrap(bitmap.colorAt(x: point.0, y: point.1)).alphaComponent, 1,
@@ -175,7 +175,7 @@ final class DeepSeekRenderingTests: XCTestCase {
           }
         }
       }
-      // Full controls evidence at the same width; product remains 360 × 510.
+      // Full controls evidence at the same width; product remains 360 × 380.
       let settings = SettingsView(
         config: AppConfig(defaults: defaults, loginItemService: RenderLoginItems()),
         deepSeekConfiguration: DeepSeekConfiguration(secretStore: RenderSecrets()),
@@ -209,7 +209,8 @@ final class DeepSeekRenderingTests: XCTestCase {
   }
 
   private func render<Content: View>(
-    _ host: NSHostingView<Content>, appearance: NSAppearance.Name, height: CGFloat = 510
+    _ host: NSHostingView<Content>, appearance: NSAppearance.Name,
+    height: CGFloat = HomeView.popoverSize.height
   ) throws -> NSBitmapImageRep {
     host.appearance = try XCTUnwrap(NSAppearance(named: appearance))
     host.frame = NSRect(x: 0, y: 0, width: 360, height: height)

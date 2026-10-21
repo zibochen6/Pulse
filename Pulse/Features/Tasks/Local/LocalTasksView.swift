@@ -91,7 +91,6 @@ final class LocalTaskPresentation: ObservableObject {
   @Published var submittingIDs = Set<UUID>()
   @Published var expandedComposers = Set<LocalTaskFilter>()
   private var expansionRevisions: [LocalTaskFilter: Int] = [:]
-  @Published var collapsedCompleted = Set<LocalTaskFilter>()
   private var selectionRevision = 0
 
   /// Tag drag state. `draggingTagID` also suspends pointer-departure dismissal,
@@ -318,7 +317,6 @@ final class LocalTaskPresentation: ObservableObject {
   func reveal(_ task: LocalTask, tags: [TaskTag]) {
     selectedFilter =
       tags.first(where: { task.tagIDs.contains($0.id) }).map { .tag($0.id) } ?? .untagged
-    if task.completed { collapsedCompleted.remove(selectedFilter) }
     revealedTaskID = task.id
     revealRequest = UUID()
   }
@@ -344,11 +342,21 @@ struct LocalTasksView: View {
   let onEditingChanged: (Bool) -> Void
   @State private var dropCoordinator = TagBarDropCoordinator()
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// The tag bar's selection plate. With a namespace, the accent capsule is a
+  /// single view that slides between pills; without one the pill falls back to
+  /// a static fill, which is what Reduce Motion gets anyway.
+  @Namespace private var tagPlate
 
   /// Rows arrive from the top and leave the same way, so switching lists reads
   /// as content moving rather than as a list being torn down and rebuilt.
   private var rowTransition: AnyTransition {
     .opacity.combined(with: .move(edge: .top))
+  }
+
+  /// `nil` under Reduce Motion: the plate then lands in place instead of
+  /// sliding, while every other part of selection feedback stays identical.
+  private var selectionPlateNamespace: Namespace.ID? {
+    reduceMotion ? nil : tagPlate
   }
 
   var body: some View {
@@ -438,44 +446,26 @@ struct LocalTasksView: View {
       value: controller.deletionHistory.last?.id)
   }
 
+  /// The ids in display order. Used as the animation key for the list surface:
+  /// a task that is added or deleted is inserted or removed with the list's
+  /// row transition, while a completion changes no id at all — the task stays
+  /// exactly where it was and only strikes through in place.
+  private var taskIDs: [UUID] {
+    controller.tasks(matching: presentation.selectedFilter).map(\.id)
+  }
+
   private var taskScrollView: some View {
     ScrollViewReader { proxy in
       ScrollView {
         VStack(alignment: .leading, spacing: 2) {
           let filter = presentation.selectedFilter
-          let incomplete = controller.incompleteTasks(matching: filter)
-          let completed = controller.completedTasks(matching: filter)
-          if incomplete.isEmpty && completed.isEmpty {
+          let tasks = controller.tasks(matching: filter)
+          if tasks.isEmpty {
             Text(filter == .untagged ? "No tasks yet" : "No tasks in this tag")
               .font(.system(size: 13)).foregroundStyle(.secondary).padding(.vertical, 12)
           }
-          ForEach(incomplete) { taskRow($0).id($0.id).transition(rowTransition) }
-          if !completed.isEmpty {
-            Button {
-              if presentation.collapsedCompleted.contains(filter) {
-                presentation.collapsedCompleted.remove(filter)
-              } else {
-                presentation.collapsedCompleted.insert(filter)
-              }
-            } label: {
-              HStack(spacing: 5) {
-                // One symbol that rotates reads as a disclosure control; two
-                // swapped chevrons only ever look like a glyph that changed.
-                Image(systemName: "chevron.down")
-                  .rotationEffect(
-                    .degrees(presentation.collapsedCompleted.contains(filter) ? -90 : 0))
-                Text("Completed (\(completed.count))")
-                Spacer()
-              }
-              .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-              .padding(.vertical, 6).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain).accessibilityIdentifier("completedTasksHeading")
-            .accessibilityValue(
-              presentation.collapsedCompleted.contains(filter) ? "Collapsed" : "Expanded")
-            if !presentation.collapsedCompleted.contains(filter) {
-              ForEach(completed) { taskRow($0).id($0.id).transition(rowTransition) }
-            }
+          ForEach(tasks) { task in
+            taskRow(task).id(task.id).transition(rowTransition)
           }
           if presentation.isComposerExpanded {
             LocalTaskQuickComposer(controller: controller, presentation: presentation)
@@ -490,35 +480,28 @@ struct LocalTasksView: View {
                   insertion: .opacity.combined(with: .move(edge: .bottom)),
                   removal: .identity))
           } else {
-            Button {
-              presentation.beginAddingTask()
-            } label: {
-              Image(systemName: "plus")
-                .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(.secondary).frame(width: 36, height: 36)
-            }
-            .buttonStyle(PulseIconButtonStyle()).help("Add task")
-            .accessibilityLabel("Add task").accessibilityIdentifier("addLocalTaskButton")
-            .frame(maxWidth: .infinity).padding(.top, 6)
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            addTaskEntry
           }
           Color.clear.frame(height: 1).id("taskComposerEnd")
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Two values, two curves: rows change with the list, the disclosure is
-        // its own affordance. Both are set before the view ever mounts in the
-        // rendering tests, so neither animation can capture a mid-flight value
-        // in an off-window render.
+        // Three values, three curves: rows change with the list, the composer
+        // grows from its entry point, and a finished task acknowledges in
+        // place. All are set before the view ever mounts in the rendering
+        // tests, so none can capture a mid-flight value in an off-window
+        // render.
         .animation(
-          reduceMotion ? nil : PulseDesignTokens.insertionAnimation,
+          reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation,
           value: presentation.selectedFilter)
         .animation(
-          reduceMotion ? nil : PulseDesignTokens.disclosureAnimation,
-          value: presentation.collapsedCompleted)
-        .animation(
-          reduceMotion ? nil : PulseDesignTokens.insertionAnimation,
+          reduceMotion ? nil : PulseDesignTokens.composerAnimation,
           value: presentation.isComposerExpanded)
+        // Membership of the list itself. A completion leaves every id in
+        // place, so finishing a task never animates the row anywhere — and a
+        // background refresh that only touches a timestamp animates nothing
+        // either.
+        .animation(reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: taskIDs)
       }
       .accessibilityIdentifier("localTaskList")
       .onAppear {
@@ -537,6 +520,30 @@ struct LocalTasksView: View {
       }
       .onChange(of: presentation.revealRequest) { _ in scrollToRevealedTask(using: proxy) }
     }
+  }
+
+  /// The list's closing entry point. Text-first and left-aligned so it reads as
+  /// an invitation in the list rather than as a floating icon parked in the
+  /// middle of an otherwise empty column.
+  private var addTaskEntry: some View {
+    Button {
+      presentation.beginAddingTask()
+    } label: {
+      HStack(spacing: 6) {
+        Image(systemName: "plus")
+          .font(.system(size: PulseDesignTokens.caption, weight: .semibold))
+        Text("Add task")
+          .font(.system(size: PulseDesignTokens.footnote, weight: .medium))
+      }
+      .foregroundStyle(.secondary)
+    }
+    .buttonStyle(PulseFooterActionStyle())
+    .help("Add task")
+    .accessibilityLabel("Add task")
+    .accessibilityIdentifier("addLocalTaskButton")
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.top, 4)
+    .transition(.opacity.combined(with: .move(edge: .top)))
   }
 
   private func scrollToComposer(using proxy: ScrollViewProxy) {
@@ -581,7 +588,8 @@ struct LocalTasksView: View {
           HStack(spacing: 4) {
             PulsePillTab(
               title: "Todo", isSelected: presentation.selectedFilter == .untagged,
-              action: { presentation.selectedFilter = .untagged }
+              action: { presentation.selectedFilter = .untagged },
+              plateNamespace: selectionPlateNamespace
             )
             .id(LocalTaskFilter.untagged).accessibilityIdentifier("localTaskFilter.todo")
             .background(tagMidpointReporter { TagBarGeometry(todoMidX: $0) })
@@ -593,9 +601,19 @@ struct LocalTasksView: View {
           .coordinateSpace(name: TagBarGeometry.spaceName)
           .onPreferenceChange(TagBarGeometryKey.self) { presentation.tagBarGeometry = $0 }
           .onDrop(of: [.text], delegate: dropCoordinator)
+          // Scoped to the tag row: this is what makes the selection plate
+          // travel between pills instead of vanishing from one and appearing in
+          // another. The list below keeps its own curve.
+          .animation(
+            reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation,
+            value: presentation.selectedFilter)
         }
         .onAppear { proxy.scrollTo(presentation.selectedFilter, anchor: .center) }
-        .onChange(of: presentation.selectedFilter) { proxy.scrollTo($0, anchor: .center) }
+        .onChange(of: presentation.selectedFilter) { selection in
+          withAnimation(reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation) {
+            proxy.scrollTo(selection, anchor: .center)
+          }
+        }
         .onChange(of: tags.map(\.id)) { _ in
           proxy.scrollTo(presentation.selectedFilter, anchor: .center)
         }
@@ -607,7 +625,9 @@ struct LocalTasksView: View {
           width: 28, height: 28)
       }
       .buttonStyle(PulseIconButtonStyle()).help("New tag")
-      .accessibilityLabel("New tag").accessibilityIdentifier("addLocalTagButton")
+      .accessibilityLabel("New tag")
+      .accessibilityHint("Creates a new list next to Todo")
+      .accessibilityIdentifier("addLocalTagButton")
       .padding(.trailing, 10)
     }
     .onAppear { configureDropCoordinator() }
@@ -621,7 +641,8 @@ struct LocalTasksView: View {
       presentation.tagDropTarget?.pillID == tag.id ? presentation.tagDropTarget?.edge : nil
     return PulsePillTab(
       title: tag.name, isSelected: presentation.selectedFilter == .tag(tag.id),
-      action: { presentation.selectedFilter = .tag(tag.id) }
+      action: { presentation.selectedFilter = .tag(tag.id) },
+      plateNamespace: selectionPlateNamespace
     )
     .id(LocalTaskFilter.tag(tag.id))
     .accessibilityIdentifier("localTaskFilter.\(tag.id.uuidString)")
@@ -1088,31 +1109,38 @@ struct LocalTaskRow: View {
   var body: some View {
     HStack(alignment: .top, spacing: 2) {
       Button(action: onToggle) {
-        Group {
+        // One structure, never a swap. The pending spinner used to *replace*
+        // the check control, which rebuilt the button mid-save and dropped the
+        // completion animation that was about to run. Now the circle and check
+        // stay mounted, the spinner only covers them while the write is in
+        // flight, and nothing about the button's identity changes.
+        ZStack {
+          ZStack {
+            Image(systemName: "circle")
+              .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
+              .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+            // The check pops in instead of swapping glyphs, which is what
+            // makes a completion feel acknowledged rather than merely
+            // updated. Both symbols stay mounted so the static appearance is
+            // unchanged; only the transition differs.
+            Image(systemName: "checkmark.circle.fill")
+              .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
+              .foregroundStyle(Color.accentColor)
+              .scaleEffect(task.completed ? 1 : 0.4)
+              .opacity(task.completed ? 1 : 0)
+          }
+          .animation(
+            reduceMotion ? nil : PulseDesignTokens.selectionAnimation, value: task.completed)
+          .opacity(isPending ? 0 : 1)
           if isPending {
-            ProgressView().controlSize(.mini)
-          } else {
-            ZStack {
-              Image(systemName: "circle")
-                .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-              // The check pops in instead of swapping glyphs, which is what
-              // makes a completion feel acknowledged rather than merely
-              // updated. Both symbols stay mounted so the static appearance is
-              // unchanged; only the transition differs.
-              Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Color.accentColor)
-                .scaleEffect(task.completed ? 1 : 0.4)
-                .opacity(task.completed ? 1 : 0)
-            }
-            .animation(
-              reduceMotion ? nil : PulseDesignTokens.selectionAnimation, value: task.completed)
+            ProgressView().controlSize(.mini).transition(.opacity)
           }
         }
         .padding(.top, 2).frame(width: 28, height: 30, alignment: .top).contentShape(Rectangle())
       }
       .buttonStyle(PulseRowButtonStyle(isHovered: isHovered)).disabled(isPending)
+      .animation(
+        reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: isPending)
       .focused($focusedControl, equals: .complete)
       .help(task.completed ? "Mark incomplete" : "Mark complete")
       .accessibilityLabel("\(task.completed ? "Mark incomplete" : "Mark complete"): \(task.text)")

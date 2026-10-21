@@ -24,7 +24,7 @@ final class DailyRepeatControllerTests: XCTestCase {
     XCTFail("Timed out waiting for controlled operation")
   }
 
-  func testSaveTaskPersistsRepeatFlagAndFilterHelpersSplitCompletion() async throws {
+  func testSaveTaskPersistsRepeatFlagAndCompletionLeavesStoredOrder() async throws {
     let store = try store()
     let controller = LocalTaskController(store: store)
     await controller.refresh()
@@ -35,15 +35,17 @@ final class DailyRepeatControllerTests: XCTestCase {
     XCTAssertTrue(plainSaved)
     let daily = try XCTUnwrap(controller.document?.tasks.first(where: { $0.text == "Daily" }))
     XCTAssertTrue(daily.repeatsDaily)
-    XCTAssertEqual(
-      controller.incompleteTasks(matching: .all).map(\.text), ["Daily", "Plain"])
-    XCTAssertEqual(controller.completedTasks(matching: .all), [])
+    XCTAssertEqual(controller.tasks(matching: .all).map(\.text), ["Daily", "Plain"])
+    XCTAssertFalse(controller.tasks(matching: .all).contains(where: \.completed))
     let completion = try XCTUnwrap(controller.setCompleted(true, taskID: daily.id))
     await completion.value
-    XCTAssertEqual(controller.completedTasks(matching: .all).map(\.text), ["Daily"])
-    XCTAssertEqual(controller.incompleteTasks(matching: .all).map(\.text), ["Plain"])
-    // `.all` still means every task, and the helper preserves stored order.
+    // Finishing a task changes no position: the list is stored order, and the
+    // view strikes the row through exactly where it already was.
     XCTAssertEqual(controller.tasks(matching: .all).map(\.text), ["Daily", "Plain"])
+    XCTAssertEqual(
+      controller.tasks(matching: .all).map(\.completed), [true, false])
+    // `.all` still means every task.
+    XCTAssertEqual(controller.tasks(matching: .all).count, 2)
     // The flag survives a reload from disk, not just the in-memory document.
     let reopened = LocalTaskController(store: LocalTaskStore(fileURL: store.fileURL))
     await reopened.refresh()

@@ -265,14 +265,15 @@ final class LocalTasksRenderingTests: XCTestCase {
     XCTAssertTrue(presentation.isEditing)
   }
 
-  func testRevealingCompletedTaskExpandsDestinationAndRequestsScroll() {
+  /// A completed task is a row like any other, so revealing one only has to
+  /// select its list and ask for the scroll — there is no section to expand
+  /// first.
+  func testRevealingCompletedTaskSelectsDestinationAndRequestsScroll() {
     let presentation = LocalTaskPresentation()
     let tag = TaskTag(name: "Work")
     let task = LocalTask(text: "Restored or moved", completed: true, tagIDs: [tag.id])
-    presentation.collapsedCompleted.insert(.tag(tag.id))
     presentation.reveal(task, tags: [tag])
     XCTAssertEqual(presentation.selectedFilter, .tag(tag.id))
-    XCTAssertFalse(presentation.collapsedCompleted.contains(.tag(tag.id)))
     XCTAssertEqual(presentation.revealedTaskID, task.id)
   }
 
@@ -715,7 +716,7 @@ final class LocalTasksRenderingTests: XCTestCase {
     try FileManager.default.createDirectory(at: renderDirectory, withIntermediateDirectories: true)
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
       for mode in [
-        "empty", "list", "completed-only", "collapsed", "options", "editor", "new-tag",
+        "empty", "list", "completed-only", "options", "editor", "new-tag",
         "rename-tag", "delete-tag", "tag-settings", "composer", "editor-new-tag", "editor-error",
         "long-list", "tag-drag", "tag-reorder",
       ] {
@@ -755,7 +756,6 @@ final class LocalTasksRenderingTests: XCTestCase {
           presentation.tagIntent = LocalTagIntent(action: .rename(work.id), name: work.name)
         case "delete-tag":
           presentation.tagIntent = LocalTagIntent(action: .delete(work.id), name: work.name)
-        case "collapsed": presentation.collapsedCompleted.insert(.tag(work.id))
         case "completed-only":
           presentation.selectedFilter = .untagged
         case "tag-drag":
@@ -802,6 +802,231 @@ final class LocalTasksRenderingTests: XCTestCase {
       }
     }
   }
+
+  /// The same states at the height the popover actually leaves for the list once
+  /// the toolbar, quota strip and tag bar are in place (380 − 73 − 33). The
+  /// 455pt suite above is a stress render; this one is the shipped geometry, so
+  /// a footer or composer that outgrows the panel shows up here first.
+  func testTaskSurfaceFitsTheRealPopoverRegionInBothAppearances() async throws {
+    let controller = try await controller()
+    let work = TaskTag(name: "Work")
+    let created = await controller.createTag(id: work.id, name: work.name)
+    XCTAssertTrue(created)
+    for index in 0..<6 {
+      _ = await controller.saveTask(
+        id: nil,
+        text: index == 0
+          ? "写一份两行的中文任务，标题足够长，在紧凑的列表里自动折行显示"
+          : "示例事项 \(index + 1)",
+        tagIDs: [work.id], newTagNames: [])
+    }
+    let empty = try await self.controller()
+    let longList = try await self.controller()
+    for index in 0..<24 {
+      _ = await longList.saveTask(
+        id: nil, text: "示例事项 \(index + 1)", tagIDs: [], newTagNames: [])
+    }
+    let regionHeight: CGFloat = 274
+    let directory = URL(fileURLWithPath: "/tmp/PulseMinimalTodoRender", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+      for mode in ["list", "empty", "long-list", "composer"] {
+        let presentation = LocalTaskPresentation()
+        let target: LocalTaskController
+        if mode == "empty" {
+          target = empty
+        } else if mode == "long-list" {
+          target = longList
+        } else {
+          target = controller
+        }
+        presentation.reconcileTags(target.document?.tags ?? [])
+        if mode == "composer" {
+          presentation.beginAddingTask()
+          presentation.quickDraft.text = "在真实高度下展开输入"
+        }
+        let host = NSHostingView(
+          rootView: LocalTasksView(
+            controller: target, presentation: presentation, onEditingChanged: { _ in })
+            .frame(width: 360, height: regionHeight)
+            .background(Color(nsColor: .windowBackgroundColor)))
+        host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
+        host.frame = NSRect(x: 0, y: 0, width: 360, height: regionHeight)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        XCTAssertEqual(
+          Double(bitmap.pixelsWide) * regionHeight,
+          Double(bitmap.pixelsHigh) * 360, accuracy: 1)
+        for point in [(2, 2), (bitmap.pixelsWide - 2, bitmap.pixelsHigh - 2)] {
+          XCTAssertEqual(
+            try XCTUnwrap(bitmap.colorAt(x: point.0, y: point.1)).alphaComponent, 1,
+            accuracy: 0.01)
+        }
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(
+          to: directory.appendingPathComponent(
+            "\(appearanceName.rawValue)-region-\(mode).png"))
+      }
+    }
+  }
+
+  /// A task that is still saving keeps the exact geometry it had at rest. The
+  /// pending spinner used to *replace* the check control, so the row changed
+  /// shape mid-save and the completion animation that follows ran against a
+  /// view that had just been rebuilt.
+  func testPendingCompletionDoesNotChangeRowGeometry() throws {
+    let task = LocalTask(text: "Geometry must not shift while saving")
+    let idle = try rowFrame(task: task, isPending: false)
+    let saving = try rowFrame(task: task, isPending: true)
+    XCTAssertGreaterThan(idle.height, 30)
+    XCTAssertEqual(idle.width, saving.width, accuracy: 0.5, "Row width is unchanged")
+    XCTAssertEqual(idle.height, saving.height, accuracy: 0.5, "Row height is unchanged")
+  }
+
+  /// The tag bar's selection plate has to be visible in an off-window render:
+  /// a matched-geometry plate that silently fails to draw would leave the
+  /// selected tab looking unselected in every snapshot.
+  func testSelectedTagPlateRendersInBothAppearances() throws {
+    let directory = URL(fileURLWithPath: "/tmp/PulseMinimalTodoRender", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+      let host = NSHostingView(
+        rootView: TagPlatePreview().frame(width: 360, height: 76, alignment: .topLeading)
+          .background(Color(nsColor: .windowBackgroundColor)))
+      host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
+      host.frame = NSRect(x: 0, y: 0, width: 360, height: 76)
+      host.layoutSubtreeIfNeeded()
+      let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+      host.cacheDisplay(in: host.bounds, to: bitmap)
+
+      // Sample inside each capsule but before its label: the capsule's left cap
+      // is a semicircle of radius 13, so x = start+2…start+8 is inside the fill
+      // and clear of any glyph (the label begins after 9pt of padding). Both
+      // candidate vertical mappings are averaged, so the check does not depend
+      // on which way the cached bitmap's rows run.
+      let selectedWidth =
+        ("Todo" as NSString).size(withAttributes: [
+          .font: NSFont.systemFont(ofSize: 13, weight: .semibold)
+        ]).width + 18
+      let idleWidth =
+        ("Project" as NSString).size(withAttributes: [
+          .font: NSFont.systemFont(ofSize: 13, weight: .regular)
+        ]).width + 18
+      XCTAssertGreaterThan(idleWidth, 0)
+      let idleStart = 20 + Int(selectedWidth.rounded()) + 4
+      // Sampling works in points and converts through the bitmap's real scale,
+      // because a Retina cache doubles the pixel grid the assertion reads.
+      let scale = CGFloat(bitmap.pixelsWide) / 360
+      // The pill occupies top-relative y 20…46; that band and its mirror are
+      // both sampled, so the answer does not depend on the bitmap's row order.
+      let bands = [20..<46, 30..<56]
+      let selectedBands = bands.map {
+        averageColor(in: bitmap, xStart: 20, yBand: $0, scale: scale)
+      }
+      let idleBands = bands.map {
+        averageColor(in: bitmap, xStart: idleStart, yBand: $0, scale: scale)
+      }
+      // The mirrored band is mostly background by construction, so take the
+      // strongest disagreement between matching bands instead of averaging.
+      let distance = zip(selectedBands, idleBands)
+        .map { pair in zip(pair.0, pair.1).map { abs($0 - $1) }.max() ?? 0 }
+        .max() ?? 0
+      let selectedDescription = selectedBands
+        .map { $0.map { String(format: "%.3f", $0) }.joined(separator: ",") }
+        .joined(separator: " | ")
+      let idleDescription = idleBands
+        .map { $0.map { String(format: "%.3f", $0) }.joined(separator: ",") }
+        .joined(separator: " | ")
+      XCTAssertGreaterThan(
+        distance, 0.01,
+        "The selected pill must be filled (\(appearanceName.rawValue)): selected ("
+          + selectedDescription + ") idle (" + idleDescription + ")")
+      try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(
+        to: directory.appendingPathComponent("\(appearanceName.rawValue)-tag-plate.png"))
+    }
+  }
+
+  // MARK: - Helpers
+
+  /// Mean RGB over the left-cap columns of one pill band, converted from points
+  /// through the bitmap's actual pixel scale. The label begins after 9pt of
+  /// padding, so x = start+2…start+8 samples only fill (or bare background).
+  /// Returns `[red, green, blue]`.
+  private func averageColor(
+    in bitmap: NSBitmapImageRep, xStart: Int, yBand: Range<Int>, scale: CGFloat
+  ) -> [CGFloat] {
+    var sum: [CGFloat] = [0, 0, 0]
+    var count = 0
+    for x in Int((CGFloat(xStart) + 2) * scale)..<Int((CGFloat(xStart) + 9) * scale) {
+      for y in Int(CGFloat(yBand.lowerBound) * scale)..<Int(CGFloat(yBand.upperBound) * scale) {
+        guard let color = bitmap.colorAt(x: x, y: y) else { continue }
+        sum[0] += color.redComponent
+        sum[1] += color.greenComponent
+        sum[2] += color.blueComponent
+        count += 1
+      }
+    }
+    guard count > 0 else { return [1, 1, 1] }
+    return sum.map { $0 / CGFloat(count) }
+  }
+
+  private func rowFrame(task: LocalTask, isPending: Bool) throws -> CGRect {
+    let capture = FrameCapture()
+    let row = LocalTaskRow(
+      task: task, isPending: isPending, onToggle: {}, onEdit: {}, onDelete: {})
+      .background(
+        GeometryReader { proxy in
+          Color.clear.preference(key: RowFrameKey.self, value: proxy.frame(in: .local))
+        })
+      .overlayPreferenceValue(RowFrameKey.self) { frame in
+        GeometryReader { _ in
+          FrameCaptureView(frame: frame, capture: capture)
+        }
+        .allowsHitTesting(false)
+      }
+      .frame(width: 332)
+    let host = NSHostingView(rootView: row)
+    host.frame = NSRect(x: 0, y: 0, width: 332, height: 120)
+    host.layoutSubtreeIfNeeded()
+    return try XCTUnwrap(capture.frame, "Row frame was never measured")
+  }
+}
+
+/// Renders one selected and one idle pill side by side in the same namespace,
+/// exactly as the tag bar does.
+private struct TagPlatePreview: View {
+  @Namespace private var plate
+
+  var body: some View {
+    HStack(spacing: 4) {
+      PulsePillTab(title: "Todo", isSelected: true, action: {}, plateNamespace: plate)
+      PulsePillTab(title: "Project", isSelected: false, action: {}, plateNamespace: plate)
+    }
+    .padding(20)
+  }
+}
+
+private struct RowFrameKey: PreferenceKey {
+  static let defaultValue: CGRect = .null
+  static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+    let next = nextValue()
+    if next != .null { value = next }
+  }
+}
+
+@MainActor
+private final class FrameCapture {
+  var frame: CGRect?
+}
+
+private struct FrameCaptureView: NSViewRepresentable {
+  let frame: CGRect
+  let capture: FrameCapture
+  func makeNSView(context: Context) -> NSView {
+    capture.frame = frame
+    return NSView()
+  }
+  func updateNSView(_ nsView: NSView, context: Context) { capture.frame = frame }
 }
 
 @MainActor

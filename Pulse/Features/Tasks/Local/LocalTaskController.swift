@@ -49,17 +49,6 @@ final class LocalTaskController: ObservableObject {
     matching(document?.tasks ?? [], filter: filter)
   }
 
-  /// Open tasks for the current filter, in stored order. Kept as a helper so the
-  /// list can show open tasks before completed ones without re-deriving the
-  /// filter in the view.
-  func incompleteTasks(matching filter: LocalTaskFilter) -> [LocalTask] {
-    tasks(matching: filter).filter { !$0.completed }
-  }
-
-  func completedTasks(matching filter: LocalTaskFilter) -> [LocalTask] {
-    tasks(matching: filter).filter(\.completed)
-  }
-
   func saveTask(
     id: UUID?, text: String, tagIDs: Set<UUID>, newTagNames: [String], repeatsDaily: Bool = false,
     creationID: UUID = UUID()

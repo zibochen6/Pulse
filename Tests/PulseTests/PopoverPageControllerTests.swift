@@ -30,4 +30,36 @@ final class PopoverPageControllerTests: XCTestCase {
       XCTAssertEqual(pages.page, .home)
     }
   }
+
+  /// Settings reports one aggregated editing bit: the tag editor and the two
+  /// API key fields hold focus in turn, and the popover's dismissal suspension
+  /// has to survive that hand-off instead of being released the moment the
+  /// first control blurs.
+  func testEditingRegistryAggregatesEverySettingsSurface() {
+    let registry = PulseEditingRegistry()
+    XCTAssertFalse(registry.isEditing)
+
+    registry.set(source: "tagEditor", editing: true)
+    XCTAssertTrue(registry.isEditing)
+
+    registry.set(source: "deepSeekAPIKeyField", editing: true)
+    XCTAssertTrue(registry.isEditing)
+
+    registry.set(source: "tagEditor", editing: false)
+    XCTAssertTrue(registry.isEditing, "Blurring one field must not release the suspension")
+
+    registry.set(source: "deepSeekAPIKeyField", editing: false)
+    XCTAssertFalse(registry.isEditing)
+
+    registry.set(source: "vipAPIKeyField", editing: true)
+    registry.clear()
+    XCTAssertFalse(registry.isEditing, "Leaving the page always releases it")
+
+    // Repeated reports from the same source are idempotent.
+    registry.set(source: "vipAPIKeyField", editing: true)
+    registry.set(source: "vipAPIKeyField", editing: true)
+    XCTAssertTrue(registry.isEditing)
+    registry.set(source: "vipAPIKeyField", editing: false)
+    XCTAssertFalse(registry.isEditing)
+  }
 }

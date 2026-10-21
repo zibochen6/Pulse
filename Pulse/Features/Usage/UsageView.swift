@@ -187,31 +187,43 @@ struct UsageView: View {
 
   private func quotaRow(_ window: QuotaWindow) -> some View {
     VStack(alignment: .leading, spacing: 3) {
-      HStack(alignment: .firstTextBaseline) {
+      HStack(alignment: .firstTextBaseline, spacing: 8) {
         Text(window.displayName)
-          .font(.caption)
-        Spacer()
+          .font(.system(size: PulseDesignTokens.caption))
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+        Spacer(minLength: 8)
         Text(window.remainingPercent.map { "\($0)%" } ?? "--")
           .font(.system(size: 17, weight: .semibold, design: .rounded))
           .monospacedDigit()
+          .layoutPriority(1)
       }
       Text(
         window.resetsAt.map { "Resets \($0.formatted(date: .abbreviated, time: .shortened))" }
           ?? "Reset time unavailable"
       )
-      .font(.caption)
+      .font(.system(size: PulseDesignTokens.caption))
       .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
     }
   }
 
+  /// Label left, value right. The value is the number that matters, so it is
+  /// semibold monospaced while the label stays a quiet caption; both are free
+  /// to wrap instead of clipping digits when a balance runs long.
   private func detailRow(_ title: String, value: String) -> some View {
-    HStack(alignment: .firstTextBaseline) {
+    HStack(alignment: .firstTextBaseline, spacing: 8) {
       Text(title)
-        .font(.caption)
-      Spacer()
+        .font(.system(size: PulseDesignTokens.caption))
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      Spacer(minLength: 8)
       Text(value)
-        .font(.caption.weight(.medium))
+        .font(.system(size: PulseDesignTokens.footnote, weight: .semibold))
         .monospacedDigit()
+        .multilineTextAlignment(.trailing)
+        .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(1)
     }
   }
 

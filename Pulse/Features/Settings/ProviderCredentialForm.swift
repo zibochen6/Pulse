@@ -6,8 +6,14 @@ struct ProviderCredentialForm<Icon: View>: View {
   let fieldIdentifier: String
   let actionIdentifier: String
   let onCredentialsChanged: () -> Void
+  /// Reported while the key field has keyboard focus. Pointer-departure
+  /// dismissal is suspended for that whole window, so a caret sitting in the
+  /// API key field can never lose the popover to a mouse move. Declared before
+  /// the builder so call sites can pass it and still use a trailing closure.
+  var onEditingChanged: (Bool) -> Void = { _ in }
   @ViewBuilder let icon: () -> Icon
   @State private var apiKey = ""
+  @FocusState private var keyFocused: Bool
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -19,8 +25,11 @@ struct ProviderCredentialForm<Icon: View>: View {
           .font(.caption)
           .foregroundStyle(.secondary)
       }
+      // The typed key stays in this `@State` and in the Keychain on save —
+      // never in the controller, a store, or a log line.
       SecureField("\(name) API key", text: $apiKey)
         .textFieldStyle(.roundedBorder)
+        .focused($keyFocused)
         .accessibilityIdentifier(fieldIdentifier)
       HStack(spacing: 10) {
         Button(configuration.hasAPIKey ? "Replace key" : "Save key") {
@@ -54,5 +63,8 @@ struct ProviderCredentialForm<Icon: View>: View {
       }
     }
     .onAppear { configuration.refresh() }
+    .onChange(of: keyFocused) { onEditingChanged($0) }
+    // Leaving the page must release the suspension even if focus never moved.
+    .onDisappear { onEditingChanged(false) }
   }
 }

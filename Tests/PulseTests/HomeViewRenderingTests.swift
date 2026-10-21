@@ -18,6 +18,13 @@ final class HomeViewRenderingTests: XCTestCase {
     UsageController(provider: PreviewVIPUsageProvider())
   }
 
+  /// The popover's size is part of the product contract: one fixed surface, so
+  /// typing, completing a task or a background refresh never resizes the panel
+  /// under the pointer.
+  func testPopoverSizeIsTheFixedRoundOneSurface() {
+    XCTAssertEqual(HomeView.popoverSize, NSSize(width: 360, height: 380))
+  }
+
   func testCodexMenuIconIsBundled() {
     XCTAssertNotNil(Bundle.main.url(forResource: "CodexMenuIcon", withExtension: "png"))
   }
@@ -156,7 +163,9 @@ final class HomeViewRenderingTests: XCTestCase {
           }
           host.cacheDisplay(in: host.bounds, to: bitmap)
           XCTAssertEqual(host.bounds.size, HomeView.popoverSize)
-          XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
+          XCTAssertEqual(
+            Double(bitmap.pixelsWide) * HomeView.popoverSize.height,
+            Double(bitmap.pixelsHigh) * HomeView.popoverSize.width, accuracy: 1)
           for point in [(2, 2), (bitmap.pixelsWide - 2, bitmap.pixelsHigh - 2)] {
             guard let color = bitmap.colorAt(x: point.0, y: point.1) else {
               return XCTFail("Missing rendered pixel")
@@ -274,7 +283,9 @@ final class HomeViewRenderingTests: XCTestCase {
         host.layoutSubtreeIfNeeded()
         let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
         host.cacheDisplay(in: host.bounds, to: bitmap)
-        XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
+        XCTAssertEqual(
+          Double(bitmap.pixelsWide) * HomeView.popoverSize.height,
+          Double(bitmap.pixelsHigh) * HomeView.popoverSize.width, accuracy: 1)
         let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
         try png.write(
           to: renderDirectory.appendingPathComponent(
@@ -355,14 +366,16 @@ final class HomeViewRenderingTests: XCTestCase {
         host.layoutSubtreeIfNeeded()
         let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
         host.cacheDisplay(in: host.bounds, to: bitmap)
-        XCTAssertEqual(bitmap.pixelsWide * 510, bitmap.pixelsHigh * 360)
+        XCTAssertEqual(
+          Double(bitmap.pixelsWide) * HomeView.popoverSize.height,
+          Double(bitmap.pixelsHigh) * HomeView.popoverSize.width, accuracy: 1)
         let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
         try png.write(
           to: directory.appendingPathComponent("\(appearanceName.rawValue)-\(destination).png"))
       }
       // Off-window hosts do not reliably execute ScrollViewReader's onAppear.
       // Also inspect all actual settings controls at the product's 360pt width;
-      // this taller evidence image does not alter the 360x510 application.
+      // this taller evidence image does not alter the fixed popover size.
       let fullSettings = NSHostingView(
         rootView: SettingsView(
           config: config,

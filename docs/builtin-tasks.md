@@ -28,13 +28,14 @@ there is no account, import, source selector, database or network sync.
 
 ## Fast entry and editing
 
-- A centered **+** follows all task rows and the Completed group inside the
-  scrolling list. It expands inline entry and focuses the destination-labelled
-  input. Enter saves; confirmed success clears and collapses back to **+**.
+- A left-aligned **+ Add task** row follows all task rows inside the scrolling
+  list. It expands inline entry in place and focuses the
+  destination-labelled input. Enter saves; confirmed success clears and collapses
+  back to the **+ Add task** row.
   Failure preserves input for retry. Chinese IME candidate confirmation must
   not submit, and empty/whitespace-only titles cannot be submitted.
 - Esc or the collapse control hides entry without discarding the draft. Click
-  **+** again to continue. New empty tags select their list and open entry.
+  **+ Add task** again to continue. New empty tags select their list and open entry.
 - Creation options are disclosed on demand. The list menu offers **New tag…**;
   only choosing it reveals name entry. Both creation and editing can create and
   select one new tag, and support **Repeat daily**.
@@ -52,9 +53,9 @@ there is no account, import, source selector, database or network sync.
 
 ## Completion and deletion
 
-- Open tasks precede a collapsible **Completed** section with a count, even
-  when every task is completed. It starts expanded. Completed rows stay dimmed
-  and struck through; collapsing changes presentation only.
+- A completed task stays exactly where it is: dimmed and struck through, in
+  stored order, with no section to fold it into and no heading above it. It
+  remains reachable for editing, un-completing and deleting like any open task.
 - Completion is published only after verified storage and disables duplicate
   toggles while pending. Failures retain a task-specific retry intent.
 - Deleting from a row, its context menu or the editor removes the task without
@@ -117,7 +118,7 @@ change the machine clock to test failures/repeat.
    conversion and the original byte backup exists.
 2. Create an empty tag using **+**, cancel another, retry a duplicate with
    different capitalization and create enough tags to require scrolling.
-3. Expand **+**, add with Enter and verify success collapses entry. Reopen and
+3. Expand **+ Add task**, add with Enter and verify success collapses entry. Reopen and
    check destination, focus, whitespace rejection, long text and Chinese IME
    candidate confirmation without submission. Collapse a draft with Esc and
    verify it remains on reopening without blocking pointer dismissal.
@@ -125,8 +126,11 @@ change the machine clock to test failures/repeat.
    to another list. The task appears only at its destination.
 5. Leave drafts in two lists, switch tabs, visit Settings, close/reopen and verify
    both drafts. Submit then change tabs/input before a delayed save returns.
-6. Complete every task; verify a counted Completed heading, collapse/expand and
-   persistence after reload. Test daily reset with an injected clock in tests.
+6. Complete every task; verify each row stays in place, dimmed and struck
+   through, and that nothing above the list changes shape. Un-complete one and
+   verify it returns to its original styling in the same position, then reload
+   and check both states persist. Test daily reset with an injected clock in
+   tests.
 7. Delete via mouse, context menu and keyboard. Verify no text reflow, immediate
    feedback and multiple Undo operations. Remove the original tag, then undo a
    task deletion and verify fallback to Todo.
@@ -136,7 +140,7 @@ change the machine clock to test failures/repeat.
    idle hover dismissal, outside click and the normal 300 ms opening guard /
    180 ms departure delay.
 10. Inspect empty/populated/completed/editor/options/tag/undo states at the fixed
-    360 × 510 popover size in Aqua and Dark Aqua. Simulate storage failures with
+    360 × 380 popover size in Aqua and Dark Aqua. Simulate storage failures with
     injected writers and verify retry preserves input and confirmed data.
 11. Drag a tab to the far right, to the front and back again, then relaunch and
     confirm the order survived. Verify **Todo** never moves, a drop on a tab's

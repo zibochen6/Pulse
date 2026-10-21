@@ -13,6 +13,10 @@ struct SettingsView: View {
   let onVIPCredentialsChanged: () -> Void
   let onQuit: () -> Void
   var onTaskEditingChanged: (Bool) -> Void = { _ in }
+  /// Aggregates every Settings surface that can hold keyboard focus — the tag
+  /// editor and both API key fields — so one control blurring cannot release
+  /// the popover's dismissal suspension while another still has the caret.
+  @StateObject private var editing = PulseEditingRegistry()
 
   var body: some View {
     VStack(spacing: 0) {
@@ -27,12 +31,14 @@ struct SettingsView: View {
         .accessibilityLabel("Back to Home")
         .accessibilityIdentifier("backToHomeButton")
         Text("Settings")
-          .font(.system(size: 16, weight: .semibold))
+          .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
         Spacer()
       }
-      .padding(.horizontal, 16)
-      .padding(.top, 16)
-      .padding(.bottom, 10)
+      // Same toolbar metrics as Home and Usage: switching pages must not make
+      // the header jump.
+      .padding(.horizontal, PulseDesignTokens.contentInset)
+      .padding(.top, 6)
+      .padding(.bottom, 4)
 
       ScrollViewReader { proxy in
         ScrollView {
@@ -77,6 +83,13 @@ struct SettingsView: View {
           deepSeekConfiguration.refresh()
         }
       }
+    }
+    // One aggregation point: Settings reports a single editing bit no matter
+    // which of its fields currently holds focus.
+    .onChange(of: editing.isEditing) { onTaskEditingChanged($0) }
+    .onDisappear {
+      editing.clear()
+      onTaskEditingChanged(false)
     }
   }
 
@@ -142,13 +155,15 @@ struct SettingsView: View {
       ProviderCredentialForm(
         configuration: vipConfiguration, name: "88VIP", fieldIdentifier: "vipAPIKeyField",
         actionIdentifier: "VIP",
-        onCredentialsChanged: onVIPCredentialsChanged
+        onCredentialsChanged: onVIPCredentialsChanged,
+        onEditingChanged: { editing.set(source: "vipAPIKeyField", editing: $0) }
       ) { VIPProviderIcon(size: 18) }
       Divider()
       ProviderCredentialForm(
         configuration: deepSeekConfiguration, name: "DeepSeek",
         fieldIdentifier: "deepSeekAPIKeyField", actionIdentifier: "DeepSeek",
-        onCredentialsChanged: onDeepSeekCredentialsChanged
+        onCredentialsChanged: onDeepSeekCredentialsChanged,
+        onEditingChanged: { editing.set(source: "deepSeekAPIKeyField", editing: $0) }
       ) { DeepSeekProviderIcon(size: 18) }
 
       Text("More AI providers are coming soon.")
@@ -223,7 +238,9 @@ struct SettingsView: View {
   /// deleting tasks stays on Home so the popover never becomes a second editor.
   private var tasksContent: some View {
     VStack(alignment: .leading, spacing: 10) {
-      LocalTagSettingsView(controller: localTasks, onEditingChanged: onTaskEditingChanged)
+      LocalTagSettingsView(
+        controller: localTasks,
+        onEditingChanged: { editing.set(source: "tagEditor", editing: $0) })
       Text(
         "Tasks live in Pulse only. Add them on Home, mark them done to dim them, set"
           + " “Repeat daily” for a task that comes back each day, or hover a row to delete it."
@@ -253,5 +270,32 @@ struct SettingsView: View {
     case .notFound:
       "macOS cannot locate this app for login. Try an installed build."
     }
+  }
+}
+
+/// Tracks which Settings surfaces currently hold keyboard focus and exposes one
+/// aggregated bit for the popover's dismissal suspension.
+///
+/// The naive version passes each field's focus straight through: focus moves
+/// from tag editor → API key, the editor reports `false`, and the popover is
+/// free to close with a caret still in the key field. Counting sources removes
+/// that race, and `clear()` makes leaving the page unconditionally safe.
+@MainActor
+final class PulseEditingRegistry: ObservableObject {
+  @Published private(set) var isEditing = false
+  private var sources = Set<String>()
+
+  func set(source: String, editing: Bool) {
+    if editing {
+      sources.insert(source)
+    } else {
+      sources.remove(source)
+    }
+    isEditing = !sources.isEmpty
+  }
+
+  func clear() {
+    sources.removeAll()
+    isEditing = false
   }
 }

@@ -114,15 +114,17 @@ enum PopoverPage: Equatable {
 
 ### 3. Contracts
 
-- The Home header contains Pulse identity, the Settings gear, and independent compact Codex, 88VIP, and DeepSeek controls. Codex uses the real icon and `UsageMenuFormatter.title(for:)`: one window yields a bare percentage, multiple windows yield short labeled values, and loading/unavailable/failure yield `…`/`--`/`!`. Money remains a native-currency balance, separate from quota percentages. Home has no reset time, update time, or refresh control; those belong to Usage. The AppKit menu bar continues to use only Codex state.
-- Header status controls begin beside the brand with flexible space after them, shifting them toward the leading edge. When they do not fit, place them in leading-aligned rows below the brand; wrap whole controls instead of clipping monetary decimals or overlapping Settings. Bound a single exceptionally wide quota control and make its text horizontally reachable. Use actual measured widths at the fixed 360 × 510 popover size. Keep the existing native colors, fonts, and task-region ownership.
+- The Home header is a lightweight toolbar: Pulse identity on the leading edge, flexible space, then the Settings gear, and a separate quota strip directly below it carries the independent compact Codex, 88VIP, and DeepSeek controls. Each control shows the provider name above its current value so the two never compete for one line. Codex uses the real icon and `UsageMenuFormatter.title(for:)`: one window yields a bare percentage, multiple windows yield short labeled values, and loading/unavailable/failure yield `…`/`--`/`!`. Money remains a native-currency balance, separate from quota percentages. Home has no reset time, update time, or refresh control; those belong to Usage. The AppKit menu bar continues to use only Codex state.
+- The quota strip is its own band below the toolbar, so header height never depends on how long an amount is. Controls measure themselves and wrap as whole controls into further leading-aligned rows instead of clipping monetary decimals or overlapping Settings; wrap instead of shrinking type. Bound a single exceptionally wide quota control and make its text horizontally reachable. Use actual measured widths at the fixed 360 × 380 popover size, which never changes as content loads, saves or expands. Keep the existing native colors, fonts, and task-region ownership.
 - Clicking a provider control requests that provider's refresh, calls `showUsage()`, and displays full `UsageView` in a separate scrollable page. Manual refresh remains in Usage. Add Provider routes to Settings → Providers, which owns separate 88VIP and DeepSeek Keychain forms. Back from Usage or Settings calls `showHome()`.
 - Tasks is Home's main region and has one native local implementation in
   `Pulse/Features/Tasks/Local/`. The fixed tab row contains permanent default
   Todo (untagged only) plus independent custom tags, with no All/aggregate tab.
   Each task belongs to one logical list. A fixed tab-bar + creates empty tags;
-  a separate centered + follows all scrolling task rows and expands quick entry.
-  Completed tasks have a counted collapsible section. Delete is immediate with controller-owned
+  a left-aligned "+ Add task" row follows all scrolling task rows and expands
+  quick entry in place.
+  Completed tasks stay in place, dimmed and struck through, with no section or
+  heading of their own. Delete is immediate with controller-owned
   Undo. Never fabricate sample tasks for empty/loading states. See Built-in
   tasks below for the complete interaction contract.
 - `PopoverPageController` is presentation state only. It does not start an integration or change a UserDefaults key. `popoverDidClose` resets it to Home so a later open is task-first.
@@ -131,6 +133,7 @@ enum PopoverPage: Equatable {
 - `requestClose` enters Closing and cancels timers before requesting native dismissal. `popoverWillClose` also enters Closing for native outside clicks. During Closing, tracking, stale presentation signals, duplicate close requests and status-item toggles cannot reopen or restart timers. Only `popoverDidClose` resets the controller and page state. A second click and outside click request dismissal immediately, without the hover grace interval. The hover controller never shows the popover.
 - The popover retains its opaque adaptive background and fixed `HomeView.popoverSize` across page changes.
 - Home keeps the task region visually dominant within the fixed popover size. The Usage detail page scrolls for extra quota windows and long messages; no detailed Usage content appears on Home.
+- All in-panel motion comes from `PulseDesignTokens` — `hoverAnimation` (120 ms), `pressAnimation` (90 ms), `selectionAnimation`, `tabSwitchAnimation`, `composerAnimation`, `pageTransitionAnimation`, `completionAnimation`, `reorderAnimation`, `insertionAnimation` — all within 90–260 ms with zero or slight bounce. Apply them with `.animation(_:value:)` scoped to the smallest changed state, never to the root view, so a transition can be interrupted and never delays typing or saving. Page entry moves a few points in its direction of travel with a fade while removal keeps identity, because a removed page must not carry the shared field editor with it. A finishing task keeps one row structure and one scoped animation across press, save and checkmark; it stays in place and only strikes through. Reduce Motion drops offsets and springs to plain opacity and skips the matched-geometry tag plate entirely. Popover open/close stays native and system-owned.
 
 ### 4. Validation & Error Matrix
 
@@ -230,7 +233,7 @@ Tests use isolated defaults and a temporary store.
   reserved and cannot be renamed/deleted/duplicated.
 - Tab context menus and Settings share tag rename/remove operations. Remove
   requires confirmation explicitly stating tasks move to Todo and are kept.
-- A centered task + follows all task rows and the Completed group inside the
+- A left-aligned "+ Add task" row follows all task rows inside the
   task ScrollView. Presentation owns expansion per list alongside retained
   drafts. Explicit expansion scrolls entry into view after mount and requests
   focus; ordinary list appearance never focuses hidden entry. Esc/collapse
@@ -260,18 +263,18 @@ Tests use isolated defaults and a temporary store.
   must give that input a fresh creation ID; reusing a committed ID with divergent
   content causes `taskConflict`. Editor/tag pending guards likewise survive
   view remounts, and older results cannot clear newer versions of the intent.
-- Completed rows are dimmed/struck through after open rows, under a counted
-  disclosure heading even when no open tasks exist. Starts expanded; collapse
-  is presentation only. Checkbox is disabled/spinner shown while pending.
+- Completed rows stay exactly where they are: dimmed/struck through, in stored
+  order, with no section heading and no collapse state. Checkbox is
+  disabled/spinner shown while pending.
 - Reserve delete-control width; hover/focus changes visibility without text
   reflow. Keyboard and context-menu actions reach delete. Row/editor delete
   has no confirmation and exposes Undo after confirmed removal. Controller
   history keeps 20 deletions through pages/popover closure until process exit.
   Restoration reveals its task; missing original tags fall back to Todo.
-  Revealing a moved/restored completed task expands its destination's Completed
-  section and scrolls the target into view after the updated rows are present.
+  Revealing a moved/restored completed task selects its destination list and
+  scrolls the target into view after the updated rows are present.
 - Use existing adaptive opaque backgrounds, Pulse action/icon/row styles and
-  fixed 360 × 510 popover. Respect Reduce Motion and do not animate whole pages
+  fixed 360 × 380 popover. Respect Reduce Motion and do not animate whole pages
   for row actions. Settings controls remain native and compact.
 - Daily repeat remains per-task. Popover open/surface appearance reset stale
   days without raising `isSaving` or clearing another error. Task-specific
@@ -289,13 +292,13 @@ Tests use isolated defaults and a temporary store.
 | Later input before old save resolves | Old result cannot clear new text or redirect selection. |
 | Popover closes / Settings visited | Drafts remain; returning reinstates relevant editing protection. |
 | Collapsed draft or unfocused empty input | Normal pointer dismissal resumes; retained text stays available. |
-| All rows completed | Counted Completed disclosure still appears. |
+| All rows completed | Each row stays in place, struck through; list height is unchanged. |
 | Delete then another edit then Undo | Restore target only; subsequent edit persists. |
 | Save/restore fails | Retain input/receipt and offer retry; no false success. |
 
 ### 5. Good / Base / Bad Cases
 
-- Good: create an empty tag, add with Enter and return to the centered +,
+- Good: create an empty tag, add with Enter and return to the + Add task row,
   reopen a retained draft, move a task, delete another and Undo without reflow.
 - Base: Todo always holds untagged tasks; empty custom tabs allow immediate entry.
 - Bad: a late save returns after tab/draft changes. Preserve current input and
