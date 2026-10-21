@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 22
+- **Total Sessions**: 23
 - **Last Active**: 2026-10-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~557 | Active |
+| `journal-1.md` | ~579 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 23 | 2026-10-21 | Tag drag reorder and motion polish | `2dbf345` | `main` |
 | 22 | 2026-10-21 | Release Pulse 0.1.5 | `c4fbd57`, `031b71a` | `main` |
 | 21 | 2026-10-21 | Minimal Todo list and editor | `85ee083` | `codex/minimal-todo-editor` |
 | 20 | 2026-10-21 | Release Pulse 0.1.4 | `983bbbd`, `69844f1` | `main` |

@@ -555,3 +555,25 @@ Published v0.1.5/build9 through canonical release.sh after 180 isolated tests. S
 ### Status
 
 [OK] **Completed**
+
+
+## Session 23: Tag drag reorder and motion polish
+<!-- trellis-session: v=2 fp=8b229dd5df7da36d -->
+
+**Date**: 2026-10-21
+**Task**: Tag drag reorder and motion polish
+**Branch**: `main`
+
+### Summary
+
+Added drag reordering for custom tag tabs with a live insertion caret, an optimistic order preview that converges on the confirmed write, and the same move from each tab's context menu (Move Left/Move Right, opt-cmd-arrows) and from Settings -> Tasks. Todo stays fixed at the left and is never draggable. The store grows moveTag(id:toIndex:) where the index is the position after the move: out-of-range destinations clamp rather than fail, a tag deleted mid-drag is tagMissing, and a move to the tag's own slot writes nothing. Drop geometry is a pure view-free function over measured pill centres, so animated layout can never feed back into the hit test. Motion is now one curve per kind of feedback in PulseDesignTokens (hover, press, selection, disclosure, insertion, reorder), all gated on Reduce Motion; tabs acknowledge a press with a scale-down and draw a capsule focus affordance instead of the suppressed square ring, completion pops the check in rather than swapping glyphs, the Completed chevron rotates instead of trading symbols, and rows, the inline composer, banners and the undo bar transition in and out. Two deliberate non-animated exceptions are documented: the selection fill (fading from clear leaves a selected tab blank in off-window renders) and the composer's removal (lingering through a removal transition is how a saved draft gets typed back into a field that should be gone). 204 tests pass; 32 Aqua/Dark Aqua previews inspected including two new drag states; real task bytes unchanged. Native desktop drag QA was not performed. No release, no local install and no push.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2dbf345` | feat: drag-reorder tag tabs and polish motion |
+
+### Status
+
+[OK] **Completed**
