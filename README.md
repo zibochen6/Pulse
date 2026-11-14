@@ -2,16 +2,20 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services every day. The intended product brings AI usage status and daily to-dos into one quick daily entry point.
 
-**Current state:** Pulse is a buildable menu bar app with Codex usage, optional 88VIP and DeepSeek balance integrations, and native to-do lists with one tag per task, independent tag creation, quick entry, deletion undo, optional daily repeat, and visible completed tasks. It reads rate-limit windows from a locally installed, signed-in Codex CLI and can query user-configured 88VIP and DeepSeek account balances. The menu bar remains Codex-only; the popover header shows all three compact statuses, left aligned and wrapped when needed. Click any status for Usage details; Settings is another page in the same popover. A development-signed preview is available on GitHub.
+**Pulse 0.1.8:** Pulse combines real Codex usage, optional 88VIP and DeepSeek balances, and local to-dos. The redesigned app uses a spacious 400 × 520 menu-bar panel, discoverable tag management, soft adaptive colors and a separate categorized Settings window. English and Simplified Chinese follow the system language.
+
+The menu bar remains Codex-only. Select a provider to inspect its own usage, or connect an optional service from its status card. Tasks support independent tag lists, quick entry, daily repeat and deletion undo. Everything stays local; API keys are stored in macOS Keychain. See [UI and interaction](docs/ui-layout-refactor.md) and [motion](docs/popover-motion.md) for the current behavior.
+
+[Preview the redesigned interface and 18-second demo](docs/media/ui-redesign/README.md) in English or Simplified Chinese. All preview values and tasks are clearly labelled sample data.
 
 ## Download and install
 
-Download [Pulse 0.1.7](https://github.com/zibochen6/Pulse/releases/tag/v0.1.7)
+Download [Pulse 0.1.8](https://github.com/zibochen6/Pulse/releases/tag/v0.1.8)
 for macOS 13 or newer (Apple Silicon and Intel). Open the DMG and drag Pulse
 to Applications. Quit the previous Pulse instance before replacing it, then
 launch `/Applications/Pulse.app`; its settings and task storage are retained.
-The release publishes `Pulse-0.1.7.dmg` with a SHA-256 checksum for manual
-installs, plus `Pulse-0.1.7.zip` and its checksum for the in-app updater; the
+The release publishes `Pulse-0.1.8.dmg` with a SHA-256 checksum for manual
+installs, plus `Pulse-0.1.8.zip` and its checksum for the in-app updater; the
 DMG and ZIP contain the same signed app.
 
 This preview is signed with an Apple Development certificate, **not Developer ID
@@ -19,14 +23,14 @@ signed or notarized**. macOS may block first launch. If you trust the downloaded
 build, use the available **Open Anyway** option in System Settings → Privacy &
 Security after attempting to launch; follow [Apple's guidance](https://support.apple.com/102445)
 and do not disable Gatekeeper. Source builds
-remain available below. See [0.1.7 release notes](docs/releases/0.1.7.md) for
+remain available below. See [0.1.8 release notes](docs/releases/0.1.8.md) for
 changes and current limits.
 
 ## Automatic updates
 
 Pulse 0.1.3 and later check the public GitHub latest-release feed about ten
 seconds after launch and every six hours while running. Settings → Updates has
-a manual **Check Now** action, and automatic checks can be turned off there.
+a manual **Check for updates** action, and automatic checks can be turned off there.
 Draft and prerelease releases are ignored.
 
 Before anything is staged, Pulse verifies the download over HTTPS, checks the
@@ -36,8 +40,8 @@ the bundle identifier and embedded version, and verifies the Apple code
 signature (TeamIdentifier `9Y4B7WBUU2`, Apple Development authority). Any
 mismatch discards the download and leaves the installed app untouched.
 
-A verified update installs itself only when no task draft is open and the
-popover is closed; otherwise a "Pulse 0.1.x is ready" banner with **Restart**
+A verified update installs itself only when the popover and Settings are
+closed, no unfinished task/settings draft remains and no local save is pending; otherwise a "Pulse 0.1.x is ready" banner with **Restart**
 and **Later** appears above the task list, and quitting applies it. Task data,
 existing preferences and Keychain items are not touched. The current app is
 backed up to `~/Library/Application Support/Pulse/Backups/` and restored if
@@ -57,7 +61,7 @@ Requirements: macOS 13 or newer and Xcode 26.6 or a compatible Xcode version.
 
 1. Open `Pulse.xcodeproj` in Xcode.
 2. Select the `Pulse` scheme and **My Mac**, then Run.
-3. Sign in to Codex if needed, then click the Codex icon in the menu bar. The Home popover shows Tasks first; click its compact Codex status for quota details, or the gear for Settings. Both pages return to Home. Click the menu bar item again or click outside to dismiss the popover. Pointer departure from both it and the menu bar item starts a 180 ms grace interval; returning cancels the close. Opening and dismissal use native macOS animation, with a short 300 ms opening guard that also waits for presentation to finish. System **Reduce Motion** disables animation. Choose **Quit Pulse** in Settings to exit. Pulse has no Dock icon.
+3. Sign in to Codex if needed, then click the Codex icon in the menu bar. The Home popover shows Tasks first; click its compact Codex status for quota details, or the gear for Settings. Usage returns to Home; Settings opens in its own window and is also available with **⌘,**. Click the menu bar item again or click outside to dismiss the popover. Pointer departure from both it and the menu bar item starts a 180 ms grace interval; returning cancels the close. Opening and dismissal use native macOS animation, with a short 300 ms opening guard that also waits for presentation to finish. System **Reduce Motion** disables native panel motion and removes internal movement/scale, retaining gentle state fades. Choose **Quit Pulse** in Settings to exit. Pulse has no Dock icon.
 
 Command-line build:
 
@@ -109,15 +113,16 @@ If the app cannot find Codex, install or launch Codex and check that its CLI wor
 
 ## 88VIP balance
 
-Open **Settings → Providers**, enter your 88VIP API key, and select **Save key**. Pulse stores the key only in your macOS Keychain. It queries 88API's documented billing subscription and usage endpoints, calculates the remaining balance in USD, and shows it beside Codex in the popover. The full Usage page includes the limit, used amount, remaining amount, available expiry, update time, and a manual refresh action.
+Open **Settings → AI services**, enter your 88VIP API key, and select **Save and verify**. Pulse stores the key only in your macOS Keychain. It queries 88API's documented billing subscription and usage endpoints, calculates the remaining balance in USD, and shows it beside Codex in the popover. The full Usage page includes the limit, used amount, remaining amount, available expiry, update time, and a manual refresh action.
 
-88VIP refreshes at launch and every ten minutes. Opening the popover refreshes a reading older than 60 seconds; selecting the compact status or the Usage page's refresh control requests it immediately. Network requests time out instead of leaving refresh controls busy indefinitely. Missing keys and other unavailable/error states show an error marker in the compact status, with the detailed reason on the Usage page. Partial responses are retried on a later popover open after a 60-second cooldown. Pulse never converts a USD value to another currency or fabricates a remaining balance. Clicking the Codex status likewise requests a fresh reading.
+88VIP refreshes at launch and every ten minutes. Opening the popover refreshes a reading older than 60 seconds; selecting a configured service's compact status or the Usage page's refresh control requests it immediately. Network requests time out instead of leaving refresh controls busy indefinitely. A missing key shows **Connect** and opens that service in Settings. Other unavailable/error states show an error marker, with the detailed reason on the Usage page. Partial responses are retried on a later popover open after a 60-second cooldown. Pulse never converts a USD value to another currency or fabricates a remaining balance. Clicking the Codex status likewise requests a fresh reading.
 
 ## DeepSeek balance
 
-Open **Settings → Providers**, enter your DeepSeek API key, and select **Save key**.
-Pulse stores it only in macOS Keychain, independently of 88VIP. **Replace key**
-and **Remove key** immediately clear the previous reading and refresh the account.
+Open **Settings → AI services**, enter your DeepSeek API key, and select **Save and verify**.
+Pulse stores it only in macOS Keychain, independently of 88VIP. **Manage connection**
+reveals **Save and verify** for a replacement key and **Disconnect** for removal.
+Changing or removing the key immediately invalidates the previous reading.
 The integration uses the [official account balance endpoint](https://api-docs.deepseek.com/api/get-user-balance);
 it monitors API account balance rather than a chat subscription or token history.
 
@@ -129,21 +134,22 @@ for Usage details, update time, setup/error guidance, and manual refresh.
 
 DeepSeek refreshes at launch and every ten minutes, on popover open when the
 reading is older than 60 seconds, and immediately after a key change or manual
-refresh. Requests time out after 20 seconds. Missing keys and failed requests
-show `!` in Home and explain the reason in Usage; an old amount is never kept as
+refresh. Requests time out after 20 seconds. Missing keys show **Connect** and
+open Settings; failed requests show `!` in Home and explain the reason in Usage.
+An old amount is never kept as
 the current result after a failure. Provider controls sit toward the leading
 edge and wrap as complete controls when amounts or quota windows need space.
 Only a readout wider than the entire row scrolls horizontally; ordinary amounts
-and their decimal digits remain visible in full within the 360 × 380 popover,
+and their decimal digits remain visible in full within the 400 × 520 popover,
 which never grows as content changes.
 
 ## Built-in tasks
 
 Pulse has independent native to-do lists. **Todo** always holds tasks without a
 custom tag; each custom tag is another list, and each task belongs to one list.
-Use the tab bar's **+** to create an empty tag. Drag any tab to set the order,
-or use **Move Left** / **Move Right** from its context menu and from Settings →
-Tasks; the order is saved and survives relaunch. A left-aligned **+ Add task**
+Use the tab bar's **+** to create an empty tag. The selected tag's **…** menu exposes rename, move and removal; **All tags** opens searchable management without a tag-count cap. Drag any tab to set the order,
+or use **Move left** / **Move right** from its context menu, or **Move up** /
+**Move down** in Settings → Lists & tags; the order is saved and survives relaunch. A left-aligned **+ Add task**
 row follows all task rows and expands quick entry; Enter saves and collapses it
 again.
 Collapse without saving to retain a draft for later. Options expose single-list
@@ -153,7 +159,7 @@ Completed tasks stay in place, dimmed and struck through.
 
 Delete a task directly and use **Undo** to restore it. The last 20 deletions stay
 available until Pulse quits. Removing a tag requires confirmation and moves its
-tasks to Todo. Quick-entry drafts survive list/page switches and popover closure.
+tasks to Todo. An affected unfinished draft must first be saved or explicitly discarded; it is never silently lost. Quick-entry drafts survive list/page switches and popover closure.
 Legacy data is normalized with an original-file backup, so previously hidden
 untagged tasks become reachable in Todo. Data stays local in schema-version-1
 JSON. See [the task interaction and storage contract](docs/builtin-tasks.md)
@@ -169,7 +175,15 @@ See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration]
 
 ## 中文简介
 
-Pulse 计划成为一个本地优先的 macOS 菜单栏工作入口，集中查看 AI 服务额度和本地待办。目前已接入本机 Codex CLI、可选的 88VIP USD 余额与 DeepSeek 原币种余额：菜单栏只显示 Codex，弹窗头部并排显示三项紧凑状态，点击可进入 Usage 详情，设置是同一弹窗中的另一页。任务区只有一套原生待办：标签即标签页，没有"全部"和"未分类"标签页，没有标签时显示单个指引标签 "Todo"，空状态为"暂无任务"或"此标签下暂无任务"；选中标签为填充的圆角胶囊样式，键盘焦点是与形状匹配的柔和描边而不是方框。标签页可直接拖拽调序（拖动时会有插入位置提示），也可用右键菜单的 Move Left / Move Right（⌥⌘← / ⌥⌘→）或设置页调整，顺序保存在本地并重启后保持；"Todo" 始终在最左且不可拖动。列表下方左对齐的 `+ Add task` 就地展开内联新建（文本、标签菜单、新建标签、"每日重复"复选框、Add/Cancel），标签行右端的 `+` 可按标签新建任务或新建标签。已完成任务不会消失：它们原地变暗并加删除线，仍然留在原位置，没有单独的分组标题；悬停行可删除（需确认），也可在编辑页删除（同样需确认）。勾选"每日重复"的任务会记录本地日历日；每次打开 Pulse（弹窗打开或任务界面出现）都会把前一天已完成的重复任务恢复为未完成，任务正文旁有循环箭头小标记。任务保存在本地 `~/Library/Application Support/Pulse/tasks.json`，模式版本仍为 1，新增键为可选，旧版本文件无需迁移即可读写。设置中的 Tasks 页只管理标签（排序/重命名/删除），没有任务来源选项，旧的连接与导入数据保持原样。更多 Provider 尚未实现。后续阶段见 [路线图](docs/06-mvp-roadmap.md)。
+Pulse 是本地优先的 macOS 菜单栏工具，将 AI 服务状态和每日待办放在一起。0.1.8 采用 400 × 520 主面板、柔和彩色视觉、独立分类设置窗口，并支持跟随系统的中英文界面。可从上方链接下载新版本。
+
+- **AI 状态**：Codex 额度、88VIP USD 余额和 DeepSeek 原币种余额。点击哪个服务，就查看哪个服务；未配置、验证中、连接成功和失败分别表达，保存密钥不冒充连接成功。
+- **标签即列表**：Todo 固定保留，自定义标签可通过可见的省略号菜单编辑、删除和排序；全部标签入口支持搜索，没有人为数量上限。删除标签保留任务，并保护未提交草稿。
+- **日常操作**：列表下方添加任务，支持每日重复；完成任务原地显示，删除任务可以撤销。跨标签、页面和窗口保留草稿；中文输入法确认候选词不会误提交。
+- **设置与动画**：使用齿轮或 ⌘, 打开独立设置。保留鼠标移出 180 毫秒后关闭面板的习惯，输入、菜单和拖拽期间暂停；跟随系统减少动态效果。
+- **本地数据**：任务文件保持 schema 1，密钥只保存在 macOS Keychain；没有云同步或使用情况追踪。
+
+更多细节见 [界面与交互](docs/ui-layout-refactor.md)、[本地任务](docs/builtin-tasks.md) 和 [推广展示](docs/07-community-launch-plan.md)。
 
 ## License
 

@@ -32,7 +32,7 @@ The production initializer supplies `.standard` and `SystemLoginItemService()` b
 - The status item renders the bundled Codex icon plus the current `UsageRefreshState` title (`…`, percentage, `--`, or `!`). `showMenuBarLabel` only adds the word “Pulse”; it never hides the usage state.
 - `CodexMenuIcon.png` is the monochrome template artwork for the macOS status bar only. Popover views use `CodexProviderIcon`, backed by the alpha-enabled `CodexColorIcon.png`, so the Codex mark keeps its supplied blue-violet color in both Aqua and Dark Aqua. Do not set the popover image to template rendering or reuse it for the status item.
 - `DeepSeekProviderIcon` must preserve the actual DeepSeek whale geometry, including the belly, eye and tail negative spaces. The initial generic whale silhouette was rejected by the user. Reuse the shared native vector component on Home, Usage and Settings; preserve aspect ratio inside its existing frame and use the reference blue `#4D6BFE`. Obtain original vector geometry from the official source rather than approximating the mark. Keep attribution in `THIRD_PARTY_NOTICES.md` and inspect an enlarged render as well as the 14–18-point icons in both appearances.
-- The popover uses one `HomeView.popoverSize` for both AppKit and SwiftUI and covers the entire hosting surface with adaptive opaque `windowBackgroundColor`. Section cards use opaque `controlBackgroundColor`. Native show/close animation is enabled unless NSWorkspace reports Reduce Motion; never restore the former clear background or unconditionally disable motion. Observe accessibility display changes and reread the setting before opening/closing. Animation duration and appearance are owned by macOS.
+- The popover uses one `HomeView.popoverSize` for both AppKit and SwiftUI and covers the entire hosting surface with the adaptive opaque `PulseDesignTokens.background`. Section cards use the shared adaptive surface tokens. Native show/close animation is enabled unless NSWorkspace reports Reduce Motion; never restore the former clear background or unconditionally disable motion. Observe accessibility display changes and reread the setting before opening/closing. Animation duration and appearance are owned by macOS.
 - `@Published` emits during `willSet`. Subscribers that update AppKit controls must use the emitted value rather than re-read the stored property in the same callback.
 - Rebuilding the app does not replace an already-running menu bar process. Restart the built app before judging its icon, quota, or popover appearance.
 
@@ -75,129 +75,100 @@ config.$showMenuBarLabel.sink { [weak self] showName in
 
 `PulseAppDelegate` owns one `UsageController` and passes it to `HomeView`. The controller is `@MainActor` and publishes loading, success, unavailable, and failure. `UsageView` and the AppKit status item consume that same state. When subscribing to `usage.$state`, use the emitted value because `@Published` emits during `willSet`. The normal refresh period is 60 seconds; manual refresh does not overlap an active fetch. On failure, the status item shows `!` and the popover shows the message instead of presenting the previous percentage as current. See [Codex Usage](../backend/codex-usage.md) for the app-server contract and tests.
 
-## Scenario: in-popover navigation and guarded pointer dismissal
+## Scenario: quick-panel navigation, Settings and guarded dismissal
 
 ### 1. Scope / Trigger
-
-Home, Usage detail, and Settings share one transient popover. Pointer departure from both the menu bar button and popover content schedules a delayed close; an outside click still uses AppKit's native transient close.
+Home, provider-specific Usage and tag management share the fixed 400 × 520
+popover. Settings is a separate singleton 720 × 560 window. The approved
+redesign intentionally replaces the older in-popover Settings architecture.
 
 ### 2. Signatures
 
 ```swift
-@MainActor final class PopoverHoverController {
-  func beginOpening()
-  func presentationDidShow()
-  func synchronize(statusButton: Bool, content: Bool, popoverWindow: Bool)
-  func entered(_ region: PopoverPointerRegion)
-  func exited(_ region: PopoverPointerRegion)
-  func requestClose()
-  func beginClosing()
-  func reset()
-}
-
 enum PopoverPage: Equatable {
   case home
-  case usage
-  case settings(SettingsDestination)
+  case usage(ProviderID)
+  case tagManagement
 }
-
-@MainActor final class PopoverPageController: ObservableObject {
-  private(set) var page: PopoverPage { get }
-  func showUsage()
-  func showSettings(_ destination: SettingsDestination)
-  func showHome()
-  func reset()
-}
+// Existing showHome/reset remain; showUsage carries the selected provider.
+func showUsage(_ provider: ProviderID = .codex)
+func showTagManagement()
 ```
 
-`PulseAppDelegate` owns one `PopoverPageController` alongside the AppKit status item, popover, shared config, and shared usage controller. It passes the page controller to `HomeView` and calls `reset()` before opening and after any popover close. There is no navigation stack.
+AppDelegate owns the shared controllers, LocalTaskPresentation and Settings
+window/session. See [UI presentation](ui-presentation.md) for window, connection,
+interaction-hold and update preflight contracts.
 
 ### 3. Contracts
-
-- The Home header is a lightweight toolbar: Pulse identity on the leading edge, flexible space, then the Settings gear, and a separate quota strip directly below it carries the independent compact Codex, 88VIP, and DeepSeek controls. Each control shows the provider name above its current value so the two never compete for one line. Codex uses the real icon and `UsageMenuFormatter.title(for:)`: one window yields a bare percentage, multiple windows yield short labeled values, and loading/unavailable/failure yield `…`/`--`/`!`. Money remains a native-currency balance, separate from quota percentages. Home has no reset time, update time, or refresh control; those belong to Usage. The AppKit menu bar continues to use only Codex state.
-- The quota strip is its own band below the toolbar, so header height never depends on how long an amount is. Controls measure themselves and wrap as whole controls into further leading-aligned rows instead of clipping monetary decimals or overlapping Settings; wrap instead of shrinking type. Bound a single exceptionally wide quota control and make its text horizontally reachable. Use actual measured widths at the fixed 360 × 380 popover size, which never changes as content loads, saves or expands. Keep the existing native colors, fonts, and task-region ownership.
-- Clicking a provider control requests that provider's refresh, calls `showUsage()`, and displays full `UsageView` in a separate scrollable page. Manual refresh remains in Usage. Add Provider routes to Settings → Providers, which owns separate 88VIP and DeepSeek Keychain forms. Back from Usage or Settings calls `showHome()`.
-- Tasks is Home's main region and has one native local implementation in
-  `Pulse/Features/Tasks/Local/`. The fixed tab row contains permanent default
-  Todo (untagged only) plus independent custom tags, with no All/aggregate tab.
-  Each task belongs to one logical list. A fixed tab-bar + creates empty tags;
-  a left-aligned "+ Add task" row follows all scrolling task rows and expands
-  quick entry in place.
-  Completed tasks stay in place, dimmed and struck through, with no section or
-  heading of their own. Delete is immediate with controller-owned
-  Undo. Never fabricate sample tasks for empty/loading states. See Built-in
-  tasks below for the complete interaction contract.
-- `PopoverPageController` is presentation state only. It does not start an integration or change a UserDefaults key. `popoverDidClose` resets it to Home so a later open is task-first.
-- `NSTrackingArea` on both the status button and hosting view uses mouse entry/exit, active-always, and visible-rect tracking. `PulseAppDelegate` calls `beginOpening()` before `show`, then seeds tracked regions from actual geometry. Opening requires both a minimum 300 ms click guard and `popoverDidShow`; events record presence but cannot request hover close until both complete. Reread actual button, content and whole-window geometry at that boundary. While shown, reconcile all three regions every 50 ms, including the arrow, so missed exits cannot latch hover forever.
-- The controller has Closed, Opening, Interactive, PendingClose and Closing states. PendingClose waits 180 ms and rechecks actual pointer geometry before closure. Schedule only when no pending task exists: duplicate exits or reconciliation cannot extend the deadline. Returning to the button, content or arrow immediately cancels it; geometry alone can repair missed entry events.
-- `requestClose` enters Closing and cancels timers before requesting native dismissal. `popoverWillClose` also enters Closing for native outside clicks. During Closing, tracking, stale presentation signals, duplicate close requests and status-item toggles cannot reopen or restart timers. Only `popoverDidClose` resets the controller and page state. A second click and outside click request dismissal immediately, without the hover grace interval. The hover controller never shows the popover.
-- The popover retains its opaque adaptive background and fixed `HomeView.popoverSize` across page changes.
-- Home keeps the task region visually dominant within the fixed popover size. The Usage detail page scrolls for extra quota windows and long messages; no detailed Usage content appears on Home.
-- All in-panel motion comes from `PulseDesignTokens` — `hoverAnimation` (120 ms), `pressAnimation` (90 ms), `selectionAnimation`, `tabSwitchAnimation`, `composerAnimation`, `pageTransitionAnimation`, `completionAnimation`, `reorderAnimation`, `insertionAnimation` — all within 90–260 ms with zero or slight bounce. Apply them with `.animation(_:value:)` scoped to the smallest changed state, never to the root view, so a transition can be interrupted and never delays typing or saving. Page entry moves a few points in its direction of travel with a fade while removal keeps identity, because a removed page must not carry the shared field editor with it. A finishing task keeps one row structure and one scoped animation across press, save and checkmark; it stays in place and only strikes through. Reduce Motion drops offsets and springs to plain opacity and skips the matched-geometry tag plate entirely. Popover open/close stays native and system-owned.
+- Home has a stable brand toolbar, separate provider status band and task area.
+  Real provider controls wrap as complete units without shrinking typography or
+  cutting money decimals. Oversized single readouts scroll inside a bounded
+  area. The menu bar remains Codex-only and follows UsageMenuFormatter.
+- Clicking a configured provider refreshes only it and opens its Usage detail.
+  Missing optional credentials offer connection configuration; unavailable and
+  failure remain distinct from a successful reading. Never invent values.
+- Main panel size is fixed while content loads, saves or expands. AppKit and
+  SwiftUI share HomeView.popoverSize. Background remains opaque in both themes.
+- Settings navigation never lives in PopoverPage. Its ordinary reopen restores
+  category and session inputs; contextual links select their provider/category.
+- Opening waits for both 300 ms minimum guard and native popoverDidShow.
+  Geometry includes button, content and whole window/arrow. Departure from all
+  regions schedules one 180 ms close; re-entry cancels, duplicate exits do not
+  move the deadline. Geometry is checked every 50 ms only while shown and again
+  before closing. Closing cancels work, ignores stale events and cannot reverse.
+- Editor, native menu and native drag sessions independently suspend hover
+  close. Releasing one source cannot release others. Final release resamples
+  geometry and starts a fresh grace interval if outside. Outside-click/status
+  toggle still use native transient dismissal.
+- willClose stops hover work; didClose resets quick navigation to Home after
+  native animation finishes. Settings state and all retained drafts survive.
+- Page transition snapshots are in-memory, noninteractive and short-lived;
+  never retain an outgoing live native field editor to animate its removal.
+  Rapid transitions invalidate old callbacks/snapshots.
+- Reduce Motion disables native panel motion and geometry changes internally,
+  including pressed scales and selection travel; short fades remain allowed.
 
 ### 4. Validation & Error Matrix
 
 | Condition | Required behavior |
 | --- | --- |
-| Pointer moves from status item toward popover | Grace period allows entry; entry cancels the close. |
-| Pointer stays on the clicked status item through Opening | Geometry resampling retains the panel, including after two seconds. |
-| Pointer leaves both and stays outside | Request native animated close after 180 ms, provided current geometry still confirms outside. |
-| Pointer re-enters before deadline | Cancel close. |
-| Pointer stays over the popover arrow without a content entry event | Reconcile window geometry; keep open until a later departure. |
-| Guard expires but native presentation has not completed | Remain in Opening until `popoverDidShow`. |
-| Repeated exit while PendingClose | Keep the original deadline. |
-| Pointer/click returns during Closing | Finish dismissal; do not reverse or reopen the native animation. |
-| AppKit closes from outside click or status item toggle | Reset pending close and pointer state. |
-| Settings or placeholder entry is clicked inside popover | Navigate in place; do not request a close or integration. |
-| Provider status is clicked | Refresh only that provider and show its real quota/balance, update time, and error state on Usage. |
-| Popover closes while Usage or Settings is visible | Reset page state; next open shows Home and Tasks. |
-| Codex returns one weekly window or multiple windows | Home shows bare percentage or labeled short values respectively, with no window-selection setting. |
-| Codex refresh fails | Preserve the existing explicit error state, not a fabricated percentage. |
-| Three provider controls do not fit beside the brand | Move them to leading-aligned rows below it; keep amounts and Settings hit area complete. |
-| One quota label exceeds the full usable row | Bound that control's horizontal scroll area; sibling controls remain inside the popover. |
-| DeepSeek returns CNY and USD | Prefer CNY in Home and show separate labelled currency rows in Usage. |
-| Saved API key changes during a refresh | Clear the old reading and prevent the old request from publishing its result. |
+| Pointer stays on button or arrow | Keep open after presentation/guard |
+| Leaves all regions | Close after 180 ms if geometry still outside |
+| Re-enters / duplicate exit | Cancel / retain original deadline |
+| Menu extends outside panel | Menu lifecycle holds until it ends |
+| Drag exits / Escape cancels | Retain hold / release real session |
+| Menu ends while editor active | Editor still holds panel |
+| Click DeepSeek | Open DeepSeek details, not Codex |
+| Close panel on a subpage | Next open Home; drafts retained |
+| Open Settings during draft | Same app-owned draft remains available |
+| Change key during refresh | Existing generation guard rejects old result |
 
 ### 5. Good / Base / Bad Cases
-
-- Good: the user opens Pulse and sees a compact Codex status above the task list region, then clicks status to inspect full Usage detail.
-- Base: the user views Settings or Usage, closes the popover, and sees Home on the next open.
-- Bad: Codex refresh fails; Home shows `!`, while Usage detail explains the failure rather than repeating a stale percentage.
+Good: inspect a provider then return to the same list and draft. Base: new user
+can connect optional services without a false error. Bad: saved invalid key
+cannot show Connected, and a menu/drag must not dismiss mid-operation.
 
 ### 6. Tests Required
-
-Unit tests cover the minimum guard plus native presentation completion, geometry resampling, short departure delay, duplicate exits, re-entry cancellation, missed events, arrow presence, Closing request gating and reset, and edit suspension. Check native NSPopover callbacks with animation enabled/disabled. Page tests assert Home → Usage, Home → Settings destination, Back → Home, and reset after completed closure. Render Home, Usage, and Settings in Aqua and Dark Aqua and assert opaque edges; keep existing usage/preference/task regressions. `DeepSeekRenderingTests` resolves actual `ProviderHeaderBoundsKey` anchors at 360 points: assert complete control IDs, leading insets, non-overlapping frames, amount text widths, whole-control wrapping, bounded oversized quota, and the single-row small-value case. Inspect representative images as well. Actual mouse delivery and animation appearance still require desktop checks; do not infer visual acceptance from these tests.
+Keep native hover/callback and provider formatting tests. Cover navigation
+targets, overlapping holds and stale leases, actual 400-point header geometry,
+720 × 560 Settings, opaque edges, failed/large/multi-currency values and
+light/dark × English/Chinese. Render pass is not live mouse/IME acceptance.
 
 ### 7. Wrong vs Correct
 
 ```swift
-// Wrong: closes during the short trip from the menu bar button to the popover.
-func mouseExited(with event: NSEvent) { popover.performClose(nil) }
-
-// Correct: record the exit and let the shared controller close only after
-// both tracked regions remain empty for the grace interval.
-func mouseExited(with event: NSEvent) { hoverController.exited(.statusButton) }
-
-// Wrong: leave Usage selected when AppKit dismisses the transient popover.
-func popoverDidClose(_ notification: Notification) { hoverController.reset() }
-
-// Correct: stop hover work before animating out, then reset pages after close.
-func popoverWillClose(_ notification: Notification) {
-  hoverController.beginClosing()
-}
-
-func popoverDidClose(_ notification: Notification) {
-  hoverController.reset()
-  pages.reset()
-}
+// Wrong: every provider opens the same page.
+pages.showUsage()
+// Correct: preserve the clicked service's identity.
+pages.showUsage(.deepSeek)
 ```
 
 ## Built-in tasks
 
 ### 1. Scope / Trigger
 
-The app delegate owns one `LocalTaskController`; Home owns a
-`LocalTaskPresentation` above page navigation. Tabs, quick entry, editing and
+The app delegate owns one `LocalTaskController` and one
+`LocalTaskPresentation`, injected into Home and Settings. Tabs, quick entry, editing and
 Settings use that shared state. No task source preference/selector exists.
 Tests use isolated defaults and a temporary store.
 
@@ -231,8 +202,11 @@ Tests use isolated defaults and a temporary store.
   Enter creates/selects an empty tag and focuses quick entry. Cancel writes
   nothing. Duplicate canonical names offer selecting existing tags. Todo is
   reserved and cannot be renamed/deleted/duplicated.
-- Tab context menus and Settings share tag rename/remove operations. Remove
-  requires confirmation explicitly stating tasks move to Todo and are kept.
+- The selected tab ellipsis, context menu and searchable manager share tag
+  rename/remove operations. Remove requires confirmation explicitly stating
+  tasks move to Todo and are kept. Affected unfinished drafts block removal
+  with a Return to draft action; never strand a quickDrafts entry for a deleted
+  tag or overwrite a Todo draft.
 - A left-aligned "+ Add task" row follows all task rows inside the
   task ScrollView. Presentation owns expansion per list alongside retained
   drafts. Explicit expansion scrolls entry into view after mount and requests
@@ -274,8 +248,8 @@ Tests use isolated defaults and a temporary store.
   Revealing a moved/restored completed task selects its destination list and
   scrolls the target into view after the updated rows are present.
 - Use existing adaptive opaque backgrounds, Pulse action/icon/row styles and
-  fixed 360 × 380 popover. Respect Reduce Motion and do not animate whole pages
-  for row actions. Settings controls remain native and compact.
+  fixed 400 × 520 popover. Respect Reduce Motion and do not animate whole pages
+  for row actions. Settings uses its independent native categorized window.
 - Daily repeat remains per-task. Popover open/surface appearance reset stale
   days without raising `isSaving` or clearing another error. Task-specific
   completion retry preserves original click day; draft-save errors retain the

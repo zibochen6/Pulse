@@ -1,5 +1,8 @@
 # Task-first UI visual polish
 
+Historical design note for the earlier task surface. For the current source
+preview, see [Native panel and Settings interaction](ui-layout-refactor.md).
+
 Pulse's task surface is the native local list. This pass only refines
 the native macOS presentation inside the 360×380 menu-bar popover.
 

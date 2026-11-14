@@ -29,6 +29,15 @@ gh release create <version-tag> <dmg> <dmg-sha256> <zip> <zip-sha256> --repo zib
 - Release notes live in `docs/releases/<version>.md` and the README release link points at the matching tag. The tag version, asset basenames, embedded bundle version and updater expectations must agree.
 - Verify the image, mount it read-only without browsing, and validate app signature, version/build, architectures, executable bytes, resource signature, and Applications link before publication. Eject the image afterward. On hosts reporting legacy `hdiutil` commands deprecated, consult the current `diskutil image` help for future tooling changes; a successful existing image operation remains valid evidence.
 - Stage and verify the new local app before stopping the old one. Gracefully quit Pulse, preserve the complete old app in a timestamped backup outside the repository, then replace `/Applications/Pulse.app`. Restore the old app if replacement fails. Launch the explicit installed path and verify one running instance, its executable path, bundle version and release executable hash.
+- A declined, failed or timed-out graceful quit is a hard stop: never send
+  SIGTERM/SIGKILL as a fallback, including during rollback. Do not replace a
+  running application. Keep every prior backup by allocating a unique backup
+  directory. `--no-install` is diagnostic-only and must require `--no-push`.
+- Match the updater's fixed trust tuple before packaging: bundle identifier
+  `dev.zibochen.Pulse`, Apple Development authority, team `9Y4B7WBUU2`. A custom
+  signer selection cannot weaken these checks. Inspect the installed signer
+  with `codesign -dv --verbose=2`; lower verbosity omits Authority and silently
+  defeats identity-comparison logic.
 - Installation does not migrate/delete task data, preferences or Keychain items. A normal launched app may refresh existing integrations; synthetic tests must continue using isolated data and the live-usage startup gate.
 - Source publication uses the existing repository `https://github.com/zibochen6/Pulse.git` and default `main`, with non-forced fast-forward pushes and a new version tag pointing to the verified release source. Never rewrite an existing published tag or overwrite an unrelated remote update. Only task-owned source/docs are staged; preserve unrelated untracked files.
 - Keep release binaries, staging and signing/install manifests outside Git. The versioned release notes and README links must match actual tag/asset names. Use a notes file rather than escaped multiline shell text.

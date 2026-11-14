@@ -13,7 +13,8 @@ involved. This document is the contract for that mechanism.
   manual DMG download.
 - Never install code that has not passed the checksum and code-signature gate,
   and never touch task data, preferences or Keychain items.
-- Never restart while the user is writing a task or reading the popover.
+- Never automatically restart while either UI surface is open, an unfinished
+  task/settings draft exists, or a local write is pending.
 - Be honest about failures: a rejected download leaves the installed app
   untouched and the reason appears in Settings → Updates.
 
@@ -108,9 +109,14 @@ failure removes the staging root; the installed app is never touched.
   fresh launch removes the whole staging root, and a failed attempt does the
   same; a leftover partial download is never installed.
 - A verified download becomes a staged update. Pulse restarts to install it
-  only when the popover is closed and no task draft is open. That condition is
+  only when both the popover and Settings window are closed, no unfinished
+  draft remains (including hidden drafts), and no local write is pending. That condition is
   re-checked every 3 seconds for about 20 minutes; if it never becomes true,
   the update stays staged until Pulse quits.
+- Explicit **Restart and update** and **Quit Pulse** check for unfinished edits
+  before starting any installer. Cancelling continues editing; explicitly
+  discarding drafts permits the requested action. Closing Settings normally
+  retains drafts and does not ask for confirmation.
 - Otherwise, a banner above the task list reads "Pulse <version> is ready"
   with **Restart** and **Later** actions. Later only hides the banner for the
   current run: the update remains staged, still installs at the next safe
@@ -163,12 +169,12 @@ failure removes the staging root; the installed app is never touched.
 ## Logs and user controls
 
 - Settings → Updates shows the current version, the last check status, the
-  automatic-check toggle, **Check Now**, **Restart to Update** when an update
-  is staged, **Skip This Version** while a release is offered, and a link to
+  automatic-check toggle, **Check for updates**, **Restart and update** when an update
+  is staged, **Skip this version** while a release is offered but not staged, and a link to
   the release notes. The toggle is on by default and is disabled when the
   app's location cannot be updated.
 - Turning automatic checks off cancels the launch and six-hour checks; a
-  manual **Check Now** still works and still downloads and verifies a newer
+  manual **Check for updates** still works and still downloads and verifies a newer
   release.
 - Check, download and stage failures are shown as status text in Settings →
   Updates. They never interrupt the task list or change the installed app.
@@ -208,7 +214,7 @@ The full update path is rehearsed end to end with a local feed:
 4. Serve that directory with
    `python3 -m http.server <port> --bind 127.0.0.1`.
 5. Launch the installed app with the override in its environment, then use
-   Settings → Updates → **Check Now**:
+   Settings → Updates → **Check for updates**:
 
    ```sh
    PULSE_UPDATE_FEED_URL=http://127.0.0.1:<port>/latest.json \

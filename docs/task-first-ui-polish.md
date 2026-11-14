@@ -1,5 +1,8 @@
 # Task-first UI polish
 
+Historical design note for the earlier task surface. For the current source
+preview, see [Native panel and Settings interaction](ui-layout-refactor.md).
+
 Pulse Home is the short daily view of the native local to-do list. A lightweight
 toolbar holds the Pulse identity, flexible space and the Settings entry; a
 separate quota strip underneath shows the compact Codex, 88VIP and DeepSeek

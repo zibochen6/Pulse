@@ -1,27 +1,80 @@
-# Task-first popover and interaction
+# Native panel and Settings interaction
 
-Pulse uses a 360×380 menu bar popover with exactly three page states: Home, Usage, and Settings. Home opens with a lightweight toolbar — the Pulse identity on the leading edge, flexible space, then the Settings gear — followed by a separate quota strip carrying the compact clickable Codex, 88VIP, and DeepSeek statuses. The strip is its own band below the toolbar, so header height never depends on how long the amounts are, and the surface keeps its fixed size while content changes. The rest of Home is the task-list surface: the native local to-do list — a tag-tab row, the task list, and a left-aligned `+ Add task` row that expands the inline composer in place. Task density and fonts remain unchanged by the motion update.
+This document describes the native UI introduced in Pulse 0.1.8.
 
-The Codex header status uses the same real `UsageRefreshState` and `UsageMenuFormatter` as the menu bar. One quota window shows only its percentage; multiple windows show their short duration labels. Loading, unavailable, and failure show their existing short statuses without a stale quota. The strip has no reset time, update time, refresh control, or other-provider list. It sits below the toolbar at the 14-point leading inset, so brand and Settings stay on their own row no matter how long an amount is. Each control shows the provider name above the value in monospaced digits, and the provider layout measures each control and wraps complete controls into further rows without shrinking type or truncating decimal digits. Only an individual readout wider than the full usable row gets a bounded horizontal scroll area.
+## Surfaces and navigation
 
-Clicking any provider status requests its own fresh reading and opens the Usage page. `UsageView` retains real Codex windows, percentages, reset and update times, refresh, and explicit error content. The page also shows independent 88VIP and DeepSeek balance sections, each with refresh and update state. DeepSeek retains CNY/USD totals separately; the compact summary prefers CNY. The page scrolls vertically for extra windows or long errors. Providers settings contains separate SecureFields backed by distinct Keychain accounts. Saving, replacing, or removing a key clears form text on success, invalidates older fetches, and requests fresh data without affecting other providers. Add Provider opens Settings' Providers explanation without connecting anything. Usage and Settings return to Home; closing the popover also resets page state to Home. The menu bar format, Codex fetching, and all existing settings remain unchanged.
+The menu-bar panel has a fixed 400 × 520 content surface. A stable brand toolbar
+sits above AI status controls, a tag strip and the scrolling task list. Settings
+opens in one independent 720 × 560 native window, with General, AI services,
+Lists & tags, Updates and About categories. Reopening Settings restores the
+last category; contextual configuration actions open the relevant provider.
+Cmd+, opens Settings, Cmd+W closes its window, and closing it never quits Pulse.
 
-## Pointer lifecycle
+Home, provider-specific Usage and tag management share the quick panel. Selecting
+a configured provider requests its own reading and opens its details; an
+unconfigured service opens its connection settings. Back restores the
+Home task selection and drafts. Closing the panel resets only quick navigation,
+not Settings or retained draft state. Pulse remains an accessory app with no
+Dock icon.
 
-`PulseAppDelegate` owns one `NSStatusItem` and one transient `NSPopover`. Native outside clicks and a second status-item click request close immediately, without a hover delay. `PopoverHoverController` manages these lifecycle states:
+## Information and visual hierarchy
 
-| State | Behavior |
-| --- | --- |
-| Closed | No hover work remains. |
-| Opening | Begins before `show`; a minimum 300 ms protection and `popoverDidShow` must both complete before hover dismissal is allowed. |
-| Interactive | At the end of Opening, current button, content, and whole-window geometry is read again. A pointer over the status button or content keeps the panel open. |
-| PendingClose | Once all regions are empty, wait 180 ms, then verify actual geometry. Re-entry cancels; duplicate exits do not extend the deadline. |
-| Closing | Cancel all timers. Ignore tracking, stale show callbacks and repeated close/open requests until native dismissal completes. |
+The opaque root uses adaptive neutral colors with a restrained violet accent.
+Readable task text, 16-point horizontal insets, soft tag colors and clear action
+hierarchy replace dense uniform gray controls. Real provider icons retain their
+identity colors. Controls wrap as whole units so long amounts keep every decimal;
+only a readout wider than the entire available row needs horizontal scrolling.
 
-`popoverWillClose` stops hover work; `popoverDidClose` resets the page after animation, preventing a page flash during dismissal. Opening still protects against stale click events. Every 50 ms, actual button/content/window geometry repairs missing tracking events, including over the arrow. Native motion is enabled with the existing opaque background and disabled when the system requests Reduce Motion. No custom window-size animation is used; macOS controls its exact effect and duration.
+Codex remains a quota and other providers remain native-currency balances. No
+currency conversion, fabricated percentage or stale successful value is shown
+as current. Unconfigured services offer Connect; saved credentials are shown as
+Connected only after successful usage verification. Errors explain a recovery
+action. Refresh provides an in-place busy indicator and rejects duplicate work.
+
+Settings shows only one category at a time. Credential forms expand on request;
+Manage connection reveals Save and verify and Disconnect controls.
+Draft keys stay only in memory until explicitly saved into their existing
+Keychain account. Category/window switches preserve unfinished input. Login
+Items continue to show observed macOS state separately from requested intent.
+
+## Tags and tasks
+
+Todo is pinned and cannot be renamed or deleted. Custom tags scroll horizontally
+with visible overflow controls; Add and All tags remain reachable. The selected
+tag exposes an ellipsis menu, with context menus and keyboard reorder retained.
+All tags opens a searchable manager with full names and task counts. The same
+manager appears in Settings. There is no artificial tag-count limit.
+
+Delete-tag confirmation states that saved tasks move to Todo. Affected unsaved
+drafts block deletion and offer Return to draft; they cannot be silently hidden
+or overwritten. Task deletion retains its separate 20-entry session Undo history.
+Per-list drafts and matching asynchronous save identity remain unchanged. See
+[built-in tasks](builtin-tasks.md) for data guarantees.
+
+## Pointer and app lifecycle
+
+Native transient outside-click dismissal and status-item toggling remain.
+Pointer departure waits 180 ms after the 300 ms opening/presentation guard.
+Current button, content and window/arrow geometry is reconciled every 50 ms only
+while shown. Closing cancels pending work, ignores stale events and resets quick
+navigation only after the native closing animation finishes.
+
+Editing, native menus and complete native tag-drag sessions hold the panel
+independently. Leaving a drop target hides its marker without releasing the drag
+hold. Successful drop, outside release and Escape all end the native session;
+when the final hold ends, pointer geometry is reread and normal dismissal resumes.
+
+Automatic update installation requires both surfaces closed, no unfinished
+session drafts and no pending local writes. Explicit restart and quit check
+before launching the installer. Closing Settings retains drafts without prompting.
+See [auto-update](auto-update.md) for the unchanged verification chain.
 
 ## Verification
 
-Build and test with the commands in the README. Tests cover pointer states, Home/Usage/Settings page transitions and reset, compact one-window and multi-window formatting, and Aqua/Dark Aqua rendering with loading, success, unavailable, and long failure states. DeepSeek tests cover loading, CNY/USD, missing-key, authentication, rate-limit, network, timeout and malformed-response states in both appearances. Anchor measurements assert actual non-overlapping provider/Settings frames within 360 points, complete amount widths, leading alignment and whole-control wrapping for multiple quota windows and large balances. Representative PNGs and frame JSON are generated under `/tmp/PulseDeepSeekRender`. The rendering tests confirm an opaque fixed 360×380 surface, a quota strip laid out below the toolbar, the task list at the height the popover actually leaves for it, a pending completion that does not move the row, and a visible tag selection plate; native AppKit event delivery still requires desktop checks.
-
-The desktop checklist is: retain the pointer on the clicked status item for two seconds; enter content; leave both areas and check a short 180 ms grace before native dismissal; re-enter before the deadline; open Usage and Settings; edit a task; click outside; and toggle with the status item. See [motion verification](popover-motion.md) for current results and unverified live interactions.
+Unit/render tests cover navigation targets, singleton settings, dirty-input and
+installer protection, task/tag storage, overlapping interaction holds, provider
+state truthfulness and measured layout in light/dark appearances. English and
+Simplified Chinese are inspected at actual product dimensions. Actual mouse,
+keyboard, Chinese IME and animated transitions require runtime acceptance in
+addition to test results; see [motion](popover-motion.md).

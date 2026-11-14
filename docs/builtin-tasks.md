@@ -11,20 +11,24 @@ there is no account, import, source selector, database or network sync.
   you set and always follow **Todo**. A task belongs to one list only; changing
   its tag moves it.
 - The selected tab has an accent-tinted capsule and a shape-matched keyboard
-  focus affordance. Custom tabs scroll horizontally; the trailing **+** stays
-  reachable. Selecting or creating a tag brings its tab into view.
+  focus affordance. Todo stays pinned; custom tabs scroll horizontally with overflow controls.
+  The trailing **+** and **All tags** controls stay reachable. Selecting or creating a tag brings its tab into view.
 - **Drag a tab to reorder it.** While dragging, the dragged tab dims and an
   accent caret marks the slot the tag will land in. The new order is written on
-  drop and survives relaunch. Dropping on **Todo**, on the left half of the
-  first tab, or on the tag's own current slot changes nothing. The identical
+  drop and survives relaunch. Dropping on **Todo** or on the tag's own current
+  slot changes nothing. Dropping before the first custom tab moves a tag to
+  the front of the custom list. The identical
   move is available from a tab's context menu (**Move Left** / **Move Right**,
-  ⌥⌘← / ⌥⌘→) and from Settings → Tasks, so reordering never depends on dragging.
+  ⌥⌘← / ⌥⌘→) and as **Move up** / **Move down** in Settings → Lists & tags, so reordering never depends on dragging.
 - **+** opens tag-name entry. Enter creates an empty tag, selects it and focuses
   task entry. Cancel creates nothing. Names are trimmed and compared without
   case; a duplicate offers the existing tag instead of creating another.
-- A tab's context menu offers **Move Left**, **Move Right**, **Rename** and
-  **Remove**. Settings → Tasks offers the same operations. Removing a custom tag
+- The selected tag's visible **…** menu and its context menu offer **Move Left**, **Move Right**, **Rename** and
+  **Remove**. Settings → Lists & tags offers the same operations. Removing a custom tag
   requires confirmation, moves its tasks to **Todo**, and never deletes tasks.
+  An affected retained draft blocks removal with a **Return to draft** action;
+  save or explicitly discard it first. **All tags** opens searchable management
+  with full names, task counts and creation. There is no tag-count cap.
 
 ## Fast entry and editing
 
@@ -140,15 +144,16 @@ change the machine clock to test failures/repeat.
    idle hover dismissal, outside click and the normal 300 ms opening guard /
    180 ms departure delay.
 10. Inspect empty/populated/completed/editor/options/tag/undo states at the fixed
-    360 × 380 popover size in Aqua and Dark Aqua. Simulate storage failures with
+    400 × 520 popover size in Aqua and Dark Aqua. Simulate storage failures with
     injected writers and verify retry preserves input and confirmed data.
 11. Drag a tab to the far right, to the front and back again, then relaunch and
     confirm the order survived. Verify **Todo** never moves, a drop on a tab's
     own slot changes nothing, and the caret reads as a boundary rather than as a
-    selected tab. Confirm **Move Left** / **Move Right** from the tab menu and
-    from Settings → Tasks land the tag in the same slot as the equivalent drag.
-    With Reduce Motion on, no hover, press, disclosure, row or drag feedback
-    animates and every control still behaves the same.
+    selected tab. Confirm **Move left** / **Move right** from the tab menu and
+    **Move up** / **Move down** from Settings → Lists & tags land the tag in the
+    same slot as the equivalent drag.
+    With Reduce Motion on, feedback uses brief fades without movement or scale;
+    every control still behaves the same.
 
 The previous Markdown dashboard integration was removed; native tasks are the
 only task system.

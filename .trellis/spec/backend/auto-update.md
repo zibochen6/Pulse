@@ -63,12 +63,14 @@ log: `~/Library/Logs/Pulse/update.log`.
   A fresh launch clears the staging root; a failed attempt clears the staging
   root too; the archive is deleted after successful verification. A leftover
   download is never installed without a fresh verification.
-- Restart safety: Pulse installs and restarts only when the popover is closed
-  and no task draft is open. Otherwise it stages the update, shows the
+- Restart safety: automatic installation requires both the popover and Settings
+  window closed, no retained task/settings drafts, and no pending local writes. Otherwise it stages the update, shows the
   "Pulse <version> is ready" banner above the task list with Restart/Later,
   and keeps checking for a quiet moment. Later only hides the banner. An update
   still applies when the user quits; installation started by a quit must not
-  relaunch the app.
+  relaunch the app. Explicit restart/quit preflight runs before installer launch;
+  cancellation must leave installer invocation count zero. See frontend
+  [UI presentation](../frontend/ui-presentation.md) for shared draft protection.
 - The updater must never modify user data: `tasks.json`, UserDefaults values
   other than the updater's own automatic-check/last-check/skipped-version
   keys, and Keychain items are untouched. Installation writes only the app
