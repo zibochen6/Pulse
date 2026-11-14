@@ -603,3 +603,27 @@ Implemented native colorful UI and motion, independent categorized Settings, sca
 ### Status
 
 [OK] **Completed**
+
+
+## Session 25: Fix tag list deletion and release Pulse 0.1.9
+<!-- trellis-session: v=2 fp=5197c89bfaa7a1d9 -->
+
+**Date**: 2026-11-14
+**Task**: Fix tag list deletion and release Pulse 0.1.9
+**Branch**: `main`
+
+### Summary
+
+Changed custom tag deletion to atomic whole-list deletion with one Undo, mixed 20-operation history, latest transaction recovery, explicit confirmation, and source/destination draft guards. Shared Undo is reachable on Home and both managers. Full suite 259 passed with 2 expected opt-in skips; Chinese checks 9 passed; independent review and layout inspection passed. Published and installed verified universal Pulse 0.1.9/build13, preserving the old app backup and existing tasks detached by earlier versions. Unrelated .workbuddy and docs/images remain untouched.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `08dd740` | fix: delete complete tag lists with atomic undo |
+| `a5aa902` | release: prepare Pulse 0.1.9 |
+| `147eea2` | docs: record verified Pulse 0.1.9 delivery |
+
+### Status
+
+[OK] **Completed**
