@@ -577,3 +577,29 @@ Added drag reordering for custom tag tabs with a live insertion caret, an optimi
 ### Status
 
 [OK] **Completed**
+
+
+## Session 24: Pulse UI redesign and 0.1.8 release
+<!-- trellis-session: v=2 fp=79e50a251f64eb3d -->
+
+**Date**: 2026-11-14
+**Task**: Pulse UI redesign and 0.1.8 release
+**Branch**: `main`
+
+### Summary
+
+Implemented native colorful UI and motion, independent categorized Settings, scalable draft-safe tags, truthful provider states and bilingual demos. Passed 235 full-suite tests, 24 Chinese checks and 18 release-safety checks. Published universal Apple Development-signed Pulse 0.1.8/build12, verified four asset digests and installed the identical app with recoverable backup. Preserved unrelated .workbuddy and docs/images; recorded remaining native popover/IME/runtime coverage limits.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5db07af` | feat: redesign native UI, settings and tag interactions |
+| `f4a0cca` | docs: document UI redesign and add bilingual native demos |
+| `a829778` | fix: preserve drafts and backups during release installation |
+| `9326ce6` | release: prepare Pulse 0.1.8 |
+| `622bd50` | docs: record verified Pulse 0.1.8 delivery |
+
+### Status
+
+[OK] **Completed**
