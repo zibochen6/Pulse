@@ -10,7 +10,7 @@
 #                  CURRENT_PROJECT_VERSION + 1 (written to project.yml).
 #   --notes <f>    Release notes file (default: docs/releases/<version>.md).
 #   --skip-tests   Skip the Debug unit-test run.
-#   --no-install   Do not replace /Applications/Pulse.app.
+#   --no-install   Do not replace /Applications/Pulse.app (requires --no-push).
 #   --no-push      Stop before commit/tag/push/GitHub release.
 #   --dry-run      Read-only preflight; print every command; change nothing.
 #
@@ -33,7 +33,7 @@ set -euo pipefail
 REPO_SLUG="zibochen6/Pulse"
 INSTALLED_APP="/Applications/Pulse.app"
 # The updater trusts this team id; keep the release verifier in agreement.
-EXPECTED_TEAM="${PULSE_TEAM_ID:-9Y4B7WBUU2}"
+EXPECTED_TEAM="9Y4B7WBUU2"
 BACKUP_ROOT="$HOME/Library/Application Support/Pulse/Backups"
 
 VERSION=""; NOTES_ARG=""; SKIP_TESTS=0; NO_INSTALL=0; NO_PUSH=0; DRY_RUN=0
@@ -44,6 +44,13 @@ warn() { printf 'WARN: %s\n' "$*" >&2; }
 step() { printf '\n==> %s\n' "$*"; }
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "required tool not found: $1"; }
 
+validate_release_options() {
+  [ "$NO_INSTALL" != 1 ] || [ "$NO_PUSH" = 1 ] \
+    || die "--no-install requires --no-push: a release cannot be published before its exact signed app is installed and verified."
+  [ -z "${PULSE_TEAM_ID:-}" ] || [ "$PULSE_TEAM_ID" = "$EXPECTED_TEAM" ] \
+    || die "PULSE_TEAM_ID must match the updater's trusted team $EXPECTED_TEAM; refusing a release the updater would reject."
+}
+
 usage() {
   cat <<'EOF'
 Usage: scripts/release.sh <version> [options]
@@ -51,7 +58,7 @@ Usage: scripts/release.sh <version> [options]
   <version>        Marketing version without a leading "v" (e.g. 0.1.3).
   --notes <file>   Release notes file (default: docs/releases/<version>.md).
   --skip-tests     Skip the Debug unit-test run.
-  --no-install     Do not replace /Applications/Pulse.app.
+  --no-install     Do not replace /Applications/Pulse.app (requires --no-push).
   --no-push        Stop before commit/tag/push/GitHub release.
   --dry-run        Read-only preflight; print every command; change nothing.
   -h, --help       Show this help.
@@ -73,7 +80,7 @@ assert_meta() { # <app> <version> <build> <label>
 }
 
 verify_signed() { # <app> <label>
-  local report authority team
+  local report authority team identifier
   [ -d "$1" ] || die "$2: app bundle not found at $1"
   codesign --verify --deep --strict "$1" >/dev/null 2>&1 \
     || die "$2: codesign --verify --deep --strict failed for $1"
@@ -82,9 +89,13 @@ verify_signed() { # <app> <label>
   report="$(codesign -dv --verbose=2 "$1" 2>&1)"
   authority="$(printf '%s\n' "$report" | sed -n 's/^Authority=//p' | head -1)"
   team="$(printf '%s\n' "$report" | sed -n 's/^TeamIdentifier=//p' | head -1)"
+  identifier="$(printf '%s\n' "$report" | sed -n 's/^Identifier=//p' | head -1)"
+  case "$authority" in "Apple Development:"*) ;; *) die "$2: expected Apple Development signing, got '${authority:-none}'";; esac
   [ "$authority" = "$IDENTITY" ] || die "$2: signature authority '${authority:-none}' != '$IDENTITY'"
+  [ "$identifier" = "dev.zibochen.Pulse" ] \
+    || die "$2: Identifier '${identifier:-none}' != 'dev.zibochen.Pulse'"
   [ "$team" = "$EXPECTED_TEAM" ] \
-    || die "$2: TeamIdentifier '${team:-none}' != '$EXPECTED_TEAM' (override with PULSE_TEAM_ID)"
+    || die "$2: TeamIdentifier '${team:-none}' != '$EXPECTED_TEAM'"
 }
 
 assert_hash() { # <app> <expected_sha256> <label>
@@ -127,45 +138,51 @@ resolve_identity() {
     IDENTITY="$PULSE_SIGN_IDENTITY"
   else
     IDENTITY="$(printf '%s\n' "$available" | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)"
-    [ -n "$IDENTITY" ] || IDENTITY="$(printf '%s\n' "$available" | sed -n 's/.*"\([^"]*\)".*/\1/p' | head -1)"
     [ -n "$IDENTITY" ] || die "No codesigning identity found. Install an Apple Development certificate or set PULSE_SIGN_IDENTITY."
   fi
+  case "$IDENTITY" in "Apple Development:"*) ;; *) die "PULSE_SIGN_IDENTITY must use the Apple Development preview channel";; esac
 }
 
-quit_pulse() {
-  local pids deadline pid
+request_pulse_quit() {
+  local pids deadline
   pids="$(pgrep -x Pulse || true)"
   [ -n "$pids" ] || return 0
   printf '  Pulse running (pid(s): %s); requesting a graceful quit\n' "$(printf '%s' "$pids" | tr '\n' ' ')"
-  osascript -e 'quit app "Pulse"' >/dev/null 2>&1 || {
-    warn "AppleScript quit failed; sending SIGTERM"
-    for pid in $pids; do kill -TERM "$pid" 2>/dev/null || true; done
-  }
-  deadline=$((SECONDS + 15))
-  while pgrep -x Pulse >/dev/null 2>&1 && [ "$SECONDS" -lt $((deadline - 5)) ]; do sleep 0.5; done
-  if pgrep -x Pulse >/dev/null 2>&1; then
-    warn "Pulse did not exit after the graceful request; sending SIGTERM"
-    for pid in $(pgrep -x Pulse || true); do kill -TERM "$pid" 2>/dev/null || true; done
-    while pgrep -x Pulse >/dev/null 2>&1 && [ "$SECONDS" -lt "$deadline" ]; do sleep 0.5; done
+  # A cancelled draft prompt must remain cancelled. Never bypass the app's
+  # termination delegate with a signal, including during rollback.
+  if ! osascript -e 'with timeout of 15 seconds' -e 'quit app "Pulse"' -e 'end timeout' >/dev/null 2>&1; then
+    warn "Pulse did not accept the graceful quit request; leaving the running app and its drafts intact"
+    return 1
   fi
+  deadline=$((SECONDS + 15))
+  while pgrep -x Pulse >/dev/null 2>&1 && [ "$SECONDS" -lt "$deadline" ]; do sleep 0.5; done
   if pgrep -x Pulse >/dev/null 2>&1; then
-    die "Pulse did not quit within 15s (pid(s): $(pgrep -x Pulse | tr '\n' ' ')). Refusing to force-kill; quit Pulse manually (Settings > Quit Pulse) and rerun."
+    warn "Pulse is still running after the graceful quit request; leaving it and its drafts intact"
+    return 1
   fi
   printf '  Pulse quit cleanly\n'
 }
 
+quit_pulse() {
+  request_pulse_quit \
+    || die "Pulse did not quit gracefully. Save or retain your drafts in Pulse, quit when ready, and rerun. No app replacement was attempted."
+}
+
+new_backup_path() { # <version> <build>; reserve a unique directory atomically
+  local backup_dir
+  mkdir -p "$BACKUP_ROOT" || return 1
+  backup_dir="$(mktemp -d "$BACKUP_ROOT/Pulse-$1-$2-$(date -u +%Y%m%dT%H%M%SZ).XXXXXX")" || return 1
+  printf '%s/Pulse.app\n' "$backup_dir"
+}
+
 restore_previous_app() {
-  local pids pid deadline
   if [ -z "${BACKUP_APP:-}" ] || [ ! -d "$BACKUP_APP" ]; then
     warn "no previous app backup to restore; $INSTALLED_APP left in its current state"
     return 0
   fi
-  pids="$(pgrep -x Pulse || true)"
-  if [ -n "$pids" ]; then
-    osascript -e 'quit app "Pulse"' >/dev/null 2>&1 || true
-    for pid in $pids; do kill -TERM "$pid" 2>/dev/null || true; done
-    deadline=$((SECONDS + 10))
-    while pgrep -x Pulse >/dev/null 2>&1 && [ "$SECONDS" -lt "$deadline" ]; do sleep 0.5; done
+  if ! request_pulse_quit; then
+    warn "RESTORE DEFERRED: Pulse is still running or declined to quit. The installed app and backup remain intact. Quit Pulse before restoring from $BACKUP_APP"
+    return 1
   fi
   rm -rf "$INSTALLED_APP"
   if ditto "$BACKUP_APP" "$INSTALLED_APP"; then
@@ -235,8 +252,9 @@ plan_text() {
   ditto -x -k "$STAGE/artifacts/Pulse-@VERSION@.zip" "$STAGE/zip-check"
 
   # 8. Local install (skipped with --no-install): graceful quit, backup, replace, verify one process
-  osascript -e 'quit app "Pulse"'          # waits up to 15s; never force-kills
-  ditto /Applications/Pulse.app "$HOME/Library/Application Support/Pulse/Backups/Pulse-@OLDVER@-@OLDBUILD@.app"
+  quit_pulse                              # graceful request only; cancellation aborts
+  BACKUP_APP="$(new_backup_path @OLDVER@ @OLDBUILD@)"
+  ditto /Applications/Pulse.app "$BACKUP_APP"
   rm -rf /Applications/Pulse.app && ditto "$APP" /Applications/Pulse.app
   open /Applications/Pulse.app             # verify exactly one pid at the installed path
 
@@ -269,14 +287,13 @@ print_plan() {
 
 install_app() {
   local installed_version installed_build pids count pid comm deadline
-  [ -w /Applications ] || die "/Applications is not writable by $(id -un); cannot install. Re-run with --no-install to skip the local install."
+  [ -w /Applications ] || die "/Applications is not writable by $(id -un); cannot install. Re-run with --no-install --no-push to build without installing or publishing."
   installed_version="$(app_version "$INSTALLED_APP" || true)"
   installed_build="$(app_build "$INSTALLED_APP" || true)"
   quit_pulse
   if [ -d "$INSTALLED_APP" ]; then
-    BACKUP_APP="$BACKUP_ROOT/Pulse-${installed_version:-unknown}-${installed_build:-unknown}.app"
-    mkdir -p "$BACKUP_ROOT" || die "cannot create backup directory $BACKUP_ROOT"
-    [ ! -d "$BACKUP_APP" ] || rm -rf "$BACKUP_APP"
+    BACKUP_APP="$(new_backup_path "${installed_version:-unknown}" "${installed_build:-unknown}")" \
+      || die "cannot create a unique backup directory in $BACKUP_ROOT"
     printf '  backing up the installed app to %s\n' "$BACKUP_APP"
     ditto "$INSTALLED_APP" "$BACKUP_APP" || {
       open "$INSTALLED_APP" >/dev/null 2>&1 || true
@@ -405,6 +422,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+validate_release_options
 [ -n "$VERSION" ] || { usage >&2; exit 2; }
 case "$VERSION" in v*) die "pass the version without a leading 'v' (got '$VERSION', use '${VERSION#v}')";; esac
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "invalid version '$VERSION': expected MAJOR.MINOR.PATCH without a leading 'v', e.g. 0.1.3"
@@ -477,7 +495,7 @@ printf '%s\n' "$GH_STATUS" | grep -q 'account zibochen6' || die "gh active accou
 resolve_identity
 printf '  signing identity: %s\n' "$IDENTITY"
 if [ -d "$INSTALLED_APP" ]; then
-  INSTALLED_AUTHORITY="$(codesign -dv "$INSTALLED_APP" 2>&1 | sed -n 's/^Authority=//p' | head -1 || true)"
+  INSTALLED_AUTHORITY="$(codesign -dv --verbose=2 "$INSTALLED_APP" 2>&1 | sed -n 's/^Authority=//p' | head -1 || true)"
   if [ -n "$INSTALLED_AUTHORITY" ] && [ "$INSTALLED_AUTHORITY" != "$IDENTITY" ] && [ -z "${PULSE_SIGN_IDENTITY:-}" ]; then
     die "The installed app is signed by '$INSTALLED_AUTHORITY' but the resolved identity is '$IDENTITY'. Refusing to silently switch signing identity; set PULSE_SIGN_IDENTITY explicitly if intended."
   fi
@@ -617,7 +635,7 @@ fi
 step "9/10 Commit, tag, push and create the GitHub release"
 if [ "$NO_PUSH" = 1 ]; then
   printf '  skipped (--no-push). project.yml/Pulse.xcodeproj are bumped locally and uncommitted; artifacts: %s\n' "$ARTIFACTS"
-  printf '  Commit manually with: git add -A -- project.yml Pulse.xcodeproj Pulse Tests scripts docs .trellis README.md && git commit -m "release: prepare Pulse %s"\n' "$VERSION"
+  printf '  Commit manually with: git add -A -- project.yml Pulse.xcodeproj Pulse Tests scripts docs .trellis README.md '\'':(exclude)docs/images'\'' && git commit -m "release: prepare Pulse %s"\n' "$VERSION"
 else
   publish_release
 fi
