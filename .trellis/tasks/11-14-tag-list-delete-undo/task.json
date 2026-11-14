@@ -15,12 +15,12 @@
   "branch": "codex/tag-list-delete-undo",
   "base_branch": "main",
   "worktree_path": null,
-  "commit": null,
+  "commit": "a5aa90258ec7ea1b8e0a576c86530fe72320bc90",
   "pr_url": null,
   "subtasks": [],
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "User-approved whole-list deletion+Undo implemented and independently reviewed. Final fullsuite259passed/2expected opt-in skips; Chinese9passed; strict lint/resource/diff checks passed. Ready for authorized0.1.9/build13 local install and publication; prior detached tasks remain untouched.",
+  "notes": "Whole-list deletion and one-step Undo delivered in published0.1.9/build13; installed and running. Full259passed/2expected skips; Chinese9passed; independentreview/lint/resources passed. Signeduniversal DMG/ZIP/installed executable and4assetdigests verified. Old detached tasks and unrelateduntrackedfiles preserved. See research/delivery.md.",
   "meta": {}
 }
