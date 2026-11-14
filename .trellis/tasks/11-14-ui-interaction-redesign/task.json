@@ -15,12 +15,12 @@
   "branch": "codex/ui-interaction-redesign",
   "base_branch": "main",
   "worktree_path": null,
-  "commit": null,
+  "commit": "9326ce68578614840e30f274b01000b88020a72b",
   "pr_url": null,
   "subtasks": [],
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "Implementation, independent review and final verification complete: 235 full-suite passes, 2 opt-in skips; 24 Chinese checks; Release build and native demo export passed. User explicitly authorized commit, publication and local installation. Delivery of 0.1.8/build12 is in progress; preserve unrelated .workbuddy/ and docs/images/.",
+  "notes": "Delivered and published Pulse0.1.8/build12; installed and running at /Applications/Pulse.app. Full235 + Chinese24 + release-safety18 checks passed; verified universal signed DMG/ZIP/installed executable and four public asset digests. Delivery receipt and remaining native runtime limits in research/delivery.md. Unrelated .workbuddy/ and docs/images/ preserved.",
   "meta": {}
 }
