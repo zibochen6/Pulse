@@ -22,7 +22,7 @@ final class HomeViewRenderingTests: XCTestCase {
   /// typing, completing a task or a background refresh never resizes the panel
   /// under the pointer.
   func testPopoverSizeIsTheFixedRoundOneSurface() {
-    XCTAssertEqual(HomeView.popoverSize, NSSize(width: 360, height: 380))
+    XCTAssertEqual(HomeView.popoverSize, NSSize(width: 400, height: 520))
   }
 
   func testCodexMenuIconIsBundled() {
@@ -65,14 +65,13 @@ final class HomeViewRenderingTests: XCTestCase {
         return XCTFail("Could not create \(appearanceName) appearance")
       }
       for page in [
-        PopoverPage.home, .usage, .settings(.general), .settings(.providers),
-        .settings(.tasks), .settings(.updates), .settings(.about),
+        PopoverPage.home, .usage(.codex), .usage(.vip), .usage(.deepSeek), .tagManagement,
       ] {
         let pages = PopoverPageController()
         switch page {
         case .home: break
-        case .usage: pages.showUsage()
-        case .settings(let destination): pages.showSettings(destination)
+        case .usage(let provider): pages.showUsage(provider)
+        case .tagManagement: pages.showTagManagement()
         }
         let host = NSHostingView(
           rootView: HomeView(
@@ -137,9 +136,9 @@ final class HomeViewRenderingTests: XCTestCase {
         return XCTFail("Could not create \(appearanceName) appearance")
       }
       for usage in usages {
-        for page in [PopoverPage.home, .usage] {
+        for page in [PopoverPage.home, .usage(.codex)] {
           let pages = PopoverPageController()
-          if page == .usage { pages.showUsage() }
+          if case .usage(let provider) = page { pages.showUsage(provider) }
           let host = NSHostingView(
             rootView: HomeView(
               config: config,
@@ -267,7 +266,7 @@ final class HomeViewRenderingTests: XCTestCase {
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
       for settings in [false, true] {
         let pages = PopoverPageController()
-        if settings { pages.showSettings(.tasks) }
+        if settings { pages.showTagManagement() }
         let host = NSHostingView(
           rootView: HomeView(
             config: config, usage: usage, vipUsage: vipUsage,
@@ -316,11 +315,11 @@ final class HomeViewRenderingTests: XCTestCase {
         onBack: {}, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
         onQuit: {}
       )
-      .frame(width: 360)
+      .frame(width: 720)
       .background(Color(nsColor: .windowBackgroundColor))
       let host = NSHostingView(rootView: view)
       host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
-      host.frame = NSRect(x: 0, y: 0, width: 360, height: 1100)
+      host.frame = NSRect(origin: .zero, size: SettingsWindowController.contentSize)
       host.layoutSubtreeIfNeeded()
       let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
       host.cacheDisplay(in: host.bounds, to: bitmap)
@@ -339,65 +338,39 @@ final class HomeViewRenderingTests: XCTestCase {
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
-    let usage = UsageController(provider: PreviewUsageProvider())
-    let vipUsage = UsageController(provider: PreviewVIPUsageProvider())
-    await usage.refresh()
-    await vipUsage.refresh()
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "PulseSettingsActionRender")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
-      for destination in [
-        SettingsDestination.general, .providers, .tasks, .updates,
-      ] {
-        let pages = PopoverPageController()
-        pages.showSettings(destination)
+      for destination in SettingsDestination.allCases {
+        let session = SettingsPresentation(destination: destination)
+        if destination == .providers { session.beginEditing(.deepSeek) }
         let host = NSHostingView(
-          rootView: HomeView(
-            config: config, usage: usage, vipUsage: vipUsage,
-            deepSeekUsage: inactiveDeepSeekUsage(),
+          rootView: SettingsView(
+            config: config,
             deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
             vipConfiguration: VIPConfiguration(secretStore: PreviewConnectedSecretStore()),
             localTasks: isolatedLocalTasks(),
-            updates: makeInactiveUpdateController(defaults: defaults), pages: pages,
-            onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {}, onQuit: {}))
+            updates: makeInactiveUpdateController(defaults: defaults),
+            onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {}, onQuit: {},
+            presentation: session))
         host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
-        host.frame = NSRect(origin: .zero, size: HomeView.popoverSize)
+        host.frame = NSRect(origin: .zero, size: SettingsWindowController.contentSize)
         host.layoutSubtreeIfNeeded()
         let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
         host.cacheDisplay(in: host.bounds, to: bitmap)
-        XCTAssertEqual(
-          Double(bitmap.pixelsWide) * HomeView.popoverSize.height,
-          Double(bitmap.pixelsHigh) * HomeView.popoverSize.width, accuracy: 1)
+        XCTAssertEqual(host.bounds.size, NSSize(width: 720, height: 560))
+        for point in [(2, 2), (bitmap.pixelsWide - 2, bitmap.pixelsHigh - 2)] {
+          XCTAssertEqual(
+            try XCTUnwrap(bitmap.colorAt(x: point.0, y: point.1)).alphaComponent, 1, accuracy: 0.01)
+        }
         let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
         try png.write(
           to: directory.appendingPathComponent("\(appearanceName.rawValue)-\(destination).png"))
       }
-      // Off-window hosts do not reliably execute ScrollViewReader's onAppear.
-      // Also inspect all actual settings controls at the product's 360pt width;
-      // this taller evidence image does not alter the fixed popover size.
-      let fullSettings = NSHostingView(
-        rootView: SettingsView(
-          config: config,
-          deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
-          vipConfiguration: VIPConfiguration(secretStore: PreviewConnectedSecretStore()),
-          localTasks: isolatedLocalTasks(),
-          updates: makeInactiveUpdateController(defaults: defaults),
-          destination: .general,
-          onBack: {}, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {}, onQuit: {}
-        )
-        .background(Color(nsColor: .windowBackgroundColor)))
-      fullSettings.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
-      fullSettings.frame = NSRect(x: 0, y: 0, width: 360, height: 1000)
-      fullSettings.layoutSubtreeIfNeeded()
-      let fullBitmap = try XCTUnwrap(
-        fullSettings.bitmapImageRepForCachingDisplay(in: fullSettings.bounds))
-      fullSettings.cacheDisplay(in: fullSettings.bounds, to: fullBitmap)
-      let fullPNG = try XCTUnwrap(fullBitmap.representation(using: .png, properties: [:]))
-      try fullPNG.write(
-        to: directory.appendingPathComponent("\(appearanceName.rawValue)-all-controls.png"))
     }
   }
+
 }
 
 @MainActor

@@ -105,7 +105,7 @@ final class UsageController: ObservableObject {
       guard !Task.isCancelled, currentGeneration == generation else { return }
       state =
         snapshot.metrics.isEmpty
-        ? .unavailable("No usage data is available for this provider.")
+        ? .unavailable(PulseLocalization.string("No usage data is available for this provider."))
         : .success(snapshot)
     } catch is CancellationError {
       return
@@ -117,7 +117,7 @@ final class UsageController: ObservableObject {
         : .failure(error.userMessage)
     } catch {
       guard !Task.isCancelled, currentGeneration == generation else { return }
-      state = .failure("Could not refresh usage. Try again.")
+      state = .failure(PulseLocalization.string("Could not refresh usage. Try again."))
     }
   }
 }

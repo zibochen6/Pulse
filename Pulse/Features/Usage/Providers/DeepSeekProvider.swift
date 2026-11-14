@@ -32,19 +32,30 @@ enum DeepSeekUsageError: LocalizedError, Equatable, UsageFailureDescribing {
     }
   }
 
-  var userMessage: String { errorDescription ?? "Could not refresh DeepSeek balance." }
+  var userMessage: String {
+    errorDescription ?? PulseLocalization.string("Could not refresh DeepSeek balance.")
+  }
 
   var errorDescription: String? {
     switch self {
-    case .missingAPIKey: "Add a DeepSeek API key in Settings → Providers to view its balance."
-    case .keychainUnavailable: "Pulse could not read the DeepSeek API key from Keychain."
-    case .invalidCredentials: "The DeepSeek API key is invalid or no longer active."
-    case .rateLimited: "DeepSeek is rate-limiting balance requests. Try again later."
-    case .endpointUnavailable: "DeepSeek's balance endpoint is currently unavailable."
-    case .serviceStatus(let status): "DeepSeek's balance service returned HTTP \(status)."
-    case .networkUnavailable: "Could not reach DeepSeek. Check your network and try again."
-    case .timedOut: "The DeepSeek balance request timed out. Try again."
-    case .invalidResponse: "DeepSeek returned balance data Pulse could not read."
+    case .missingAPIKey:
+      PulseLocalization.string(
+        "Add a DeepSeek API key in Settings → Providers to view its balance.")
+    case .keychainUnavailable:
+      PulseLocalization.string("Pulse could not read the DeepSeek API key from Keychain.")
+    case .invalidCredentials:
+      PulseLocalization.string("The DeepSeek API key is invalid or no longer active.")
+    case .rateLimited:
+      PulseLocalization.string("DeepSeek is rate-limiting balance requests. Try again later.")
+    case .endpointUnavailable:
+      PulseLocalization.string("DeepSeek's balance endpoint is currently unavailable.")
+    case .serviceStatus(let status):
+      PulseLocalization.format("DeepSeek's balance service returned HTTP %lld.", status)
+    case .networkUnavailable:
+      PulseLocalization.string("Could not reach DeepSeek. Check your network and try again.")
+    case .timedOut: PulseLocalization.string("The DeepSeek balance request timed out. Try again.")
+    case .invalidResponse:
+      PulseLocalization.string("DeepSeek returned balance data Pulse could not read.")
     }
   }
 }

@@ -5,9 +5,25 @@ import XCTest
 
 @MainActor
 final class PulseApplicationMenuTests: XCTestCase {
+  func testExpectedAppAndWindowCommandsExist() throws {
+    let commands = PulseApplicationMenu.makeMainMenu().items.compactMap(\.submenu).flatMap(\.items)
+    XCTAssertEqual(
+      commands.first(where: { $0.action == NSSelectorFromString("openSettings:") })?.keyEquivalent,
+      ",")
+    XCTAssertEqual(
+      commands.first(where: { $0.action == NSSelectorFromString("requestQuit:") })?.keyEquivalent,
+      "q")
+    XCTAssertEqual(
+      commands.first(where: { $0.action == #selector(NSWindow.performClose(_:)) })?.keyEquivalent,
+      "w")
+  }
+
   func testApplicationInstallsPasteCommandAtLaunch() throws {
     let mainMenu = try XCTUnwrap(NSApp.mainMenu)
-    let editMenu = try XCTUnwrap(mainMenu.items.first?.submenu)
+    let editMenu = try XCTUnwrap(
+      mainMenu.items.compactMap(\.submenu).first(where: {
+        $0.items.contains(where: { $0.action == #selector(NSText.paste(_:)) })
+      }))
     let pasteItem = try XCTUnwrap(
       editMenu.items.first(where: { $0.action == #selector(NSText.paste(_:)) }))
 
@@ -19,21 +35,29 @@ final class PulseApplicationMenuTests: XCTestCase {
 
   func testCommandVPasteUsesFirstResponderAction() throws {
     let mainMenu = PulseApplicationMenu.makeMainMenu()
-    let editMenu = try XCTUnwrap(mainMenu.items.first?.submenu)
+    let editMenu = try XCTUnwrap(
+      mainMenu.items.compactMap(\.submenu).first(where: {
+        $0.items.contains(where: { $0.action == #selector(NSText.paste(_:)) })
+      }))
     let pasteItem = try XCTUnwrap(
       editMenu.items.first(where: { $0.action == #selector(NSText.paste(_:)) }))
 
-    XCTAssertEqual(editMenu.title, "Edit")
-    XCTAssertEqual(pasteItem.title, "Paste")
+    XCTAssertFalse(editMenu.title.isEmpty)
+    XCTAssertFalse(pasteItem.title.isEmpty)
     XCTAssertEqual(pasteItem.action, #selector(NSText.paste(_:)))
     XCTAssertEqual(pasteItem.keyEquivalent, "v")
     XCTAssertEqual(pasteItem.keyEquivalentModifierMask, [.command])
     XCTAssertNil(pasteItem.target, "Paste must resolve through AppKit's responder chain.")
   }
   func testTextUndoAndRedoCommandsRemainOnResponderChain() throws {
-    let editMenu = try XCTUnwrap(PulseApplicationMenu.makeMainMenu().items.first?.submenu)
-    let undo = try XCTUnwrap(editMenu.items.first(where: { $0.title == "Undo" }))
-    let redo = try XCTUnwrap(editMenu.items.first(where: { $0.title == "Redo" }))
+    let editMenu = try XCTUnwrap(
+      PulseApplicationMenu.makeMainMenu().items.compactMap(\.submenu).first(where: {
+        $0.items.contains(where: { $0.action == #selector(NSText.paste(_:)) })
+      }))
+    let undo = try XCTUnwrap(
+      editMenu.items.first(where: { $0.action == NSSelectorFromString("undo:") }))
+    let redo = try XCTUnwrap(
+      editMenu.items.first(where: { $0.action == NSSelectorFromString("redo:") }))
     XCTAssertNil(undo.target)
     XCTAssertNil(redo.target)
     XCTAssertEqual(undo.keyEquivalent, "z")

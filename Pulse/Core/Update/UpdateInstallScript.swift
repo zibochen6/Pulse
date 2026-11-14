@@ -13,25 +13,6 @@ struct UpdateInstallPlan: Equatable, Sendable {
   /// 0.2s per iteration, so the default tolerates four minutes of shutdown.
   var waitIterations: Int = 1200
 
-  init(
-    stagedAppPath: String,
-    destinationAppPath: String,
-    backupAppPath: String,
-    logPath: String,
-    stagingRootPath: String,
-    oldProcessIdentifier: Int32,
-    relaunch: Bool,
-    waitIterations: Int = 1200
-  ) {
-    self.stagedAppPath = stagedAppPath
-    self.destinationAppPath = destinationAppPath
-    self.backupAppPath = backupAppPath
-    self.logPath = logPath
-    self.stagingRootPath = stagingRootPath
-    self.oldProcessIdentifier = oldProcessIdentifier
-    self.relaunch = relaunch
-    self.waitIterations = waitIterations
-  }
 }
 
 /// Generates the POSIX shell script that swaps the app bundle after Pulse exits.
@@ -159,9 +140,10 @@ enum UpdateInstallError: LocalizedError, Equatable {
 
   var errorDescription: String? {
     switch self {
-    case .couldNotWriteScript: "Pulse could not write the update installer script."
+    case .couldNotWriteScript:
+      PulseLocalization.string("Pulse could not write the update installer script.")
     case .couldNotStartInstaller(let detail):
-      "Pulse could not start the update installer. \(detail)"
+      PulseLocalization.format("Pulse could not start the update installer. %@", detail)
     }
   }
 }

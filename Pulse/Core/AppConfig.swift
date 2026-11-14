@@ -44,7 +44,8 @@ final class AppConfig: ObservableObject {
         try loginItemService.setEnabled(enabled)
       }
     } catch {
-      loginItemError = "Could not update Login Items: \(error.localizedDescription)"
+      loginItemError = PulseLocalization.format(
+        "Could not update Login Items: %@", error.localizedDescription)
     }
     refreshLoginItemStatus()
   }

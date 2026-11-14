@@ -2,13 +2,14 @@ import SwiftUI
 
 struct DeepSeekStatusSummary: View {
   let state: UsageRefreshState
+  var isConfigured: Bool = true
   let onOpenUsage: () -> Void
 
   var body: some View {
     ProviderStatusButton(
       title: DeepSeekUsageFormatter.title(for: state), providerName: "DeepSeek",
-      identifier: "openDeepSeekUsageButton", onOpenUsage: onOpenUsage
-    ) { DeepSeekProviderIcon(size: 14) }
+      identifier: "openDeepSeekUsageButton", isConfigured: isConfigured, onOpenUsage: onOpenUsage
+    ) { DeepSeekProviderIcon(size: 18) }
   }
 }
 

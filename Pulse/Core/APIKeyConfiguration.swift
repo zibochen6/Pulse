@@ -8,13 +8,11 @@ class APIKeyConfiguration: ObservableObject {
 
   private let providerName: String
   private let account: String
-  private let article: String
   private let secretStore: any SecretStoring
 
-  init(providerName: String, account: String, article: String, secretStore: any SecretStoring) {
+  init(providerName: String, account: String, secretStore: any SecretStoring) {
     self.providerName = providerName
     self.account = account
-    self.article = article
     self.secretStore = secretStore
   }
 
@@ -25,7 +23,8 @@ class APIKeyConfiguration: ObservableObject {
       errorMessage = nil
     } catch {
       hasAPIKey = false
-      errorMessage = "Could not read the saved \(providerName) API key from Keychain."
+      errorMessage = PulseLocalization.format(
+        "Could not read the saved %@ API key from Keychain.", providerName)
     }
   }
 
@@ -33,7 +32,7 @@ class APIKeyConfiguration: ObservableObject {
   func save(apiKey: String) -> Bool {
     let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
-      errorMessage = "Enter \(article) \(providerName) API key before saving."
+      errorMessage = PulseLocalization.format("Enter your %@ API key before saving.", providerName)
       return false
     }
     do {
@@ -42,7 +41,8 @@ class APIKeyConfiguration: ObservableObject {
       errorMessage = nil
       return true
     } catch {
-      errorMessage = "Could not save the \(providerName) API key to Keychain."
+      errorMessage = PulseLocalization.format(
+        "Could not save the %@ API key to Keychain.", providerName)
       return false
     }
   }
@@ -55,7 +55,8 @@ class APIKeyConfiguration: ObservableObject {
       errorMessage = nil
       return true
     } catch {
-      errorMessage = "Could not remove the \(providerName) API key from Keychain."
+      errorMessage = PulseLocalization.format(
+        "Could not remove the %@ API key from Keychain.", providerName)
       return false
     }
   }

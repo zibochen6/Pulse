@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Wraps complete indicators at their measured ideal widths, leading aligned.
 struct ProviderStatusLayout: Layout {
-  var spacing: CGFloat = 5
+  var spacing: CGFloat = PulseDesignTokens.gap
 
   func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
     arrangement(proposal: proposal, subviews: subviews).size

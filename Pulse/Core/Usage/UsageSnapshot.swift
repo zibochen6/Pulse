@@ -45,10 +45,10 @@ struct QuotaWindow: Equatable, Sendable {
   }
 
   var displayName: String {
-    guard let durationMinutes else { return "Limit window" }
-    if durationMinutes == 300 { return "5-hour window" }
-    if durationMinutes == 10_080 { return "Weekly window" }
-    return "\(shortLabel) window"
+    guard let durationMinutes else { return PulseLocalization.string("Limit window") }
+    if durationMinutes == 300 { return PulseLocalization.string("5-hour window") }
+    if durationMinutes == 10_080 { return PulseLocalization.string("Weekly window") }
+    return PulseLocalization.format("%@ window", shortLabel)
   }
 }
 

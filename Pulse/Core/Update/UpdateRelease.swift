@@ -44,14 +44,18 @@ enum UpdateReleaseError: LocalizedError, Equatable {
   var errorDescription: String? {
     switch self {
     case .malformedPayload(let detail):
-      "Pulse could not read the update information from GitHub. \(detail)"
+      PulseLocalization.format(
+        "Pulse could not read the update information from GitHub. %@", detail)
     case .malformedVersion(let tag):
-      "The latest release has an unrecognised version tag “\(tag)”."
+      PulseLocalization.format("The latest release has an unrecognised version tag “%@”.", tag)
     case .unsupportedRelease:
-      "The latest release is a draft or prerelease, so Pulse will not install it."
-    case .missingArchive: "The latest release has no update archive."
-    case .missingChecksum: "The latest release has no checksum file for its update archive."
-    case .malformedAssetURL(let name): "The download address for “\(name)” is not usable."
+      PulseLocalization.string(
+        "The latest release is a draft or prerelease, so Pulse will not install it.")
+    case .missingArchive: PulseLocalization.string("The latest release has no update archive.")
+    case .missingChecksum:
+      PulseLocalization.string("The latest release has no checksum file for its update archive.")
+    case .malformedAssetURL(let name):
+      PulseLocalization.format("The download address for “%@” is not usable.", name)
     }
   }
 }

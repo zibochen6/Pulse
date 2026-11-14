@@ -314,6 +314,31 @@ final class LocalTasksRenderingTests: XCTestCase {
     XCTAssertNil(presentation.pendingTagOrder, "an ignored drop must not move anything")
   }
 
+  func testTagMoveCompletionAfterNavigatingAwayDoesNotBlockExit() async throws {
+    let controller = try await controller()
+    let work = UUID()
+    let home = UUID()
+    let createdWork = await controller.createTag(id: work, name: "Work")
+    let createdHome = await controller.createTag(id: home, name: "Home")
+    XCTAssertTrue(createdWork && createdHome)
+    let presentation = LocalTaskPresentation()
+    let pages = PopoverPageController()
+    let target = try XCTUnwrap(
+      presentation.commitTagMove(home, toIndex: 0, tagIDs: [work, home]))
+    XCTAssertTrue(presentation.hasPendingSubmissions)
+    pages.showUsage(.codex)
+
+    // No task/tag view is mounted to observe the document publication.
+    let saved = await controller.moveTag(id: home, toIndex: target)
+    presentation.finishTagMove(saved: saved, tags: controller.document?.tags ?? [])
+
+    XCTAssertTrue(saved)
+    XCTAssertEqual(pages.page, .usage(.codex))
+    XCTAssertNil(presentation.pendingTagOrder)
+    XCTAssertFalse(presentation.hasPendingSubmissions)
+    XCTAssertEqual(controller.document?.tags.map(\.id), [home, work])
+  }
+
   func testFailedTagMoveAbandonsThePreview() {
     let presentation = LocalTaskPresentation()
     let work = TaskTag(name: "Work")
@@ -321,7 +346,7 @@ final class LocalTasksRenderingTests: XCTestCase {
     presentation.beginTagDrag(home.id)
     XCTAssertEqual(presentation.commitTagMove(home.id, toIndex: 0, tagIDs: [work.id, home.id]), 0)
     XCTAssertEqual(presentation.displayOrder([work, home]).map(\.id), [home.id, work.id])
-    presentation.abandonTagMove()
+    presentation.finishTagMove(saved: false, tags: [work, home])
     XCTAssertNil(presentation.pendingTagOrder)
     XCTAssertEqual(presentation.displayOrder([work, home]).map(\.id), [work.id, home.id])
   }
@@ -338,17 +363,165 @@ final class LocalTasksRenderingTests: XCTestCase {
       [home.id, work.id, writing.id])
   }
 
-  func testEngagedTagDropSuspendsPointerDismissalButABareDragDoesNot() {
+  func testNativeTagDragHoldsDismissalUntilEndedIncludingAfterLeavingDropTarget() {
     let presentation = LocalTaskPresentation()
     XCTAssertFalse(presentation.isInteractionActive)
     presentation.beginTagDrag(UUID())
-    XCTAssertFalse(
-      presentation.isInteractionActive,
-      "a bare drag must not pin the popover open; a cancelled drag can go unnoticed")
-    presentation.updateTagDrop(LocalTagDropTarget(pillID: UUID(), index: 0, edge: .leading))
+    XCTAssertFalse(presentation.isInteractionActive, "A preview alone is not a native session")
+    presentation.beginTagDrag(UUID(), nativeSession: true)
     XCTAssertTrue(presentation.isInteractionActive)
+    presentation.updateTagDrop(LocalTagDropTarget(pillID: UUID(), index: 0, edge: .leading))
     presentation.updateTagDrop(nil)
+    XCTAssertTrue(presentation.isInteractionActive, "Leaving the panel must not end the drag hold")
+    presentation.endTagDrag()
     XCTAssertFalse(presentation.isInteractionActive)
+    XCTAssertNil(presentation.draggingTagID)
+    XCTAssertNil(presentation.tagDropTarget)
+  }
+
+  func testNativeDragCommitKeepsHoldUntilNativeEndAndDoesNotReleaseEditing() {
+    let presentation = LocalTaskPresentation()
+    let first = UUID()
+    let second = UUID()
+    presentation.beginTagDrag(first, nativeSession: true)
+    XCTAssertEqual(presentation.commitTagMove(first, toIndex: 1, tagIDs: [first, second]), 1)
+    XCTAssertTrue(presentation.isInteractionActive)
+    presentation.beginAddingTask()
+    presentation.composerFocused = true
+    presentation.endTagDrag()
+    XCTAssertTrue(presentation.isInteractionActive, "Ending drag must not release text editing")
+    presentation.collapseComposer()
+    XCTAssertFalse(presentation.isInteractionActive)
+  }
+
+  func testTagDeletionIsBlockedByHiddenDraftAndReturnNeverOverwritesTodo() throws {
+    let presentation = LocalTaskPresentation()
+    let tag = TaskTag(name: "Work")
+    presentation.quickDraft.text = "Todo draft"
+    let todo = presentation.quickDraft
+    presentation.selectedFilter = .tag(tag.id)
+    presentation.quickDraft.text = "Keep this unsaved task"
+    let work = presentation.quickDraft
+    presentation.collapseComposer()
+    presentation.selectedFilter = .untagged
+    presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
+    XCTAssertTrue(presentation.hasDraftBlockingTagDeletion(tag.id))
+    XCTAssertNil(presentation.captureTagSubmission())
+    XCTAssertTrue(presentation.hasUnsavedEdits)
+    presentation.returnToDraft(affectedByTagID: tag.id)
+    XCTAssertEqual(presentation.selectedFilter, .tag(tag.id))
+    XCTAssertTrue(presentation.isComposerExpanded)
+    XCTAssertEqual(presentation.quickDraft, work)
+    XCTAssertEqual(presentation.quickDrafts[.untagged], todo)
+    XCTAssertNil(presentation.tagIntent)
+    presentation.finishDraft(id: work.creationID)
+    presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
+    let submission = try XCTUnwrap(presentation.captureTagSubmission())
+    presentation.finishTagSubmission(submission, saved: true)
+    XCTAssertNil(presentation.quickDrafts[.tag(tag.id)], "Old field identity must be invalidated")
+    XCTAssertEqual(presentation.quickDrafts[.untagged], todo)
+  }
+
+  func testTagDeletionChecksDraftDestinationAndExistingTaskEditor() {
+    let presentation = LocalTaskPresentation()
+    let destination = UUID()
+    presentation.quickDraft.text = "From Todo to another list"
+    presentation.quickDraft.selectedTagID = destination
+    XCTAssertTrue(presentation.hasDraftBlockingTagDeletion(destination))
+    presentation.quickDraft.text = ""
+    presentation.beginEditingTask(LocalTask(text: "Edit", tagIDs: [destination]))
+    XCTAssertTrue(presentation.hasDraftBlockingTagDeletion(destination))
+    presentation.returnToDraft(affectedByTagID: destination)
+    XCTAssertNotNil(presentation.editDraft)
+  }
+
+  func testDiscardAllDraftsWaitsForSubmissionAndClearsHiddenDraftsWhenIdle() throws {
+    let presentation = LocalTaskPresentation()
+    presentation.quickDraft.text = "Pending"
+    let pending = try XCTUnwrap(presentation.captureSubmission())
+    presentation.selectedFilter = .tag(UUID())
+    presentation.quickDraft.text = "Hidden later input"
+    XCTAssertTrue(presentation.hasPendingSubmissions)
+    presentation.discardAllDrafts()
+    XCTAssertTrue(presentation.hasUnsavedEdits)
+    presentation.finishSubmission(pending, saved: false, task: nil, tags: [])
+    XCTAssertFalse(presentation.hasPendingSubmissions)
+    presentation.discardAllDrafts()
+    XCTAssertFalse(presentation.hasUnsavedEdits)
+    XCTAssertFalse(presentation.isComposerExpanded)
+  }
+
+  func testTagNameValidationRejectsDuplicatesReservedAndEmptyButAllowsSameRename() {
+    let tag = TaskTag(name: "Writing")
+    XCTAssertFalse(LocalTagIntent(name: "  WRITING ").hasValidName(in: [tag]))
+    XCTAssertEqual(LocalTagIntent(name: "writing").conflictingTag(in: [tag])?.id, tag.id)
+    XCTAssertFalse(LocalTagIntent(name: " ToDo ").hasValidName(in: []))
+    XCTAssertFalse(LocalTagIntent(name: "  ").hasValidName(in: []))
+    XCTAssertTrue(LocalTagIntent(action: .rename(tag.id), name: "Writing").hasValidName(in: [tag]))
+    XCTAssertTrue(LocalTagIntent(name: "写作 ✨").hasValidName(in: [tag]))
+  }
+
+  func testOneHundredTagsRemainReachableAndPersistInOrder() async throws {
+    let controller = try await controller()
+    let tags = (0..<100).map { TaskTag(name: "Project \($0) 标签 ✨") }
+    for tag in tags {
+      let saved = await controller.createTag(id: tag.id, name: tag.name)
+      XCTAssertTrue(saved)
+    }
+    await controller.refresh()
+    XCTAssertEqual(controller.document?.tags.map(\.id), tags.map(\.id))
+    let presentation = LocalTaskPresentation()
+    presentation.selectedFilter = .tag(try XCTUnwrap(tags.last).id)
+    presentation.reconcileTags(try XCTUnwrap(controller.document).tags)
+    XCTAssertEqual(presentation.selectedFilter, .tag(try XCTUnwrap(tags.last).id))
+    XCTAssertEqual(presentation.displayOrder(tags).count, 100)
+    let host = NSHostingView(
+      rootView: LocalTagSettingsView(
+        controller: controller, presentation: presentation
+      ).frame(width: 368, height: 420))
+    host.frame = NSRect(x: 0, y: 0, width: 368, height: 420)
+    host.layoutSubtreeIfNeeded()
+    XCTAssertLessThanOrEqual(host.fittingSize.width, 368)
+  }
+
+  func testTagSearchFocusHoldsPopoverWithoutBecomingAnUnsavedDraft() async throws {
+    let controller = try await controller()
+    let presentation = LocalTaskPresentation()
+    var editing = false
+    let host = NSHostingView(
+      rootView: LocalTagSettingsView(
+        controller: controller, presentation: presentation,
+        onEditingChanged: { editing = $0 }
+      ).frame(width: 368, height: 420))
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 368, height: 420),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    window.orderFront(nil)
+    defer { window.orderOut(nil) }
+    host.layoutSubtreeIfNeeded()
+    await Task.yield()
+    host.layoutSubtreeIfNeeded()
+    func editableFields(_ view: NSView) -> [NSTextField] {
+      if let field = view as? NSTextField, field.isEditable { return [field] }
+      return view.subviews.flatMap { editableFields($0) }
+    }
+    // SwiftUI exposes the identifier on its accessibility element, not
+    // necessarily on the bridged NSTextField. The idle manager has exactly
+    // one editable native field: assert that contract before exercising it.
+    let fields = editableFields(host)
+    XCTAssertEqual(fields.count, 1)
+    let field = try XCTUnwrap(fields.first)
+    XCTAssertTrue(window.makeFirstResponder(field))
+    try await Task.sleep(for: .milliseconds(30))
+    XCTAssertTrue(editing, "Typing in the search field must suspend hover dismissal")
+    let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+    editor.insertText("写作", replacementRange: NSRange(location: 0, length: 0))
+    XCTAssertTrue(window.makeFirstResponder(nil))
+    try await Task.sleep(for: .milliseconds(30))
+    XCTAssertFalse(editing)
+    XCTAssertEqual(presentation.tagSearch, "写作")
+    XCTAssertFalse(presentation.hasUnsavedEdits, "A retained search query must not block an update")
   }
 
   func testReturningFromEditorScrollsNewlyMountedListToSavedTaskOnce() async throws {
@@ -634,15 +807,53 @@ final class LocalTasksRenderingTests: XCTestCase {
     editor.insertText("Draft text", replacementRange: NSRange(location: 0, length: 0))
     XCTAssertEqual(field.stringValue, "Draft text")
     XCTAssertEqual(input, "Draft text")
-    let menu = try XCTUnwrap(PulseApplicationMenu.makeMainMenu().items.first?.submenu)
-    let undo = try XCTUnwrap(menu.items.first { $0.title == "Undo" })
-    let redo = try XCTUnwrap(menu.items.first { $0.title == "Redo" })
+    let items = PulseApplicationMenu.makeMainMenu().items.compactMap(\.submenu).flatMap(\.items)
+    let undo = try XCTUnwrap(items.first { $0.action == NSSelectorFromString("undo:") })
+    let redo = try XCTUnwrap(items.first { $0.action == NSSelectorFromString("redo:") })
     XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(undo.action), to: window, from: undo))
     XCTAssertEqual(field.stringValue, "")
     XCTAssertEqual(input, "")
     XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(redo.action), to: window, from: redo))
     XCTAssertEqual(field.stringValue, "Draft text")
     XCTAssertEqual(input, "Draft text")
+  }
+
+  func testRetiredNativeTaskEditorCannotResurrectOrReplaceDraft() async throws {
+    let controller = try await controller()
+    let presentation = LocalTaskPresentation()
+    presentation.beginEditingTask(LocalTask(text: "Original task"))
+    let host = NSHostingView(
+      rootView: LocalTasksView(
+        controller: controller, presentation: presentation, onEditingChanged: { _ in }
+      )
+      .frame(width: 400, height: 400))
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 400, height: 400),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    window.orderFront(nil)
+    defer { window.orderOut(nil) }
+    host.layoutSubtreeIfNeeded()
+    func textEditor(_ view: NSView) -> NSTextView? {
+      if let editor = view as? NSTextView { return editor }
+      return view.subviews.lazy.compactMap { textEditor($0) }.first
+    }
+    let editor = try XCTUnwrap(textEditor(host))
+    editor.string = "Edited task"
+    editor.didChangeText()
+    XCTAssertEqual(presentation.editDraft?.text, "Edited task")
+    let submission = try XCTUnwrap(presentation.captureEditSubmission())
+    presentation.finishEditSubmission(submission, saved: true, task: nil, tags: [])
+
+    // AppKit may deliver text notifications before SwiftUI removes the view.
+    editor.string = "Late old input"
+    editor.didChangeText()
+    XCTAssertNil(presentation.editDraft)
+    presentation.beginEditingTask(LocalTask(text: "Another task"))
+    let newer = presentation.editDraft
+    editor.string = "Another late old input"
+    editor.didChangeText()
+    XCTAssertEqual(presentation.editDraft, newer)
   }
 
   func testIMEConfirmationDoesNotSubmitAndPlainReturnDoes() {
@@ -777,7 +988,9 @@ final class LocalTasksRenderingTests: XCTestCase {
         let content: AnyView
         if mode == "tag-settings" {
           content = AnyView(
-            LocalTagSettingsView(controller: controller, onEditingChanged: { _ in }).padding(16))
+            LocalTagSettingsView(
+              controller: controller, presentation: presentation, onEditingChanged: { _ in }
+            ).padding(16))
         } else {
           content = AnyView(
             LocalTasksView(
@@ -847,9 +1060,10 @@ final class LocalTasksRenderingTests: XCTestCase {
         }
         let host = NSHostingView(
           rootView: LocalTasksView(
-            controller: target, presentation: presentation, onEditingChanged: { _ in })
-            .frame(width: 360, height: regionHeight)
-            .background(Color(nsColor: .windowBackgroundColor)))
+            controller: target, presentation: presentation, onEditingChanged: { _ in }
+          )
+          .frame(width: 360, height: regionHeight)
+          .background(Color(nsColor: .windowBackgroundColor)))
         host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
         host.frame = NSRect(x: 0, y: 0, width: 360, height: regionHeight)
         host.layoutSubtreeIfNeeded()
@@ -928,13 +1142,16 @@ final class LocalTasksRenderingTests: XCTestCase {
       }
       // The mirrored band is mostly background by construction, so take the
       // strongest disagreement between matching bands instead of averaging.
-      let distance = zip(selectedBands, idleBands)
+      let distance =
+        zip(selectedBands, idleBands)
         .map { pair in zip(pair.0, pair.1).map { abs($0 - $1) }.max() ?? 0 }
         .max() ?? 0
-      let selectedDescription = selectedBands
+      let selectedDescription =
+        selectedBands
         .map { $0.map { String(format: "%.3f", $0) }.joined(separator: ",") }
         .joined(separator: " | ")
-      let idleDescription = idleBands
+      let idleDescription =
+        idleBands
         .map { $0.map { String(format: "%.3f", $0) }.joined(separator: ",") }
         .joined(separator: " | ")
       XCTAssertGreaterThan(
@@ -973,18 +1190,20 @@ final class LocalTasksRenderingTests: XCTestCase {
   private func rowFrame(task: LocalTask, isPending: Bool) throws -> CGRect {
     let capture = FrameCapture()
     let row = LocalTaskRow(
-      task: task, isPending: isPending, onToggle: {}, onEdit: {}, onDelete: {})
-      .background(
-        GeometryReader { proxy in
-          Color.clear.preference(key: RowFrameKey.self, value: proxy.frame(in: .local))
-        })
-      .overlayPreferenceValue(RowFrameKey.self) { frame in
-        GeometryReader { _ in
-          FrameCaptureView(frame: frame, capture: capture)
-        }
-        .allowsHitTesting(false)
+      task: task, isPending: isPending, onToggle: {}, onEdit: {}, onDelete: {}
+    )
+    .background(
+      GeometryReader { proxy in
+        Color.clear.preference(key: RowFrameKey.self, value: proxy.frame(in: .local))
       }
-      .frame(width: 332)
+    )
+    .overlayPreferenceValue(RowFrameKey.self) { frame in
+      GeometryReader { _ in
+        FrameCaptureView(frame: frame, capture: capture)
+      }
+      .allowsHitTesting(false)
+    }
+    .frame(width: 332)
     let host = NSHostingView(rootView: row)
     host.frame = NSRect(x: 0, y: 0, width: 332, height: 120)
     host.layoutSubtreeIfNeeded()

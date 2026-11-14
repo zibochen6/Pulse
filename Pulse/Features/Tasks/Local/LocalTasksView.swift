@@ -60,6 +60,18 @@ struct LocalTagIntent: Equatable {
   let id = UUID()
   var action: Action = .create
   var name = ""
+
+  func conflictingTag(in tags: [TaskTag]) -> TaskTag? {
+    tags.first { tag in
+      if case .rename(let id) = action, id == tag.id { return false }
+      return LocalTaskStore.canonicalName(tag.name) == LocalTaskStore.canonicalName(name)
+    }
+  }
+
+  func hasValidName(in tags: [TaskTag]) -> Bool {
+    let canonical = LocalTaskStore.canonicalName(name)
+    return !canonical.isEmpty && canonical != "todo" && conflictingTag(in: tags) == nil
+  }
 }
 
 struct LocalTaskSubmission {
@@ -84,6 +96,7 @@ final class LocalTaskPresentation: ObservableObject {
   @Published var quickDrafts: [LocalTaskFilter: LocalTaskDraft] = [.untagged: LocalTaskDraft()]
   @Published var editDraft: LocalTaskDraft?
   @Published var tagIntent: LocalTagIntent?
+  @Published var tagSearch = ""
   @Published var composerFocused = false
   @Published var focusRequest = UUID()
   @Published var revealedTaskID: UUID?
@@ -93,8 +106,9 @@ final class LocalTaskPresentation: ObservableObject {
   private var expansionRevisions: [LocalTaskFilter: Int] = [:]
   private var selectionRevision = 0
 
-  /// Tag drag state. `draggingTagID` also suspends pointer-departure dismissal,
-  /// so a drag that runs to the popover's edge is not cut short mid-move.
+  /// Only an actual native session holds dismissal; its guaranteed ended callback
+  /// releases the hold even when a drag leaves the panel or Escape cancels it.
+  @Published private(set) var nativeTagDragActive = false
   @Published var draggingTagID: UUID?
   @Published var tagDropTarget: LocalTagDropTarget?
   /// Optimistic order for a tag move that has not been confirmed yet. It only
@@ -120,13 +134,54 @@ final class LocalTaskPresentation: ObservableObject {
       || (isComposerExpanded && (composerFocused || quickDraft.isDirty))
       || submittingIDs.contains(quickDraft.creationID)
   }
-  /// Editing and an engaged tag drop both hold the popover open. Only an
-  /// *engaged* drop counts, never a bare drag: `dropExited` and `performDrop`
-  /// both clear `tagDropTarget`, so a drag cancelled with Escape can never
-  /// leave the popover pinned open by a flag nothing resets.
   var isInteractionActive: Bool {
-    isEditing || tagDropTarget != nil
+    isEditing || nativeTagDragActive || tagDropTarget != nil
   }
+  var hasUnsavedEdits: Bool {
+    if quickDrafts.values.contains(where: \.isDirty) || editDraft != nil { return true }
+    guard let tagIntent else { return false }
+    if case .delete = tagIntent.action { return false }
+    return !tagIntent.name.isEmpty
+  }
+  var hasPendingSubmissions: Bool { !submittingIDs.isEmpty || pendingTagOrder != nil }
+  var hasPendingTagDeletion: Bool {
+    guard let intent = tagIntent, case .delete = intent.action else { return false }
+    return submittingIDs.contains(intent.id)
+  }
+
+  func discardAllDrafts() {
+    guard !hasPendingSubmissions else { return }
+    quickDrafts = [:]
+    editDraft = nil
+    tagIntent = nil
+    expandedComposers.removeAll()
+    composerFocused = false
+    ensureQuickDraft()
+  }
+
+  func hasDraftBlockingTagDeletion(_ id: UUID) -> Bool {
+    if editDraft?.selectedTagID == id { return true }
+    return quickDrafts.contains { origin, draft in
+      draft.isDirty && (origin == .tag(id) || draft.selectedTagID == id)
+    }
+  }
+
+  /// Called before leaving the manager. Draft identity and every other list's
+  /// draft are preserved; the caller only needs to reveal Home.
+  func returnToDraft(affectedByTagID id: UUID) {
+    tagIntent = nil
+    if editDraft?.selectedTagID == id { return }
+    let candidates = quickDrafts.filter { origin, draft in
+      draft.isDirty && (origin == .tag(id) || draft.selectedTagID == id)
+    }
+    let origin =
+      candidates.keys.first(where: { $0 == .tag(id) })
+      ?? candidates.keys.sorted { String(describing: $0) < String(describing: $1) }.first
+    guard let origin else { return }
+    selectedFilter = origin
+    beginAddingTask()
+  }
+
   func ensureQuickDraft() {
     if quickDrafts[selectedFilter] == nil {
       quickDrafts[selectedFilter] = LocalTaskDraft(tagIDs: selectedTagID.map { [$0] } ?? [])
@@ -150,7 +205,8 @@ final class LocalTaskPresentation: ObservableObject {
 
   // MARK: - Tag drag and reorder
 
-  func beginTagDrag(_ id: UUID) {
+  func beginTagDrag(_ id: UUID, nativeSession: Bool = false) {
+    nativeTagDragActive = nativeSession
     draggingTagID = id
     tagDropTarget = nil
   }
@@ -160,6 +216,11 @@ final class LocalTaskPresentation: ObservableObject {
   }
 
   func endTagDrag() {
+    nativeTagDragActive = false
+    clearTagDragPreview()
+  }
+
+  private func clearTagDragPreview() {
     draggingTagID = nil
     tagDropTarget = nil
   }
@@ -168,7 +229,7 @@ final class LocalTaskPresentation: ObservableObject {
   /// `nil` means the drop changed nothing and must not be persisted.
   func commitTagMove(_ id: UUID, to target: LocalTagDropTarget?, tagIDs: [UUID]) -> Int? {
     guard draggingTagID == id, let target else {
-      endTagDrag()
+      clearTagDragPreview()
       return nil
     }
     return commitTagMove(id, toIndex: target.index, tagIDs: tagIDs)
@@ -178,7 +239,7 @@ final class LocalTaskPresentation: ObservableObject {
   /// has no caret geometry to hand over. Returns the store's `toIndex`, or
   /// `nil` when the requested slot is the tag's current one.
   func commitTagMove(_ id: UUID, toIndex: Int, tagIDs: [UUID]) -> Int? {
-    defer { endTagDrag() }
+    defer { clearTagDragPreview() }
     guard tagIDs.contains(id), toIndex >= 0, toIndex < tagIDs.count,
       toIndex != tagIDs.firstIndex(of: id)
     else { return nil }
@@ -193,6 +254,16 @@ final class LocalTaskPresentation: ObservableObject {
   /// move is visually silent instead of animating twice.
   func reconcileTagOrder(_ tags: [TaskTag]) {
     if pendingTagOrder == tags.map(\.id) { pendingTagOrder = nil }
+  }
+
+  /// Complete the write even when navigation has removed the tag bar and its
+  /// document observer. A confirmed preview must never keep app exit pending.
+  func finishTagMove(saved: Bool, tags: [TaskTag]) {
+    if saved {
+      reconcileTagOrder(tags)
+    } else {
+      abandonTagMove()
+    }
   }
 
   /// A move that never reached storage drops its preview rather than leaving
@@ -250,6 +321,7 @@ final class LocalTaskPresentation: ObservableObject {
   }
   func captureTagSubmission() -> LocalTagIntent? {
     guard let snapshot = tagIntent, !submittingIDs.contains(snapshot.id) else { return nil }
+    if case .delete(let id) = snapshot.action, hasDraftBlockingTagDeletion(id) { return nil }
     submittingIDs.insert(snapshot.id)
     return snapshot
   }
@@ -263,6 +335,11 @@ final class LocalTaskPresentation: ObservableObject {
       return
     }
     tagIntent = nil
+    if case .delete(let id) = snapshot.action {
+      // Ending the old creation identity also rejects late field-editor writes.
+      if quickDrafts[.tag(id)]?.isDirty != true { quickDrafts.removeValue(forKey: .tag(id)) }
+      expandedComposers.remove(.tag(id))
+    }
     if snapshot.action == .create {
       selectedFilter = .tag(snapshot.id)
       beginAddingTask()
@@ -340,6 +417,10 @@ struct LocalTasksView: View {
   @ObservedObject var controller: LocalTaskController
   @ObservedObject var presentation: LocalTaskPresentation
   let onEditingChanged: (Bool) -> Void
+  var onManageTags: () -> Void = {}
+  @State private var tagViewportWidth: CGFloat = 0
+  @State private var tagContentWidth: CGFloat = 0
+  @State private var tagContentMinX: CGFloat = 0
   @State private var dropCoordinator = TagBarDropCoordinator()
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   /// The tag bar's selection plate. With a namespace, the accent capsule is a
@@ -350,7 +431,7 @@ struct LocalTasksView: View {
   /// Rows arrive from the top and leave the same way, so switching lists reads
   /// as content moving rather than as a list being torn down and rebuilt.
   private var rowTransition: AnyTransition {
-    .opacity.combined(with: .move(edge: .top))
+    .opacity
   }
 
   /// `nil` under Reduce Motion: the plate then lands in place instead of
@@ -365,7 +446,11 @@ struct LocalTasksView: View {
         LocalTaskEditor(
           controller: controller, presentation: presentation,
           draft: Binding(
-            get: { presentation.editDraft ?? draft }, set: { presentation.editDraft = $0 }))
+            get: { presentation.editDraft ?? draft },
+            set: { value in
+              guard presentation.editDraft?.creationID == draft.creationID else { return }
+              presentation.editDraft = value
+            }))
       } else {
         taskList
       }
@@ -438,7 +523,7 @@ struct LocalTasksView: View {
           .accessibilityIdentifier("undoLocalTaskDeletionButton")
         }
         .padding(.horizontal, 14).padding(.vertical, 7)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
       }
     }
     .animation(
@@ -461,7 +546,7 @@ struct LocalTasksView: View {
           let filter = presentation.selectedFilter
           let tasks = controller.tasks(matching: filter)
           if tasks.isEmpty {
-            Text(filter == .untagged ? "No tasks yet" : "No tasks in this tag")
+            Text(LocalizedStringKey(filter == .untagged ? "No tasks yet" : "No tasks in this tag"))
               .font(.system(size: 13)).foregroundStyle(.secondary).padding(.vertical, 12)
           }
           ForEach(tasks) { task in
@@ -477,7 +562,8 @@ struct LocalTasksView: View {
               // field that should already be gone.
               .transition(
                 .asymmetric(
-                  insertion: .opacity.combined(with: .move(edge: .bottom)),
+                  insertion: reduceMotion
+                    ? .opacity : .opacity.combined(with: .move(edge: .bottom)),
                   removal: .identity))
           } else {
             addTaskEntry
@@ -493,10 +579,12 @@ struct LocalTasksView: View {
         // render.
         .animation(
           reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation,
-          value: presentation.selectedFilter)
+          value: presentation.selectedFilter
+        )
         .animation(
           reduceMotion ? nil : PulseDesignTokens.composerAnimation,
-          value: presentation.isComposerExpanded)
+          value: presentation.isComposerExpanded
+        )
         // Membership of the list itself. A completion leaves every id in
         // place, so finishing a task never animates the row anywhere — and a
         // background refresh that only touches a timestamp animates nothing
@@ -543,7 +631,7 @@ struct LocalTasksView: View {
     .accessibilityIdentifier("addLocalTaskButton")
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.top, 4)
-    .transition(.opacity.combined(with: .move(edge: .top)))
+    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
   }
 
   private func scrollToComposer(using proxy: ScrollViewProxy) {
@@ -582,113 +670,216 @@ struct LocalTasksView: View {
   private func tagBar(_ tags: [TaskTag]) -> some View {
     let displayed = presentation.displayOrder(tags)
     let tagIDs = displayed.map(\.id)
-    return HStack(spacing: 2) {
+    let overflows = tagContentWidth > tagViewportWidth + 1
+    return HStack(spacing: 4) {
+      PulsePillTab(
+        title: "Todo", isSelected: presentation.selectedFilter == .untagged,
+        action: { presentation.selectedFilter = .untagged },
+        plateNamespace: selectionPlateNamespace
+      )
+      .fixedSize(horizontal: true, vertical: false)
+      .help("Default list · Tasks without a tag")
+      .accessibilityIdentifier("localTaskFilter.todo")
+      .anchorPreference(key: LocalTagBarBoundsKey.self, value: .bounds) { ["todo": $0] }
       ScrollViewReader { proxy in
-        ScrollView(.horizontal, showsIndicators: false) {
-          HStack(spacing: 4) {
-            PulsePillTab(
-              title: "Todo", isSelected: presentation.selectedFilter == .untagged,
-              action: { presentation.selectedFilter = .untagged },
-              plateNamespace: selectionPlateNamespace
-            )
-            .id(LocalTaskFilter.untagged).accessibilityIdentifier("localTaskFilter.todo")
-            .background(tagMidpointReporter { TagBarGeometry(todoMidX: $0) })
-            ForEach(displayed) { tag in
-              tagPill(tag, tagIDs: tagIDs)
+        HStack(spacing: 0) {
+          if overflows {
+            tagScrollButton("chevron.left", label: "Previous tags", enabled: tagContentMinX < -1) {
+              scrollTags(displayed, direction: -1, proxy: proxy)
             }
           }
-          .padding(.leading, 14).padding(.vertical, 3)
-          .coordinateSpace(name: TagBarGeometry.spaceName)
-          .onPreferenceChange(TagBarGeometryKey.self) { presentation.tagBarGeometry = $0 }
-          .onDrop(of: [.text], delegate: dropCoordinator)
-          // Scoped to the tag row: this is what makes the selection plate
-          // travel between pills instead of vanishing from one and appearing in
-          // another. The list below keeps its own curve.
-          .animation(
-            reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation,
-            value: presentation.selectedFilter)
-        }
-        .onAppear { proxy.scrollTo(presentation.selectedFilter, anchor: .center) }
-        .onChange(of: presentation.selectedFilter) { selection in
-          withAnimation(reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation) {
-            proxy.scrollTo(selection, anchor: .center)
+          ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+              ForEach(displayed) { tag in tagPill(tag, tagIDs: tagIDs) }
+            }
+            .padding(.vertical, 4)
+            .coordinateSpace(name: TagBarGeometry.spaceName)
+            .onPreferenceChange(TagBarGeometryKey.self) { geometry in
+              var measured = geometry
+              measured.todoMidX = 0  // Todo is pinned outside this scrollable coordinate space.
+              presentation.tagBarGeometry = measured
+            }
+            .background {
+              NativeTagScrollMetricsReader { metrics in
+                tagContentWidth = metrics.width
+                tagContentMinX = metrics.minX
+                tagViewportWidth = metrics.viewportWidth
+              }
+            }
+            .onDrop(of: [.text], delegate: dropCoordinator)
+            .animation(
+              reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation,
+              value: presentation.selectedFilter
+            )
+            .animation(
+              reduceMotion ? nil : PulseDesignTokens.reorderAnimation,
+              value: displayed.map(\.id))
           }
-        }
-        .onChange(of: tags.map(\.id)) { _ in
-          proxy.scrollTo(presentation.selectedFilter, anchor: .center)
+          .onChange(of: presentation.selectedFilter) { selection in
+            guard selection != .untagged else { return }
+            withAnimation(reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation) {
+              proxy.scrollTo(selection, anchor: .center)
+            }
+          }
+          .onAppear { proxy.scrollTo(presentation.selectedFilter, anchor: .center) }
+          .onChange(of: tags.map(\.id)) { _ in
+            proxy.scrollTo(presentation.selectedFilter, anchor: .center)
+          }
+          if overflows {
+            tagScrollButton(
+              "chevron.right", label: "Next tags",
+              enabled: tagContentWidth + tagContentMinX > tagViewportWidth + 1
+            ) { scrollTags(displayed, direction: 1, proxy: proxy) }
+          }
         }
       }
       Button {
         presentation.beginCreatingTag()
       } label: {
-        Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).frame(
-          width: 28, height: 28)
+        Image(systemName: "plus").font(.system(size: 13, weight: .semibold))
+          .frame(width: 28, height: 28)
       }
       .buttonStyle(PulseIconButtonStyle()).help("New tag")
-      .accessibilityLabel("New tag")
-      .accessibilityHint("Creates a new list next to Todo")
-      .accessibilityIdentifier("addLocalTagButton")
-      .padding(.trailing, 10)
+      .accessibilityLabel("New tag").accessibilityIdentifier("addLocalTagButton")
+      .anchorPreference(key: LocalTagBarBoundsKey.self, value: .bounds) { ["add": $0] }
+      Button(action: onManageTags) {
+        Image(systemName: "list.bullet").font(.system(size: 13, weight: .medium))
+          .frame(width: 28, height: 28)
+      }
+      .buttonStyle(PulseIconButtonStyle()).help("All tags")
+      .accessibilityLabel("All tags").accessibilityIdentifier("manageLocalTagsButton")
+      .anchorPreference(key: LocalTagBarBoundsKey.self, value: .bounds) { ["manage": $0] }
     }
+    .padding(.horizontal, PulseDesignTokens.contentInset)
+    .padding(.vertical, 6)
     .onAppear { configureDropCoordinator() }
   }
 
-  /// One custom tag pill: selectable, draggable and a drop target, with the
-  /// insertion caret drawn on the edge the tag would leave through.
+  private func tagScrollButton(
+    _ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
+        .frame(width: 18, height: 28)
+    }
+    .buttonStyle(PulseIconButtonStyle()).disabled(!enabled)
+    .accessibilityLabel(PulseLocalization.string(label)).help(PulseLocalization.string(label))
+    .accessibilityIdentifier(
+      symbol == "chevron.left" ? "previousLocalTagsButton" : "nextLocalTagsButton"
+    )
+    .anchorPreference(key: LocalTagBarBoundsKey.self, value: .bounds) {
+      [symbol == "chevron.left" ? "previous" : "next": $0]
+    }
+  }
+
+  private func scrollTags(_ tags: [TaskTag], direction: Int, proxy: ScrollViewProxy) {
+    let visibleCenter = -tagContentMinX + tagViewportWidth / 2
+    let target =
+      direction > 0
+      ? tags.first(where: { (presentation.tagBarGeometry.tagMidXByID[$0.id] ?? 0) > visibleCenter })
+      : tags.last(where: { (presentation.tagBarGeometry.tagMidXByID[$0.id] ?? 0) < visibleCenter })
+    guard let target else { return }
+    withAnimation(reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation) {
+      proxy.scrollTo(LocalTaskFilter.tag(target.id), anchor: direction > 0 ? .leading : .trailing)
+    }
+  }
+
   private func tagPill(_ tag: TaskTag, tagIDs: [UUID]) -> some View {
     let isDragging = presentation.draggingTagID == tag.id
+    let selected = presentation.selectedFilter == .tag(tag.id)
+    let index = tagIDs.firstIndex(of: tag.id) ?? 0
     let dropEdge =
       presentation.tagDropTarget?.pillID == tag.id ? presentation.tagDropTarget?.edge : nil
-    return PulsePillTab(
-      title: tag.name, isSelected: presentation.selectedFilter == .tag(tag.id),
-      action: { presentation.selectedFilter = .tag(tag.id) },
-      plateNamespace: selectionPlateNamespace
-    )
+    return HStack(spacing: 0) {
+      PulsePillTab(
+        title: tag.name, isSelected: selected,
+        action: { presentation.selectedFilter = .tag(tag.id) },
+        plateNamespace: selectionPlateNamespace,
+        tint: PulseDesignTokens.tagColor(for: tag.id)
+      )
+      .background(tagMidpointReporter { TagBarGeometry(tagMidXByID: [tag.id: $0]) })
+      .overlay {
+        NativeTagDragSource(
+          tagID: tag.id, title: tag.name, isEnabled: !controller.isSaving,
+          canMoveLeft: index > 0, canMoveRight: index < tagIDs.count - 1,
+          onSelect: { presentation.selectedFilter = .tag(tag.id) },
+          onBegin: {
+            presentation.beginTagDrag(tag.id, nativeSession: true)
+            onEditingChanged(presentation.isInteractionActive)
+          },
+          onMove: { deltaFromCenter in
+            guard let midpoint = presentation.tagBarGeometry.tagMidXByID[tag.id] else { return }
+            dropCoordinator.onLocation(CGPoint(x: midpoint + deltaFromCenter, y: 0))
+          },
+          onEnd: {
+            presentation.endTagDrag()
+            onEditingChanged(presentation.isInteractionActive)
+          },
+          onRename: {
+            presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
+          },
+          onDelete: {
+            presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
+          },
+          onMoveLeft: { moveTag(tag, in: tagIDs, to: index - 1) },
+          onMoveRight: { moveTag(tag, in: tagIDs, to: index + 1) }
+        )
+        .accessibilityHidden(true)
+      }
+      Menu {
+        tagMenu(tag, tagIDs: tagIDs)
+      } label: {
+        Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold))
+          .frame(width: 22, height: 28)
+      }
+      .menuStyle(.borderlessButton).menuIndicator(.hidden)
+      .fixedSize().opacity(selected ? 1 : 0)
+      .disabled(!selected || controller.isSaving)
+      .accessibilityHidden(!selected)
+      .accessibilityLabel("Actions for \(tag.name)")
+      .accessibilityIdentifier("localTagActions.\(tag.id.uuidString)")
+    }
     .id(LocalTaskFilter.tag(tag.id))
     .accessibilityIdentifier("localTaskFilter.\(tag.id.uuidString)")
-    .contextMenu {
-      let index = tagIDs.firstIndex(of: tag.id)
-      Button("Move Left") { moveTag(tag, in: tagIDs, to: (index ?? 0) - 1) }
-        .disabled(index == nil || index == 0)
-        .keyboardShortcut(.leftArrow, modifiers: [.option, .command])
-      Button("Move Right") { moveTag(tag, in: tagIDs, to: (index ?? 0) + 1) }
-        .disabled(index == nil || index == tagIDs.count - 1)
-        .keyboardShortcut(.rightArrow, modifiers: [.option, .command])
-      Divider()
-      Button("Rename…") {
-        presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
-      }
-      Button("Remove tag…", role: .destructive) {
-        presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
-      }
-    }
-    .onDrag {
-      presentation.beginTagDrag(tag.id)
-      return NSItemProvider(object: tag.id.uuidString as NSString)
-    }
+    .contextMenu { tagMenu(tag, tagIDs: tagIDs) }
     .overlay(alignment: .leading) {
-      if dropEdge == .leading {
-        tagDropCaret.offset(x: -1)
-      }
+      if dropEdge == .leading { tagDropCaret.offset(x: -1) }
     }
     .overlay(alignment: .trailing) {
-      if dropEdge == .trailing {
-        tagDropCaret.offset(x: 1)
-      }
+      if dropEdge == .trailing { tagDropCaret.offset(x: 1) }
     }
-    .background(tagMidpointReporter { TagBarGeometry(tagMidXByID: [tag.id: $0]) })
-    .opacity(isDragging ? 0.45 : 1)
-    .scaleEffect(isDragging ? 0.96 : 1)
+    .opacity(isDragging ? 0.5 : 1)
+    .scaleEffect(reduceMotion ? 1 : (isDragging ? 0.98 : 1))
     .accessibilityHint("Drag to reorder")
-    .accessibilityAction(named: Text("Move left")) { moveTag(tag, in: tagIDs, to: (tagIDs.firstIndex(of: tag.id) ?? 0) - 1) }
-    .accessibilityAction(named: Text("Move right")) {
-      moveTag(tag, in: tagIDs, to: (tagIDs.firstIndex(of: tag.id) ?? 0) + 1)
+    .accessibilityAction(named: Text("Rename")) {
+      presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
     }
+    .accessibilityAction(named: Text("Remove tag")) {
+      presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
+    }
+    .accessibilityAction(named: Text("Move left")) { moveTag(tag, in: tagIDs, to: index - 1) }
+    .accessibilityAction(named: Text("Move right")) { moveTag(tag, in: tagIDs, to: index + 1) }
+  }
+
+  @ViewBuilder private func tagMenu(_ tag: TaskTag, tagIDs: [UUID]) -> some View {
+    let index = tagIDs.firstIndex(of: tag.id) ?? 0
+    Button("Rename…") {
+      presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
+    }
+    Button("Remove tag…", role: .destructive) {
+      presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
+    }
+    Divider()
+    Button("Move Left") { moveTag(tag, in: tagIDs, to: index - 1) }
+      .disabled(index == 0).keyboardShortcut(.leftArrow, modifiers: [.option, .command])
+    Button("Move Right") { moveTag(tag, in: tagIDs, to: index + 1) }
+      .disabled(index >= tagIDs.count - 1).keyboardShortcut(
+        .rightArrow, modifiers: [.option, .command])
   }
 
   private var tagDropCaret: some View {
     Capsule()
-      .fill(Color.accentColor)
+      .fill(PulseDesignTokens.accent)
       .frame(width: 2, height: 18)
       .allowsHitTesting(false)
   }
@@ -710,6 +901,11 @@ struct LocalTasksView: View {
   private func configureDropCoordinator() {
     let presentation = presentation
     let controller = controller
+    dropCoordinator.isInternalDrag = {
+      guard let id = presentation.draggingTagID else { return false }
+      return presentation.nativeTagDragActive
+        && controller.document?.tags.contains { $0.id == id } == true
+    }
     dropCoordinator.onLocation = { location in
       presentation.updateTagDrop(
         tagDropTarget(
@@ -729,7 +925,7 @@ struct LocalTasksView: View {
       else { return }
       Task {
         let saved = await controller.moveTag(id: draggedID, toIndex: toIndex)
-        if !saved { presentation.abandonTagMove() }
+        presentation.finishTagMove(saved: saved, tags: controller.document?.tags ?? [])
       }
     }
     dropCoordinator.onExit = { presentation.updateTagDrop(nil) }
@@ -743,7 +939,7 @@ struct LocalTasksView: View {
     else { return }
     Task {
       let saved = await controller.moveTag(id: tag.id, toIndex: toIndex)
-      if !saved { presentation.abandonTagMove() }
+      presentation.finishTagMove(saved: saved, tags: controller.document?.tags ?? [])
     }
   }
 
@@ -766,71 +962,101 @@ struct LocalTasksView: View {
 }
 
 @MainActor
-private struct LocalTagEntry: View {
+struct LocalTagEntry: View {
   @ObservedObject var controller: LocalTaskController
   @ObservedObject var presentation: LocalTaskPresentation
+  var onReturnToDraft: () -> Void = {}
   @State private var focusRequest = UUID()
-  private var isSubmitting: Bool { presentation.submittingIDs.contains(intent.id) }
-
   private var intent: LocalTagIntent { presentation.tagIntent ?? LocalTagIntent() }
-  private var existing: TaskTag? {
-    controller.document?.tags.first {
-      LocalTaskStore.canonicalName($0.name) == LocalTaskStore.canonicalName(intent.name)
-    }
-  }
+  private var tags: [TaskTag] { controller.document?.tags ?? [] }
+  private var isSubmitting: Bool { presentation.submittingIDs.contains(intent.id) }
+  private var existing: TaskTag? { intent.conflictingTag(in: tags) }
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      if case .delete = intent.action {
-        Text("Remove “\(intent.name)”? Its tasks will move to Todo.").font(.caption)
+    VStack(alignment: .leading, spacing: 8) {
+      if case .delete(let tagID) = intent.action {
+        let taskCount = controller.document?.tasks.filter { $0.tagIDs.contains(tagID) }.count ?? 0
+        Text("Remove “\(intent.name)”? \(taskCount) tasks will move to Todo.")
+          .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+        if presentation.hasDraftBlockingTagDeletion(tagID) {
+          Text("This tag has an unfinished draft. Save or discard it before removing the tag.")
+            .font(.system(size: 12)).foregroundStyle(.secondary)
+          Button("Return to draft") {
+            presentation.returnToDraft(affectedByTagID: tagID)
+            onReturnToDraft()
+          }
+          .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
+          .accessibilityIdentifier("returnToBlockingTagDraftButton")
+        }
         HStack {
           Button("Keep tag") { presentation.tagIntent = nil }
           Spacer()
           Button("Remove tag", role: .destructive, action: submit)
+            .disabled(presentation.hasDraftBlockingTagDeletion(tagID) || controller.isSaving)
             .accessibilityIdentifier("confirmDeleteLocalTagButton")
         }
       } else {
-        HStack(spacing: 6) {
+        let intentID = intent.id
+        HStack(spacing: 8) {
           TaskEntryField(
-            text: Binding(get: { intent.name }, set: { presentation.tagIntent?.name = $0 }),
+            text: Binding(
+              get: {
+                presentation.tagIntent?.id == intentID ? presentation.tagIntent?.name ?? "" : ""
+              },
+              set: {
+                if presentation.tagIntent?.id == intentID { presentation.tagIntent?.name = $0 }
+              }),
             placeholder: "Tag name", identifier: "newLocalTagNameField", focusRequest: focusRequest,
-            isEnabled: !isSubmitting, onSubmit: submit, onFocusChanged: { _ in }
+            isEnabled: !isSubmitting, onSubmit: submit, onFocusChanged: { _ in },
+            onCancel: { presentation.tagIntent = nil }
           )
-          .frame(height: 24)
-          Button(intent.action == .create ? "Create" : "Save", action: submit)
-            .disabled(intent.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          .frame(height: 28)
+          Button(LocalizedStringKey(intent.action == .create ? "Create" : "Save"), action: submit)
+            .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
+            .disabled(!intent.hasValidName(in: tags) || controller.isSaving)
             .accessibilityIdentifier("saveLocalTagButton")
-          Button {
-            presentation.tagIntent = nil
-          } label: {
-            Image(systemName: "xmark")
-          }
-          .accessibilityLabel("Cancel tag").accessibilityIdentifier("cancelLocalTagButton")
+          Button("Cancel") { presentation.tagIntent = nil }
+            .accessibilityIdentifier("cancelLocalTagButton")
         }
-        if intent.action == .create, let existing {
+        if let existing {
           HStack {
-            Text("This tag already exists.").font(.caption).foregroundStyle(.secondary)
-            Button("Use \(existing.name)") { useTag(existing.id) }
+            Text("This tag already exists.").foregroundStyle(.secondary)
+            Button("Go to \(existing.name)") { useTag(existing.id) }
           }
         } else if LocalTaskStore.canonicalName(intent.name) == "todo" {
-          Button("Use Todo") { useTag(nil) }
+          HStack {
+            Text("Todo is the default list.").foregroundStyle(.secondary)
+            Button("Go to Todo") { useTag(nil) }
+          }
         }
       }
       if isSubmitting { ProgressView().controlSize(.mini) }
     }
     .buttonStyle(PulseActionButtonStyle()).font(.system(size: 12))
-    .padding(.horizontal, 14).padding(.vertical, 8).disabled(isSubmitting)
+    .padding(12)
+    .background(PulseDesignTokens.secondarySurface, in: RoundedRectangle(cornerRadius: 12))
+    .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
+    .disabled(isSubmitting)
     .accessibilityIdentifier("localTagEntry")
     .onAppear { focusRequest = UUID() }
+    .onChange(of: presentation.tagIntent?.id) { _ in focusRequest = UUID() }
   }
+
   private func useTag(_ id: UUID?) {
     presentation.selectedFilter = id.map { .tag($0) } ?? .untagged
     presentation.tagIntent = nil
-    presentation.beginAddingTask()
     controller.dismissError()
+    onReturnToDraft()
   }
+
   private func submit() {
-    guard !isSubmitting else { return }
-    if intent.action == .create, existing != nil { return }
+    guard !isSubmitting, !controller.isSaving else { return }
+    if case .delete = intent.action {
+      // Flush the native field before taking the deletion preflight snapshot.
+      NSApp.keyWindow?.makeFirstResponder(nil)
+    } else if !intent.hasValidName(in: tags) {
+      return
+    }
     guard let snapshot = presentation.captureTagSubmission() else { return }
     Task {
       let saved: Bool
@@ -860,6 +1086,7 @@ private struct LocalTaskQuickComposer: View {
   }
   private var isBusy: Bool {
     presentation.submittingIDs.contains(presentation.quickDraft.creationID)
+      || presentation.hasPendingTagDeletion
   }
   private var listName: String {
     presentation.quickDraft.newTagNames.first
@@ -870,14 +1097,15 @@ private struct LocalTaskQuickComposer: View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 6) {
         TaskEntryField(
-          text: draft.text, placeholder: "Add to \(listName)…", identifier: "localTaskTextField",
+          text: draft.text, placeholder: PulseLocalization.format("Add to %@…", listName),
+          identifier: "localTaskTextField",
           focusRequest: presentation.focusRequest, isEnabled: !isBusy, onSubmit: submit,
           onFocusChanged: { presentation.composerFocused = $0 },
           onCancel: { presentation.collapseComposer() }
         )
         .frame(height: 26)
         if isBusy { ProgressView().controlSize(.mini) }
-        Button(action: submit) { Image(systemName: "arrow.up").frame(width: 22, height: 24) }
+        Button("Add", action: submit)
           .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
           .disabled(
             isBusy
@@ -887,19 +1115,29 @@ private struct LocalTaskQuickComposer: View {
           .help("Add task (Return)").accessibilityLabel("Add task").accessibilityIdentifier(
             "saveLocalTaskButton")
         Button {
-          presentation.quickDraft.optionsExpanded.toggle()
-        } label: {
-          Image(systemName: "slider.horizontal.3").frame(width: 22, height: 24)
-        }
-        .buttonStyle(PulseIconButtonStyle()).disabled(isBusy).help("Task options")
-        .accessibilityLabel("Task options").accessibilityIdentifier("localTaskOptionsButton")
-        Button {
           presentation.collapseComposer()
         } label: {
           Image(systemName: "xmark").font(.system(size: 11)).frame(width: 24, height: 26)
         }
         .buttonStyle(PulseIconButtonStyle()).help("Collapse input (Esc)")
         .accessibilityLabel("Collapse input").accessibilityIdentifier("collapseLocalTaskButton")
+      }
+      HStack {
+        Button {
+          presentation.quickDraft.optionsExpanded.toggle()
+        } label: {
+          Label("Options", systemImage: "slider.horizontal.3")
+        }
+        .buttonStyle(PulseActionButtonStyle()).disabled(isBusy)
+        .accessibilityLabel("Task options").accessibilityIdentifier("localTaskOptionsButton")
+        Spacer()
+        Button("Discard draft") {
+          let id = presentation.quickDraft.creationID
+          presentation.finishDraft(id: id)
+          presentation.collapseComposer()
+        }
+        .buttonStyle(PulseActionButtonStyle()).disabled(isBusy)
+        .accessibilityIdentifier("discardLocalTaskDraftButton")
       }
       if presentation.quickDraft.optionsExpanded {
         LocalTaskOptions(
@@ -1125,12 +1363,13 @@ struct LocalTaskRow: View {
             // unchanged; only the transition differs.
             Image(systemName: "checkmark.circle.fill")
               .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
-              .foregroundStyle(Color.accentColor)
-              .scaleEffect(task.completed ? 1 : 0.4)
+              .foregroundStyle(PulseDesignTokens.accent)
+              .scaleEffect(reduceMotion ? 1 : (task.completed ? 1 : 0.9))
               .opacity(task.completed ? 1 : 0)
           }
           .animation(
-            reduceMotion ? nil : PulseDesignTokens.selectionAnimation, value: task.completed)
+            reduceMotion ? nil : PulseDesignTokens.selectionAnimation, value: task.completed
+          )
           .opacity(isPending ? 0 : 1)
           if isPending {
             ProgressView().controlSize(.mini).transition(.opacity)
@@ -1140,11 +1379,18 @@ struct LocalTaskRow: View {
       }
       .buttonStyle(PulseRowButtonStyle(isHovered: isHovered)).disabled(isPending)
       .animation(
-        reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: isPending)
+        reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: isPending
+      )
       .focused($focusedControl, equals: .complete)
-      .help(task.completed ? "Mark incomplete" : "Mark complete")
-      .accessibilityLabel("\(task.completed ? "Mark incomplete" : "Mark complete"): \(task.text)")
-      .accessibilityValue(isPending ? "Saving" : (task.completed ? "Completed" : "Not completed"))
+      .help(PulseLocalization.string(task.completed ? "Mark incomplete" : "Mark complete"))
+      .accessibilityLabel(
+        PulseLocalization.format(
+          task.completed ? "Mark incomplete: %@" : "Mark complete: %@", task.text)
+      )
+      .accessibilityValue(
+        PulseLocalization.string(
+          isPending ? "Saving" : (task.completed ? "Completed" : "Not completed"))
+      )
       .accessibilityIdentifier("localTaskCheckbox.\(task.id.uuidString)")
       Button(action: onEdit) {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -1166,7 +1412,7 @@ struct LocalTaskRow: View {
       )
       .focused($focusedControl, equals: .edit)
       .help("Edit task").accessibilityLabel("Edit task: \(task.text)")
-      .accessibilityValue(task.repeatsDaily ? "Repeats daily" : "")
+      .accessibilityValue(task.repeatsDaily ? PulseLocalization.string("Repeats daily") : "")
       .accessibilityIdentifier("localTaskText.\(task.id.uuidString)")
       if let onDelete {
         Button(action: onDelete) {
@@ -1176,7 +1422,7 @@ struct LocalTaskRow: View {
         .buttonStyle(PulseIconButtonStyle()).disabled(isPending)
         .focused($focusedControl, equals: .delete)
         .opacity(isHovered || focusedControl != nil ? 1 : 0)
-        .scaleEffect(isHovered || focusedControl != nil ? 1 : 0.8)
+        .scaleEffect(reduceMotion ? 1 : (isHovered || focusedControl != nil ? 1 : 0.98))
         .help("Delete task").accessibilityLabel("Delete task: \(task.text)")
         .accessibilityIdentifier("deleteLocalTaskRowButton.\(task.id.uuidString)")
       }
@@ -1221,14 +1467,14 @@ struct TaskEntryField: NSViewRepresentable {
     field.setContentHuggingPriority(.defaultLow, for: .horizontal)
     field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     field.setAccessibilityIdentifier(identifier)
-    field.setAccessibilityLabel(placeholder)
+    field.setAccessibilityLabel(PulseLocalization.string(placeholder))
     return field
   }
   func updateNSView(_ field: FocusableTaskTextField, context: Context) {
     context.coordinator.parent = self
     if field.stringValue != text { field.stringValue = text }
-    field.placeholderString = placeholder
-    field.setAccessibilityLabel(placeholder)
+    field.placeholderString = PulseLocalization.string(placeholder)
+    field.setAccessibilityLabel(PulseLocalization.string(placeholder))
     field.isEnabled = isEnabled && environmentEnabled
     if context.coordinator.lastFocusRequest != focusRequest {
       context.coordinator.lastFocusRequest = focusRequest
@@ -1355,22 +1601,24 @@ private func tagDropTarget(
 
 /// Bridges SwiftUI's drag session to the tag bar's reorder state.
 ///
-/// `DropDelegate.dropUpdated` is the only place SwiftUI reports a drag's live
-/// position, which is what keeps the insertion caret under the pointer instead
-/// of answering only at the moment of release.
+/// SwiftUI supplies drop acceptance/commit while the native source also reports
+/// live position during edge autoscroll. Only our active native session is
+/// accepted; an external text drag must never be acknowledged as a move.
 @MainActor
 final class TagBarDropCoordinator: DropDelegate {
+  var isInternalDrag: () -> Bool = { false }
   var onLocation: (CGPoint) -> Void = { _ in }
   var onCommit: (CGPoint) -> Void = { _ in }
   var onExit: () -> Void = {}
 
   func validateDrop(info: DropInfo) -> Bool {
-    !info.itemProviders(for: [.text]).isEmpty
+    isInternalDrag() && !info.itemProviders(for: [.text]).isEmpty
   }
 
   func dropEntered(info: DropInfo) { onLocation(info.location) }
 
   func dropUpdated(info: DropInfo) -> DropProposal? {
+    guard isInternalDrag() else { return nil }
     onLocation(info.location)
     return DropProposal(operation: .move)
   }
@@ -1378,7 +1626,20 @@ final class TagBarDropCoordinator: DropDelegate {
   func dropExited(info: DropInfo) { onExit() }
 
   func performDrop(info: DropInfo) -> Bool {
+    guard isInternalDrag() else { return false }
     onCommit(info.location)
     return true
+  }
+}
+
+/// Passive anchors let rendering tests inspect the actual tag controls without
+/// relying on SwiftUI's lazily generated accessibility tree in an XCTest host.
+struct LocalTagBarBoundsKey: PreferenceKey {
+  static let defaultValue: [String: Anchor<CGRect>] = [:]
+
+  static func reduce(
+    value: inout [String: Anchor<CGRect>], nextValue: () -> [String: Anchor<CGRect>]
+  ) {
+    value.merge(nextValue(), uniquingKeysWith: { _, new in new })
   }
 }

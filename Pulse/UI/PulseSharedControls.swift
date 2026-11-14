@@ -8,12 +8,13 @@ struct PulseErrorBanner<Actions: View>: View {
   let message: String
   var accessibilityIdentifier: String? = nil
   @ViewBuilder let actions: Actions
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
       Text(message)
         .font(.system(size: PulseDesignTokens.caption))
-        .foregroundStyle(.red)
+        .foregroundStyle(PulseDesignTokens.destructive)
         .fixedSize(horizontal: false, vertical: true)
       HStack(spacing: 8) {
         actions
@@ -25,9 +26,12 @@ struct PulseErrorBanner<Actions: View>: View {
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color.red.opacity(0.05), in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
+    .background(
+      PulseDesignTokens.destructive.opacity(0.06),
+      in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
+    )
     .modifier(PulseAccessibilityIdentifier(identifier: accessibilityIdentifier))
-    .transition(.move(edge: .top).combined(with: .opacity))
+    .transition(reduceMotion ? .opacity : .offset(y: -6).combined(with: .opacity))
   }
 }
 
@@ -57,7 +61,8 @@ struct PulseIconButtonStyle: ButtonStyle {
         )
         .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
         .pulseFocusAffordance(
-          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
+          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
+        )
         // Own the keyboard focus so hover/press fills can react to it, and
         // suppress AppKit's square ring in favour of the rounded affordance.
         .focusable(true)
@@ -65,7 +70,8 @@ struct PulseIconButtonStyle: ButtonStyle {
         .pulseDisableSystemFocusRing()
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
-        .animation(reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed)
+        .animation(
+          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed)
     }
 
     private func fill(_ pressed: Bool, hovered: Bool) -> Color {
@@ -91,20 +97,24 @@ struct PulsePillTab: View {
   let isSelected: Bool
   let action: () -> Void
   var plateNamespace: Namespace.ID? = nil
+  var tint: Color = PulseDesignTokens.accent
 
   var body: some View {
     Button(action: action) {
       Text(title)
-        // 13pt keeps the tab row aligned with the 18pt brand glyph and leaves
-        // the list room without a second type size in the task surface.
         .font(.system(size: PulseDesignTokens.footnote, weight: isSelected ? .semibold : .regular))
         .foregroundStyle(isSelected ? Color.primary : Color.secondary)
         .lineLimit(1)
-        .padding(.horizontal, 9)
-        .frame(height: 26)
+        .truncationMode(.tail)
+        .frame(maxWidth: 140)
+        .padding(.horizontal, 10)
+        .frame(height: 28)
     }
-    .buttonStyle(PulsePillTabStyle(isSelected: isSelected, plateNamespace: plateNamespace))
-    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+    .buttonStyle(
+      PulsePillTabStyle(isSelected: isSelected, plateNamespace: plateNamespace, tint: tint)
+    )
+    .help(title)
+    .accessibilityValue(PulseLocalization.string(isSelected ? "Selected" : "Not selected"))
   }
 }
 
@@ -113,14 +123,18 @@ struct PulsePillTab: View {
 struct PulsePillTabStyle: ButtonStyle {
   let isSelected: Bool
   var plateNamespace: Namespace.ID? = nil
+  var tint: Color = PulseDesignTokens.accent
 
   func makeBody(configuration: Configuration) -> some View {
-    PillBody(isSelected: isSelected, plateNamespace: plateNamespace, configuration: configuration)
+    PillBody(
+      isSelected: isSelected, plateNamespace: plateNamespace, tint: tint,
+      configuration: configuration)
   }
 
   private struct PillBody: View {
     let isSelected: Bool
     let plateNamespace: Namespace.ID?
+    let tint: Color
     let configuration: ButtonStyleConfiguration
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -130,7 +144,7 @@ struct PulsePillTabStyle: ButtonStyle {
       configuration.label
         .background { plate }
         .contentShape(Capsule())
-        .scaleEffect(configuration.isPressed ? 0.97 : 1)
+        .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
         .pulseFocusAffordance(focused, shape: .capsule)
         // Own the keyboard focus so the affordance can follow the capsule, and
         // suppress AppKit's square ring instead of drawing two of them.
@@ -140,7 +154,8 @@ struct PulsePillTabStyle: ButtonStyle {
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
         .animation(
-          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed)
+          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed
+        )
         .animation(reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: focused)
     }
 
@@ -161,12 +176,12 @@ struct PulsePillTabStyle: ButtonStyle {
     }
 
     @ViewBuilder private var selectionPlate: some View {
-      if let plateNamespace {
+      if let plateNamespace, !reduceMotion {
         Capsule()
-          .fill(PulseDesignTokens.accentSelectionFill)
+          .fill(tint.opacity(0.15))
           .matchedGeometryEffect(id: "selectedTagPlate", in: plateNamespace)
       } else {
-        Capsule().fill(PulseDesignTokens.accentSelectionFill)
+        Capsule().fill(tint.opacity(0.15))
       }
     }
 
@@ -239,25 +254,34 @@ struct PulseProviderStatusStyle: ButtonStyle {
       configuration.label
         .background(
           fill(configuration.isPressed),
-          in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
+          in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge)
         )
+        .overlay {
+          RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge)
+            .strokeBorder(
+              isHovered
+                ? PulseDesignTokens.accent.opacity(0.25)
+                : PulseDesignTokens.border.opacity(0.55), lineWidth: 0.7)
+        }
         .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
         .pulseFocusAffordance(
-          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
+          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge)
+        )
         .focusable(true)
         .focused($focused)
         .pulseDisableSystemFocusRing()
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
         .animation(
-          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed)
+          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed
+        )
         .animation(reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: focused)
     }
 
     private func fill(_ pressed: Bool) -> Color {
       guard isEnabled else { return .clear }
       if pressed { return PulseDesignTokens.pressedFill }
-      return isHovered ? PulseDesignTokens.hoverFill : .clear
+      return isHovered ? PulseDesignTokens.secondarySurface : PulseDesignTokens.surface
     }
   }
 }
@@ -289,14 +313,16 @@ struct PulseFooterActionStyle: ButtonStyle {
         )
         .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
         .pulseFocusAffordance(
-          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerMedium))
+          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerMedium)
+        )
         .focusable(true)
         .focused($focused)
         .pulseDisableSystemFocusRing()
         .onHover { isHovered = $0 }
         .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
         .animation(
-          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed)
+          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed
+        )
         .animation(reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: focused)
     }
 
@@ -327,32 +353,34 @@ struct PulseUpdateBanner: View {
   let version: String
   let onRestart: () -> Void
   let onDismiss: () -> Void
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    HStack(spacing: 8) {
-      Image(systemName: "arrow.triangle.2.circlepath")
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(.tint)
-      Text("Pulse \(version) is ready")
-        .font(.system(size: PulseDesignTokens.caption, weight: .medium))
-        .lineLimit(1)
-      Spacer(minLength: 4)
-      Button("Restart", action: onRestart)
-        .accessibilityIdentifier("restartToUpdateButton")
-      Button("Later", action: onDismiss)
-        .accessibilityIdentifier("dismissUpdateBannerButton")
+    VStack(alignment: .leading, spacing: 8) {
+      Label("Pulse \(version) is ready", systemImage: "arrow.triangle.2.circlepath")
+        .font(.system(size: PulseDesignTokens.caption, weight: .semibold))
+        .foregroundStyle(PulseDesignTokens.accent)
+        .fixedSize(horizontal: false, vertical: true)
+      HStack(spacing: 8) {
+        Button("Restart and update", action: onRestart)
+          .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
+          .accessibilityIdentifier("restartToUpdateButton")
+        Button("Later", action: onDismiss)
+          .buttonStyle(PulseActionButtonStyle())
+          .accessibilityIdentifier("dismissUpdateBannerButton")
+        Spacer(minLength: 0)
+      }
     }
     .font(.system(size: PulseDesignTokens.caption))
-    .buttonStyle(.borderless)
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
     .background(
-      Color.accentColor.opacity(0.08),
-      in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
+      PulseDesignTokens.accent.opacity(0.07),
+      in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge)
     )
-    .padding(.horizontal, 10)
+    .padding(.horizontal, PulseDesignTokens.contentInset)
     .padding(.vertical, 6)
     .accessibilityIdentifier("updateReadyBanner")
-    .transition(.move(edge: .top).combined(with: .opacity))
+    .transition(reduceMotion ? .opacity : .offset(y: -6).combined(with: .opacity))
   }
 }

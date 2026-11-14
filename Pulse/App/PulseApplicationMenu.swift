@@ -2,10 +2,25 @@ import AppKit
 
 @MainActor
 enum PulseApplicationMenu {
-  static func makeMainMenu() -> NSMenu {
+  static func makeMainMenu(target: AnyObject? = nil) -> NSMenu {
     let mainMenu = NSMenu()
+    let appMenu = NSMenu(title: "Pulse")
+    let settings = NSMenuItem(
+      title: PulseLocalization.string("Settings…"), action: NSSelectorFromString("openSettings:"),
+      keyEquivalent: ",")
+    settings.target = target
+    appMenu.addItem(settings)
+    appMenu.addItem(.separator())
+    let quit = NSMenuItem(
+      title: PulseLocalization.string("Quit Pulse"), action: NSSelectorFromString("requestQuit:"),
+      keyEquivalent: "q")
+    quit.target = target
+    appMenu.addItem(quit)
+    let appItem = NSMenuItem()
+    appItem.submenu = appMenu
+    mainMenu.addItem(appItem)
     let editMenuItem = NSMenuItem()
-    let editMenu = NSMenu(title: "Edit")
+    let editMenu = NSMenu(title: PulseLocalization.string("Edit"))
 
     // Accessory apps do not get standard SwiftUI scene commands. A nil target
     // keeps editing shortcuts on AppKit's responder chain, including field
@@ -20,13 +35,22 @@ enum PulseApplicationMenu {
     ]
     for (title, action, key, modifiers) in commands {
       if title == "Cut" { editMenu.addItem(.separator()) }
-      let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+      let item = NSMenuItem(
+        title: PulseLocalization.string(title), action: action, keyEquivalent: key)
       item.keyEquivalentModifierMask = modifiers
       editMenu.addItem(item)
     }
 
     editMenuItem.submenu = editMenu
     mainMenu.addItem(editMenuItem)
+    let windowMenu = NSMenu(title: PulseLocalization.string("Window"))
+    windowMenu.addItem(
+      NSMenuItem(
+        title: PulseLocalization.string("Close Window"),
+        action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+    let windowItem = NSMenuItem()
+    windowItem.submenu = windowMenu
+    mainMenu.addItem(windowItem)
     return mainMenu
   }
 }

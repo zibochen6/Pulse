@@ -7,13 +7,15 @@ enum UpdateFeedError: LocalizedError, Equatable {
 
   var errorDescription: String? {
     switch self {
-    case .unsupportedResponse: "Pulse received an unexpected answer while checking for updates."
+    case .unsupportedResponse:
+      PulseLocalization.string("Pulse received an unexpected answer while checking for updates.")
     case .httpStatus(let code):
       code == 403 || code == 429
-        ? "GitHub is rate-limiting update checks. Pulse will try again later."
-        : "GitHub answered the update check with HTTP \(code)."
+        ? PulseLocalization.string(
+          "GitHub is rate-limiting update checks. Pulse will try again later.")
+        : PulseLocalization.format("GitHub answered the update check with HTTP %lld.", code)
     case .disallowedHost(let host):
-      "The update check was redirected to an untrusted host “\(host)”."
+      PulseLocalization.format("The update check was redirected to an untrusted host “%@”.", host)
     }
   }
 }
@@ -26,10 +28,13 @@ enum UpdateDownloadError: LocalizedError, Equatable {
 
   var errorDescription: String? {
     switch self {
-    case .httpStatus(let code): "The update download failed with HTTP \(code)."
-    case .disallowedHost(let host): "The download was redirected to an untrusted host “\(host)”."
-    case .tooLarge(let bytes): "The update download is unexpectedly large (\(bytes) bytes)."
-    case .emptyDownload: "The update download was empty."
+    case .httpStatus(let code):
+      PulseLocalization.format("The update download failed with HTTP %lld.", code)
+    case .disallowedHost(let host):
+      PulseLocalization.format("The download was redirected to an untrusted host “%@”.", host)
+    case .tooLarge(let bytes):
+      PulseLocalization.format("The update download is unexpectedly large (%lld bytes).", bytes)
+    case .emptyDownload: PulseLocalization.string("The update download was empty.")
     }
   }
 }

@@ -191,7 +191,8 @@ final class LocalTaskController: ObservableObject {
     let operation = nextOperation()
     guard document != nil else {
       updateError(
-        "Reload your tasks before making changes. The saved file has not been changed.",
+        PulseLocalization.string(
+          "Reload your tasks before making changes. The saved file has not been changed."),
         operation: operation)
       return false
     }
@@ -265,7 +266,8 @@ final class LocalTaskController: ObservableObject {
   private func message(for error: Error) -> String {
     (error as? LocalTaskDeletionError)?.cause.localizedDescription
       ?? (error as? LocalTaskStoreError)?.localizedDescription
-      ?? "Pulse could not save or read your tasks. Check access and try again."
+      ?? PulseLocalization.string(
+        "Pulse could not save or read your tasks. Check access and try again.")
   }
 
   private func nextOperation() -> Int {

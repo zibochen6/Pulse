@@ -28,7 +28,8 @@ final class UpdateController: ObservableObject {
     case failed(String)
   }
 
-  static let developmentBuildMessage = "Updates are disabled for development builds."
+  static let developmentBuildMessage = PulseLocalization.string(
+    "Updates are disabled for development builds.")
   static let automaticChecksInterval: TimeInterval = 6 * 60 * 60
   static let launchCheckDelay: TimeInterval = 10
 
@@ -145,28 +146,30 @@ final class UpdateController: ObservableObject {
   var statusText: String {
     switch phase {
     case .idle:
-      "Updates are checked automatically."
+      PulseLocalization.string("Updates are checked automatically.")
     case .disabled(let reason):
       reason
     case .checking:
-      "Checking for updates…"
+      PulseLocalization.string("Checking for updates…")
     case .upToDate(let date):
       if let date {
-        "Pulse \(currentVersionText) is up to date. Last checked "
-          + date.formatted(date: .abbreviated, time: .shortened) + "."
+        PulseLocalization.format(
+          "Pulse %@ is up to date. Last checked %@.", currentVersionText,
+          date.formatted(date: .abbreviated, time: .shortened))
       } else {
-        "Pulse \(currentVersionText) is up to date."
+        PulseLocalization.format("Pulse %@ is up to date.", currentVersionText)
       }
     case .available(let release):
-      "Pulse \(release.version) is available."
+      PulseLocalization.format("Pulse %@ is available.", release.version.description)
     case .downloading(let release):
-      "Downloading Pulse \(release.version)…"
+      PulseLocalization.format("Downloading Pulse %@…", release.version.description)
     case .verifying(let release):
-      "Verifying Pulse \(release.version)…"
+      PulseLocalization.format("Verifying Pulse %@…", release.version.description)
     case .staged(let staged):
-      "Pulse \(staged.release.version) is ready. Restart to update."
+      PulseLocalization.format(
+        "Pulse %@ is ready. Restart to update.", staged.release.version.description)
     case .installing:
-      "Installing the update and restarting…"
+      PulseLocalization.string("Installing the update and restarting…")
     case .failed(let message):
       message
     }
@@ -329,7 +332,8 @@ final class UpdateController: ObservableObject {
     UpdateInstallPlan(
       stagedAppPath: staged.appBundleURL.path,
       destinationAppPath: destinationAppURL.path,
-      backupAppPath: backupDirectory
+      backupAppPath:
+        backupDirectory
         .appendingPathComponent(
           "Pulse-\(currentVersion.description)-\(currentVersion.build.map(String.init) ?? "0").app"
         ).path,

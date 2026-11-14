@@ -6,7 +6,7 @@ final class VIPConfiguration: APIKeyConfiguration {
 
   init(secretStore: any SecretStoring = KeychainSecretStore()) {
     super.init(
-      providerName: "88VIP", account: Self.keychainAccount, article: "an",
+      providerName: "88VIP", account: Self.keychainAccount,
       secretStore: secretStore)
   }
 }

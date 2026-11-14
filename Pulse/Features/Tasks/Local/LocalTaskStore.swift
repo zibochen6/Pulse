@@ -19,27 +19,40 @@ enum LocalTaskStoreError: LocalizedError, Equatable {
 
   var errorDescription: String? {
     switch self {
-    case .unreadable: "Pulse could not read your tasks. Check access and try again."
+    case .unreadable:
+      PulseLocalization.string("Pulse could not read your tasks. Check access and try again.")
     case .corruptDocument:
-      "The saved tasks could not be read. The file has been kept unchanged. Restore a valid copy and retry."
+      PulseLocalization.string(
+        "The saved tasks could not be read. The file has been kept unchanged. Restore a valid copy and retry."
+      )
     case .unsupportedVersion:
-      "These tasks were saved by a newer format. Update Pulse to read them; the file is unchanged."
-    case .multipleLists: "Choose one list for this task."
-    case .reservedTag: "Todo is the default list. Choose Todo instead."
+      PulseLocalization.string(
+        "These tasks were saved by a newer format. Update Pulse to read them; the file is unchanged."
+      )
+    case .multipleLists: PulseLocalization.string("Choose one list for this task.")
+    case .reservedTag: PulseLocalization.string("Todo is the default list. Choose Todo instead.")
     case .backupFailed:
-      "Pulse could not back up the original tasks. The original file has not been changed. Check access and retry."
-    case .emptyTask: "Enter a task before saving."
-    case .emptyTag: "Enter a tag name."
-    case .duplicateTag: "A tag with that name already exists."
-    case .taskMissing: "This task no longer exists. Refresh the list and try again."
-    case .taskConflict: "This task changed since it was created. Refresh before saving again."
+      PulseLocalization.string(
+        "Pulse could not back up the original tasks. The original file has not been changed. Check access and retry."
+      )
+    case .emptyTask: PulseLocalization.string("Enter a task before saving.")
+    case .emptyTag: PulseLocalization.string("Enter a tag name.")
+    case .duplicateTag: PulseLocalization.string("A tag with that name already exists.")
+    case .taskMissing:
+      PulseLocalization.string("This task no longer exists. Refresh the list and try again.")
+    case .taskConflict:
+      PulseLocalization.string(
+        "This task changed since it was created. Refresh before saving again.")
     case .taskNotRepeating:
-      "This task no longer repeats daily. Refresh the list and try again."
-    case .tagMissing: "A selected tag no longer exists. Refresh and choose the tags again."
+      PulseLocalization.string("This task no longer repeats daily. Refresh the list and try again.")
+    case .tagMissing:
+      PulseLocalization.string(
+        "A selected tag no longer exists. Refresh and choose the tags again.")
     case .saveFailed:
-      "Pulse could not confirm the save. Check access and try again."
+      PulseLocalization.string("Pulse could not confirm the save. Check access and try again.")
     case .verificationFailed:
-      "Pulse could not verify the saved tasks. Refresh to check the actual file."
+      PulseLocalization.string(
+        "Pulse could not verify the saved tasks. Refresh to check the actual file.")
     }
   }
 }

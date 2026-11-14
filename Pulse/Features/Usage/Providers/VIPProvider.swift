@@ -19,26 +19,28 @@ enum VIPUsageError: LocalizedError, Equatable, UsageFailureDescribing {
     }
   }
 
-  var userMessage: String { errorDescription ?? "Could not refresh 88VIP balance." }
+  var userMessage: String {
+    errorDescription ?? PulseLocalization.string("Could not refresh 88VIP balance.")
+  }
 
   var errorDescription: String? {
     switch self {
     case .missingAPIKey:
-      "Add an 88VIP API key in Settings to view its balance."
+      PulseLocalization.string("Add an 88VIP API key in Settings to view its balance.")
     case .keychainUnavailable:
-      "Pulse could not read the 88VIP API key from Keychain."
+      PulseLocalization.string("Pulse could not read the 88VIP API key from Keychain.")
     case .invalidCredentials:
-      "The 88VIP API key is invalid or no longer active."
+      PulseLocalization.string("The 88VIP API key is invalid or no longer active.")
     case .rateLimited:
-      "88VIP is rate-limiting balance requests. Try again later."
+      PulseLocalization.string("88VIP is rate-limiting balance requests. Try again later.")
     case .billingUnavailable:
-      "88VIP does not currently provide a compatible billing endpoint."
+      PulseLocalization.string("88VIP does not currently provide a compatible billing endpoint.")
     case .serviceStatus(let status):
-      "88VIP's billing service returned HTTP \(status)."
+      PulseLocalization.format("88VIP's billing service returned HTTP %lld.", status)
     case .networkUnavailable:
-      "Could not reach 88VIP. Check your network and try again."
+      PulseLocalization.string("Could not reach 88VIP. Check your network and try again.")
     case .invalidResponse:
-      "88VIP returned balance data Pulse could not read."
+      PulseLocalization.string("88VIP returned balance data Pulse could not read.")
     }
   }
 }

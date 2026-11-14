@@ -9,6 +9,6 @@ struct AIStatusSummary: View {
     ProviderStatusButton(
       title: UsageMenuFormatter.title(for: state), providerName: "Codex",
       identifier: "openUsageButton", onOpenUsage: onOpenUsage
-    ) { CodexProviderIcon(size: 14) }
+    ) { CodexProviderIcon(size: 18) }
   }
 }

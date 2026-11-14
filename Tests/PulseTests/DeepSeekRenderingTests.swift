@@ -57,8 +57,9 @@ final class DeepSeekRenderingTests: XCTestCase {
         XCTAssertEqual(Set(capture.frames.keys), Set(ids))
         for id in ids {
           let frame = try XCTUnwrap(capture.frames[id], id)
-          XCTAssertGreaterThanOrEqual(frame.minX, 13.5, id)
-          XCTAssertLessThanOrEqual(frame.maxX, 346.5, id)
+          XCTAssertGreaterThanOrEqual(frame.minX, PulseDesignTokens.contentInset - 0.5, id)
+          XCTAssertLessThanOrEqual(
+            frame.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset + 0.5, id)
           XCTAssertGreaterThan(frame.height, 20, id)
           for other in ids where other != id {
             let otherFrame = try XCTUnwrap(capture.frames[other])
@@ -74,7 +75,8 @@ final class DeepSeekRenderingTests: XCTestCase {
         XCTAssertGreaterThan(
           codex.minY, settings.maxY, "The quota strip sits below the toolbar")
         XCTAssertEqual(
-          codex.minX, 14, accuracy: 0.5, "Indicators start at the leading inset")
+          codex.minX, PulseDesignTokens.contentInset, accuracy: 0.5,
+          "Indicators start at the leading inset")
         XCTAssertLessThan(codex.minX, 140, "The first indicator stays at the leading edge")
         let vip = try XCTUnwrap(capture.frames["openVIPUsageButton"])
         let deepSeek = try XCTUnwrap(capture.frames["openDeepSeekUsageButton"])
@@ -83,9 +85,9 @@ final class DeepSeekRenderingTests: XCTestCase {
           (deepSeek, DeepSeekUsageFormatter.title(for: deepSeekUsage.state)),
         ] {
           let textWidth = (title as NSString).size(withAttributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
           ]).width
-          XCTAssertGreaterThanOrEqual(frame.width, textWidth + 23, "Every amount digit fits")
+          XCTAssertGreaterThanOrEqual(frame.width, textWidth + 40, "Every amount digit fits")
         }
         if count > 1 {
           XCTAssertGreaterThan(
@@ -93,7 +95,8 @@ final class DeepSeekRenderingTests: XCTestCase {
         }
         if count == 20 {
           XCTAssertLessThanOrEqual(
-            codex.width, 332.5, "Oversized quota stays in a bounded scroll area")
+            codex.width, HomeView.popoverSize.width - 2 * PulseDesignTokens.contentInset + 0.5,
+            "Oversized quota stays in a bounded scroll area")
         }
         let name = "\(appearance.rawValue)-home-\(count)-windows"
         try save(bitmap, to: directory.appendingPathComponent("\(name).png"))
@@ -147,12 +150,12 @@ final class DeepSeekRenderingTests: XCTestCase {
     for (name, controller) in states where name != "loading" { await controller.refresh() }
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
       for (name, controller) in states {
-        for page in [PopoverPage.home, .usage, .settings(.providers)] {
+        for page in [PopoverPage.home, .usage(.deepSeek), .tagManagement] {
           let pages = PopoverPageController()
           switch page {
           case .home: break
-          case .usage: pages.showUsage()
-          case .settings: pages.showSettings(.providers)
+          case .usage(let provider): pages.showUsage(provider)
+          case .tagManagement: pages.showTagManagement()
           }
           let host = NSHostingView(
             rootView: home(
@@ -175,7 +178,7 @@ final class DeepSeekRenderingTests: XCTestCase {
           }
         }
       }
-      // Full controls evidence at the same width; product remains 360 × 380.
+      // Settings evidence uses its real independent-window dimensions.
       let settings = SettingsView(
         config: AppConfig(defaults: defaults, loginItemService: RenderLoginItems()),
         deepSeekConfiguration: DeepSeekConfiguration(secretStore: RenderSecrets()),
@@ -186,7 +189,11 @@ final class DeepSeekRenderingTests: XCTestCase {
         onVIPCredentialsChanged: {}, onQuit: {})
       let host = NSHostingView(
         rootView: settings.background(Color(nsColor: .windowBackgroundColor)))
-      let bitmap = try render(host, appearance: appearance, height: 1100)
+      host.appearance = try XCTUnwrap(NSAppearance(named: appearance))
+      host.frame = NSRect(origin: .zero, size: SettingsWindowController.contentSize)
+      host.layoutSubtreeIfNeeded()
+      let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+      host.cacheDisplay(in: host.bounds, to: bitmap)
       try save(
         bitmap,
         to: directory.appendingPathComponent("\(appearance.rawValue)-settings-all-controls.png"))
@@ -197,11 +204,15 @@ final class DeepSeekRenderingTests: XCTestCase {
     defaults: UserDefaults, localTasks: LocalTaskController, usage: UsageController,
     vipUsage: UsageController, deepSeekUsage: UsageController, pages: PopoverPageController
   ) -> HomeView {
-    HomeView(
+    let deepSeekConfiguration = DeepSeekConfiguration(secretStore: RenderSecrets())
+    let vipConfiguration = VIPConfiguration(secretStore: RenderSecrets())
+    deepSeekConfiguration.refresh()
+    vipConfiguration.refresh()
+    return HomeView(
       config: AppConfig(defaults: defaults, loginItemService: RenderLoginItems()),
       usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
-      deepSeekConfiguration: DeepSeekConfiguration(secretStore: RenderSecrets()),
-      vipConfiguration: VIPConfiguration(secretStore: RenderSecrets()),
+      deepSeekConfiguration: deepSeekConfiguration,
+      vipConfiguration: vipConfiguration,
       localTasks: localTasks,
       updates: makeInactiveUpdateController(defaults: defaults),
       pages: pages, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
@@ -213,7 +224,7 @@ final class DeepSeekRenderingTests: XCTestCase {
     height: CGFloat = HomeView.popoverSize.height
   ) throws -> NSBitmapImageRep {
     host.appearance = try XCTUnwrap(NSAppearance(named: appearance))
-    host.frame = NSRect(x: 0, y: 0, width: 360, height: height)
+    host.frame = NSRect(x: 0, y: 0, width: HomeView.popoverSize.width, height: height)
     host.layoutSubtreeIfNeeded()
     let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
     host.cacheDisplay(in: host.bounds, to: bitmap)
@@ -228,7 +239,7 @@ final class DeepSeekRenderingTests: XCTestCase {
     switch page {
     case .home: "home"
     case .usage: "usage"
-    case .settings: "settings"
+    case .tagManagement: "tags"
     }
   }
 

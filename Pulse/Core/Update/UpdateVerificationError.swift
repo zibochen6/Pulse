@@ -18,27 +18,33 @@ enum UpdateVerificationError: LocalizedError, Equatable {
   var errorDescription: String? {
     switch self {
     case .checksumUnreadable(let detail):
-      "Pulse could not read the update checksum. \(detail)"
+      PulseLocalization.format("Pulse could not read the update checksum. %@", detail)
     case .checksumMalformed:
-      "The update checksum file is not in the expected format."
+      PulseLocalization.string("The update checksum file is not in the expected format.")
     case .checksumMismatch:
-      "The downloaded update does not match its published checksum, so it was discarded."
+      PulseLocalization.string(
+        "The downloaded update does not match its published checksum, so it was discarded.")
     case .archiveLayout:
-      "The update archive does not contain exactly one Pulse application."
+      PulseLocalization.string("The update archive does not contain exactly one Pulse application.")
     case .unreadableBundle(let detail):
-      "Pulse could not read the downloaded application. \(detail)"
+      PulseLocalization.format("Pulse could not read the downloaded application. %@", detail)
     case .bundleIdentifierMismatch:
-      "The downloaded application is not Pulse. Nothing was changed."
+      PulseLocalization.string("The downloaded application is not Pulse. Nothing was changed.")
     case .versionMismatch:
-      "The downloaded application reports a different version than its release."
+      PulseLocalization.string(
+        "The downloaded application reports a different version than its release.")
     case .signatureInvalid(let detail):
-      "The downloaded application has an invalid code signature. \(detail)"
+      PulseLocalization.format(
+        "The downloaded application has an invalid code signature. %@", detail)
     case .untrustedTeam:
-      "The downloaded application is not signed by the expected Apple team."
+      PulseLocalization.string(
+        "The downloaded application is not signed by the expected Apple team.")
     case .untrustedAuthority:
-      "The downloaded application is not signed with the expected certificate."
+      PulseLocalization.string(
+        "The downloaded application is not signed with the expected certificate.")
     case .unsupportedLocation:
-      "Pulse can only update an application installed in a writable location."
+      PulseLocalization.string(
+        "Pulse can only update an application installed in a writable location.")
     }
   }
 }

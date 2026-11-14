@@ -5,31 +5,22 @@ struct UsageView: View {
   @ObservedObject var vipUsage: UsageController
   @ObservedObject var deepSeekUsage: UsageController
   let onAddProvider: () -> Void
+  var provider: ProviderID? = nil
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      codexContent
-
+    VStack(alignment: .leading, spacing: 20) {
+      if provider == nil || provider == .codex { codexContent }
+      if provider == nil { Divider() }
+      if provider == nil || provider == .vip { vipContent }
+      if provider == nil { Divider() }
+      if provider == nil || provider == .deepSeek { deepSeekContent }
       Divider()
-
-      vipContent
-
-      Divider()
-      deepSeekContent
-
-      Divider()
-      HStack(spacing: 8) {
-        Text("More AI providers are coming soon")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-        Spacer(minLength: 4)
-        Button("Add Provider", action: onAddProvider)
-          .buttonStyle(.borderless)
-          .font(.caption.weight(.medium))
-          .accessibilityIdentifier("addProviderButton")
-      }
+      Button("Manage AI services", action: onAddProvider)
+        .buttonStyle(PulseActionButtonStyle())
+        .accessibilityIdentifier("addProviderButton")
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .font(.system(size: 13))
   }
 
   private var codexContent: some View {
@@ -42,12 +33,21 @@ struct UsageView: View {
         Button {
           usage.requestRefresh()
         } label: {
-          Image(systemName: "arrow.clockwise")
-            .font(.system(size: 12, weight: .semibold))
+          HStack(spacing: 6) {
+            if usage.isRefreshing {
+              ProgressView().controlSize(.mini)
+            } else {
+              Image(systemName: "arrow.clockwise")
+            }
+            Text("Refresh")
+          }.font(.system(size: 12, weight: .medium))
         }
         .buttonStyle(.borderless)
         .disabled(usage.isRefreshing)
-        .help(usage.isRefreshing ? "Refreshing Codex usage" : "Refresh Codex usage")
+        .help(
+          PulseLocalization.string(
+            usage.isRefreshing ? "Refreshing Codex usage" : "Refresh Codex usage")
+        )
         .accessibilityLabel("Refresh Codex usage")
         .accessibilityIdentifier("refreshCodexUsageButton")
       }
@@ -84,12 +84,21 @@ struct UsageView: View {
         Button {
           vipUsage.requestRefresh()
         } label: {
-          Image(systemName: "arrow.clockwise")
-            .font(.system(size: 12, weight: .semibold))
+          HStack(spacing: 6) {
+            if vipUsage.isRefreshing {
+              ProgressView().controlSize(.mini)
+            } else {
+              Image(systemName: "arrow.clockwise")
+            }
+            Text("Refresh")
+          }.font(.system(size: 12, weight: .medium))
         }
         .buttonStyle(.borderless)
         .disabled(vipUsage.isRefreshing)
-        .help(vipUsage.isRefreshing ? "Refreshing 88VIP balance" : "Refresh 88VIP balance")
+        .help(
+          PulseLocalization.string(
+            vipUsage.isRefreshing ? "Refreshing 88VIP balance" : "Refresh 88VIP balance")
+        )
         .accessibilityLabel("Refresh 88VIP balance")
         .accessibilityIdentifier("refreshVIPUsageButton")
       }
@@ -108,7 +117,7 @@ struct UsageView: View {
           .fixedSize(horizontal: false, vertical: true)
       case .success(let snapshot):
         if snapshot.metrics.contains(.unlimited) {
-          detailRow("Balance", value: "Unlimited")
+          detailRow("Balance", value: PulseLocalization.string("Unlimited"))
         } else {
           if let allowance = amount(for: .allowance, in: snapshot) {
             detailRow(
@@ -148,13 +157,20 @@ struct UsageView: View {
         Button {
           deepSeekUsage.requestRefresh()
         } label: {
-          Image(systemName: "arrow.clockwise")
-            .font(.system(size: 12, weight: .semibold))
+          HStack(spacing: 6) {
+            if deepSeekUsage.isRefreshing {
+              ProgressView().controlSize(.mini)
+            } else {
+              Image(systemName: "arrow.clockwise")
+            }
+            Text("Refresh")
+          }.font(.system(size: 12, weight: .medium))
         }
         .buttonStyle(.borderless)
         .disabled(deepSeekUsage.isRefreshing)
         .help(
-          deepSeekUsage.isRefreshing ? "Refreshing DeepSeek balance" : "Refresh DeepSeek balance"
+          PulseLocalization.string(
+            deepSeekUsage.isRefreshing ? "Refreshing DeepSeek balance" : "Refresh DeepSeek balance")
         )
         .accessibilityLabel("Refresh DeepSeek balance")
         .accessibilityIdentifier("refreshDeepSeekUsageButton")
@@ -177,7 +193,7 @@ struct UsageView: View {
       case .success(let snapshot):
         ForEach(snapshot.balances, id: \.currency) { balance in
           detailRow(
-            "Total balance (\(balance.currency))",
+            PulseLocalization.format("Total balance (%@)", balance.currency),
             value: MoneyFormatter.string(balance.amount, currency: balance.currency))
         }
         updated(at: snapshot.fetchedAt)
@@ -199,8 +215,10 @@ struct UsageView: View {
           .layoutPriority(1)
       }
       Text(
-        window.resetsAt.map { "Resets \($0.formatted(date: .abbreviated, time: .shortened))" }
-          ?? "Reset time unavailable"
+        window.resetsAt.map {
+          PulseLocalization.format("Resets %@", $0.formatted(date: .abbreviated, time: .shortened))
+        }
+          ?? PulseLocalization.string("Reset time unavailable")
       )
       .font(.system(size: PulseDesignTokens.caption))
       .foregroundStyle(.secondary)
@@ -213,7 +231,7 @@ struct UsageView: View {
   /// to wrap instead of clipping digits when a balance runs long.
   private func detailRow(_ title: String, value: String) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
-      Text(title)
+      Text(PulseLocalization.string(title))
         .font(.system(size: PulseDesignTokens.caption))
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -229,7 +247,7 @@ struct UsageView: View {
 
   private func updated(at date: Date) -> some View {
     Text("Updated \(date.formatted(date: .omitted, time: .shortened))")
-      .font(.caption2)
+      .font(.system(size: 12))
       .foregroundStyle(.tertiary)
   }
 

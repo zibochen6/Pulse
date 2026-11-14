@@ -14,9 +14,9 @@ enum SecretStoreError: LocalizedError, Equatable {
   var errorDescription: String? {
     switch self {
     case .unexpectedStatus:
-      "The macOS Keychain could not complete the request."
+      PulseLocalization.string("The macOS Keychain could not complete the request.")
     case .invalidStoredValue:
-      "The saved Keychain value could not be read."
+      PulseLocalization.string("The saved Keychain value could not be read.")
     }
   }
 }
@@ -51,7 +51,9 @@ struct KeychainSecretStore: SecretStoring {
       guard addStatus == errSecSuccess else { throw SecretStoreError.unexpectedStatus(addStatus) }
       return
     }
-    guard updateStatus == errSecSuccess else { throw SecretStoreError.unexpectedStatus(updateStatus) }
+    guard updateStatus == errSecSuccess else {
+      throw SecretStoreError.unexpectedStatus(updateStatus)
+    }
   }
 
   func delete(account: String) throws {

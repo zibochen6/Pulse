@@ -7,28 +7,27 @@ final class PopoverPageControllerTests: XCTestCase {
   func testPageTransitionsAndReset() {
     let pages = PopoverPageController()
     XCTAssertEqual(pages.page, .home)
-
-    pages.showUsage()
-    XCTAssertEqual(pages.page, .usage)
-    pages.showHome()
-    XCTAssertEqual(pages.page, .home)
-
-    pages.showSettings(.tasks)
-    XCTAssertEqual(pages.page, .settings(.tasks))
+    for provider in ProviderID.allCases {
+      pages.showUsage(provider)
+      XCTAssertEqual(pages.page, .usage(provider))
+      pages.showHome()
+      XCTAssertEqual(pages.page, .home)
+    }
+    pages.showTagManagement()
+    XCTAssertEqual(pages.page, .tagManagement)
     pages.reset()
     XCTAssertEqual(pages.page, .home)
   }
 
-  func testAllSettingsEntrypointsReturnHome() {
+  func testSettingsNavigationDoesNotResetWithPopover() {
     let pages = PopoverPageController()
-    for destination in [
-      SettingsDestination.general, .providers, .tasks, .about,
-    ] {
-      pages.showSettings(destination)
-      XCTAssertEqual(pages.page, .settings(destination))
-      pages.showHome()
-      XCTAssertEqual(pages.page, .home)
-    }
+    let settings = SettingsPresentation()
+    settings.open(.providers, provider: .deepSeek)
+    pages.showUsage(.vip)
+    pages.reset()
+    XCTAssertEqual(pages.page, .home)
+    XCTAssertEqual(settings.destination, .providers)
+    XCTAssertEqual(settings.focusedProvider, .deepSeek)
   }
 
   /// Settings reports one aggregated editing bit: the tag editor and the two

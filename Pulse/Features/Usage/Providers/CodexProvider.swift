@@ -17,26 +17,30 @@ enum CodexUsageError: LocalizedError, Equatable, UsageFailureDescribing {
     }
   }
 
-  var userMessage: String { errorDescription ?? "Could not refresh Codex usage." }
+  var userMessage: String {
+    errorDescription ?? PulseLocalization.string("Could not refresh Codex usage.")
+  }
 
   var errorDescription: String? {
     switch self {
     case .binaryNotFound:
-      "Codex CLI was not found. Install Codex or set CODEX_BIN to its executable."
+      PulseLocalization.string(
+        "Codex CLI was not found. Install Codex or set CODEX_BIN to its executable.")
     case .invalidBinaryOverride:
-      "CODEX_BIN does not point to an executable Codex CLI. Check its path."
+      PulseLocalization.string(
+        "CODEX_BIN does not point to an executable Codex CLI. Check its path.")
     case .launchFailed:
-      "Could not start the Codex app-server."
+      PulseLocalization.string("Could not start the Codex app-server.")
     case .timeout:
-      "Codex did not respond in time. Try refreshing."
+      PulseLocalization.string("Codex did not respond in time. Try refreshing.")
     case .serverExited:
-      "Codex closed before returning usage data."
+      PulseLocalization.string("Codex closed before returning usage data.")
     case .serverRejected:
-      "Codex rejected the usage request. Check that you are signed in."
+      PulseLocalization.string("Codex rejected the usage request. Check that you are signed in.")
     case .invalidResponse:
-      "Codex returned usage data Pulse could not read."
+      PulseLocalization.string("Codex returned usage data Pulse could not read.")
     case .noQuota:
-      "Codex did not report a usable quota window."
+      PulseLocalization.string("Codex did not report a usable quota window.")
     }
   }
 }

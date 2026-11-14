@@ -1,182 +1,161 @@
 import SwiftUI
 
-/// Tag removal only removes classification links; it never deletes tasks.
+/// One tag manager is reused by the quick panel and Settings. All edit intents
+/// belong to the app-owned presentation, so changing categories never loses input.
 @MainActor
 struct LocalTagSettingsView: View {
   @ObservedObject var controller: LocalTaskController
-  let onEditingChanged: (Bool) -> Void
+  @ObservedObject var presentation: LocalTaskPresentation
+  var onEditingChanged: (Bool) -> Void = { _ in }
+  var onReturnToDraft: () -> Void = {}
+  var onSelectTag: ((UUID?) -> Void)?
+  @FocusState private var searchFocused: Bool
 
-  @State private var editingTagID: UUID?
-  @State private var proposedName = ""
-  @State private var confirmsDeletion = false
-  @State private var isSubmitting = false
+  private var isEditing: Bool { searchFocused || presentation.tagIntent != nil }
 
-  private var isBusy: Bool { isSubmitting || controller.isSaving }
+  private var tags: [TaskTag] { controller.document?.tags ?? [] }
+  private var filteredTags: [TaskTag] {
+    let query = presentation.tagSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+    return query.isEmpty ? tags : tags.filter { $0.name.localizedStandardContains(query) }
+  }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Tags")
-        .font(.system(size: 13, weight: .medium))
-      Text(
-        "Create tags from the tab bar’s + or a task’s tag field. Removing a tag moves its tasks to Todo."
-      )
-      .font(.caption)
-      .foregroundStyle(.secondary)
-      .fixedSize(horizontal: false, vertical: true)
-
-      if let document = controller.document {
-        if document.tags.isEmpty {
-          Text("No tags yet")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+    VStack(alignment: .leading, spacing: 12) {
+      HStack(spacing: 8) {
+        HStack(spacing: 8) {
+          Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+          TextField("Search tags", text: $presentation.tagSearch)
+            .focused($searchFocused)
+            .textFieldStyle(.plain).accessibilityIdentifier("searchLocalTagsField")
         }
-        ForEach(document.tags) { tag in
-          tagContent(
-            tag, index: document.tags.firstIndex(where: { $0.id == tag.id }) ?? 0,
-            count: document.tags.count)
+        .padding(10)
+        .background(PulseDesignTokens.secondarySurface, in: RoundedRectangle(cornerRadius: 10))
+        Button {
+          controller.dismissError()
+          presentation.beginCreatingTag()
+        } label: {
+          Label("New tag", systemImage: "plus")
         }
-      } else if controller.isLoading {
-        ProgressView().controlSize(.mini)
+        .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
+        .disabled(controller.isSaving || presentation.tagIntent != nil)
+        .accessibilityIdentifier("createManagedTagButton")
       }
-      if let errorMessage = controller.errorMessage {
-        Text(errorMessage)
-          .font(.caption)
-          .foregroundStyle(.red)
-          .fixedSize(horizontal: false, vertical: true)
+      if presentation.tagIntent != nil {
+        LocalTagEntry(
+          controller: controller, presentation: presentation, onReturnToDraft: onReturnToDraft
+        )
+        .padding(.horizontal, -PulseDesignTokens.contentInset)
       }
-    }
-    .onAppear { onEditingChanged(editingTagID != nil) }
-    .task {
-      if controller.document == nil { await controller.refresh() }
-    }
-    .onChange(of: editingTagID) { onEditingChanged($0 != nil) }
-    .onDisappear { onEditingChanged(false) }
-    .onChange(of: controller.document?.tags.map(\.id)) { ids in
-      if let editingTagID, ids?.contains(editingTagID) != true {
-        closeEditor()
-      }
-    }
-  }
-
-  @ViewBuilder
-  private func tagContent(_ tag: TaskTag, index: Int, count: Int) -> some View {
-    if editingTagID == tag.id {
-      VStack(alignment: .leading, spacing: 6) {
-        if confirmsDeletion {
-          Text("Remove “\(tag.name)”? Its tasks will move to Todo.")
-            .font(.caption)
-            .fixedSize(horizontal: false, vertical: true)
-          HStack {
-            Button("Keep tag", action: closeEditor)
-            Spacer()
-            if isBusy { ProgressView().controlSize(.mini) }
-            Button("Remove tag", role: .destructive) {
-              guard !isBusy else { return }
-              isSubmitting = true
-              Task {
-                defer { isSubmitting = false }
-                if await controller.deleteTag(id: tag.id) { closeEditor() }
+      ScrollView {
+        LazyVStack(alignment: .leading, spacing: 8) {
+          if presentation.tagSearch.isEmpty {
+            HStack(spacing: 10) {
+              Image(systemName: "tray").foregroundStyle(PulseDesignTokens.accent)
+              VStack(alignment: .leading, spacing: 2) {
+                Text("Todo").font(.system(size: 13, weight: .medium))
+                Text("Default list · Cannot be renamed or removed")
+                  .font(.system(size: 12)).foregroundStyle(.secondary)
+              }
+              Spacer(minLength: 0)
+              if let onSelectTag {
+                Button("Open") { onSelectTag(nil) }.buttonStyle(PulseActionButtonStyle())
               }
             }
-            .accessibilityIdentifier("confirmDeleteLocalTag.\(tag.id.uuidString)")
+            .padding(12)
           }
-        } else {
-          TextField("Tag name", text: $proposedName)
-            .textFieldStyle(.roundedBorder)
-            .font(.system(size: 13))
-            .accessibilityIdentifier("renameLocalTagField.\(tag.id.uuidString)")
-            .onSubmit { saveName(tag) }
-          HStack {
-            Button("Cancel", action: closeEditor)
-            Spacer()
-            if isBusy { ProgressView().controlSize(.mini) }
-            Button("Save") { saveName(tag) }
-              .disabled(proposedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-              .accessibilityIdentifier("saveLocalTagName.\(tag.id.uuidString)")
+          if controller.isLoading {
+            ProgressView("Loading tags").font(.system(size: 12)).padding()
+          } else if filteredTags.isEmpty {
+            Text(
+              LocalizedStringKey(
+                tags.isEmpty ? "Create your first tag to organize tasks." : "No matching tags")
+            )
+            .font(.system(size: 13)).foregroundStyle(.secondary).padding(12)
           }
+          ForEach(filteredTags) { tag in tagRow(tag) }
         }
       }
-      .buttonStyle(PulseActionButtonStyle())
-      .font(.caption)
-      .disabled(isBusy)
-    } else {
-      HStack(spacing: 8) {
-        Image(systemName: "tag")
-          .foregroundStyle(.secondary)
-        Text(tag.name)
-          .font(.system(size: 13))
-          .lineLimit(1)
-          .truncationMode(.tail)
-          .layoutPriority(0)
-        Spacer(minLength: 4)
-        // Reordering is offered here too, so the Settings list can be arranged
-        // without going back to the tab bar. Icons keep the row inside the
-        // 360 pt popover; the tab bar's context menu names the same two
-        // commands in words.
-        Button {
-          moveTag(tag, to: index - 1)
-        } label: {
-          Image(systemName: "chevron.left")
+      .accessibilityIdentifier("localTagManagerList")
+      if let message = controller.errorMessage {
+        HStack {
+          Text(message).font(.system(size: 12)).foregroundStyle(.red)
+            .fixedSize(horizontal: false, vertical: true)
+          Spacer(minLength: 0)
+          Button("Dismiss") { controller.dismissError() }
+            .buttonStyle(PulseActionButtonStyle())
         }
-        .buttonStyle(PulseIconButtonStyle())
-        .disabled(isBusy || index == 0)
-        .help("Move left")
-        .accessibilityLabel("Move \(tag.name) left")
-        .accessibilityIdentifier("moveLocalTagLeft.\(tag.id.uuidString)")
-        Button {
-          moveTag(tag, to: index + 1)
-        } label: {
-          Image(systemName: "chevron.right")
-        }
-        .buttonStyle(PulseIconButtonStyle())
-        .disabled(isBusy || index >= count - 1)
-        .help("Move right")
-        .accessibilityLabel("Move \(tag.name) right")
-        .accessibilityIdentifier("moveLocalTagRight.\(tag.id.uuidString)")
-        Button("Rename") {
-          controller.dismissError()
-          proposedName = tag.name
-          confirmsDeletion = false
-          editingTagID = tag.id
-        }
-        .buttonStyle(PulseActionButtonStyle())
-        .accessibilityIdentifier("renameLocalTag.\(tag.id.uuidString)")
-        Button("Remove", role: .destructive) {
-          controller.dismissError()
-          confirmsDeletion = true
-          editingTagID = tag.id
-        }
-        .buttonStyle(PulseActionButtonStyle())
-        .accessibilityIdentifier("deleteLocalTag.\(tag.id.uuidString)")
       }
-      .font(.caption)
-      .disabled(isBusy)
+    }
+    .font(.system(size: 13))
+    .onAppear { onEditingChanged(isEditing) }
+    .onChange(of: isEditing) { onEditingChanged($0) }
+    .onDisappear { onEditingChanged(false) }
+    .task { if controller.document == nil { await controller.refresh() } }
+    .onChange(of: controller.document?.tags) { tags in
+      if let tags {
+        presentation.reconcileTags(tags)
+        presentation.reconcileTagOrder(tags)
+      }
     }
   }
 
-  private func saveName(_ tag: TaskTag) {
-    guard !isBusy else { return }
-    let name = proposedName
-    guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-    isSubmitting = true
-    Task {
-      defer { isSubmitting = false }
-      if await controller.renameTag(id: tag.id, name: name) { closeEditor() }
+  private func tagRow(_ tag: TaskTag) -> some View {
+    let index = tags.firstIndex(where: { $0.id == tag.id }) ?? 0
+    let count = controller.document?.tasks.filter { $0.tagIDs.contains(tag.id) }.count ?? 0
+    return HStack(alignment: .center, spacing: 10) {
+      Image(systemName: "tag.fill")
+        .font(.system(size: 13))
+        .foregroundStyle(PulseDesignTokens.tagColor(for: tag.id))
+        .frame(width: 24, height: 28)
+      VStack(alignment: .leading, spacing: 4) {
+        if let onSelectTag {
+          Button {
+            onSelectTag(tag.id)
+          } label: {
+            Text(tag.name).font(.system(size: 13, weight: .medium))
+              .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+          }
+          .buttonStyle(.plain)
+        } else {
+          Text(tag.name).font(.system(size: 13, weight: .medium))
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        Text(PulseLocalization.format(count == 1 ? "%lld task" : "%lld tasks", count))
+          .font(.system(size: 12)).foregroundStyle(.secondary)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      Button("Rename") {
+        controller.dismissError()
+        presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
+      }
+      .buttonStyle(PulseActionButtonStyle())
+      .accessibilityIdentifier("renameLocalTag.\(tag.id.uuidString)")
+      Menu {
+        Button("Move Up") { moveTag(tag, to: index - 1) }.disabled(index == 0)
+        Button("Move Down") { moveTag(tag, to: index + 1) }.disabled(index == tags.count - 1)
+        Divider()
+        Button("Remove tag…", role: .destructive) {
+          controller.dismissError()
+          presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
+        }
+        .accessibilityIdentifier("deleteLocalTag.\(tag.id.uuidString)")
+      } label: {
+        Image(systemName: "ellipsis").frame(width: 28, height: 28)
+      }
+      .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+      .accessibilityLabel("Actions for \(tag.name)")
     }
+    .padding(12)
+    .background(PulseDesignTokens.surface, in: RoundedRectangle(cornerRadius: 12))
+    .overlay {
+      RoundedRectangle(cornerRadius: 12).stroke(PulseDesignTokens.border, lineWidth: 0.5)
+    }
+    .disabled(controller.isSaving || presentation.tagIntent != nil)
+    .accessibilityIdentifier("managedLocalTag.\(tag.id.uuidString)")
   }
 
   private func moveTag(_ tag: TaskTag, to index: Int) {
-    guard !isBusy, let tags = controller.document?.tags else { return }
-    let clamped = max(0, min(index, tags.count - 1))
-    guard clamped != tags.firstIndex(where: { $0.id == tag.id }) else { return }
-    Task {
-      _ = await controller.moveTag(id: tag.id, toIndex: clamped)
-    }
-  }
-
-  private func closeEditor() {
-    editingTagID = nil
-    proposedName = ""
-    confirmsDeletion = false
+    guard !controller.isSaving else { return }
+    Task { _ = await controller.moveTag(id: tag.id, toIndex: index) }
   }
 }

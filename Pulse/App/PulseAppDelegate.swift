@@ -4,6 +4,7 @@ import SwiftUI
 
 @MainActor
 final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+  private static let runtimeServices = PulseRuntimeServices()
   private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   // The XCTest host must not migrate the real user's source preference or use
   // their local task file. Production always uses the normal preferences.
@@ -20,13 +21,21 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     return defaults
   }()
 
-  private let config = AppConfig(defaults: PulseAppDelegate.runtimeDefaults)
-  private let usage = UsageController(provider: CodexProvider())
-  private let deepSeekConfiguration = DeepSeekConfiguration()
+  private let config = AppConfig(
+    defaults: PulseAppDelegate.runtimeDefaults,
+    loginItemService: PulseAppDelegate.runtimeServices.loginItemService)
+  private let usage = UsageController(
+    provider: PulseAppDelegate.runtimeServices.usageProvider(CodexProvider()))
+  private let deepSeekConfiguration = DeepSeekConfiguration(
+    secretStore: PulseAppDelegate.runtimeServices.secretStore)
   private let deepSeekUsage = UsageController(
-    provider: DeepSeekProvider(), refreshInterval: .seconds(600))
-  private let vipConfiguration = VIPConfiguration()
-  private let vipUsage = UsageController(provider: VIPProvider(), refreshInterval: .seconds(600))
+    provider: PulseAppDelegate.runtimeServices.usageProvider(DeepSeekProvider()),
+    refreshInterval: .seconds(600))
+  private let vipConfiguration = VIPConfiguration(
+    secretStore: PulseAppDelegate.runtimeServices.secretStore)
+  private let vipUsage = UsageController(
+    provider: PulseAppDelegate.runtimeServices.usageProvider(VIPProvider()),
+    refreshInterval: .seconds(600))
   private let localTasks = LocalTaskController(
     store: LocalTaskStore(
       fileURL:
@@ -35,13 +44,36 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
           "PulseTestHost-\(ProcessInfo.processInfo.processIdentifier)/tasks.json")
         : LocalTaskStore.defaultFileURL))
   private var taskEditorActive = false
+  private let localPresentation = LocalTaskPresentation()
+  private let settingsPresentation = SettingsPresentation()
+  private var settingsController: SettingsWindowController?
+  private let interactionHolds = PopoverInteractionHolds()
+  private var menuSubscriptions = Set<AnyCancellable>()
+  private var menuLeases: [ObjectIdentifier: PopoverInteractionHolds.Lease] = [:]
+  private var approvedTermination = false
+  private lazy var exitCoordinator = PulseExitCoordinator(
+    policy: { [unowned self] in self.exitPolicy },
+    confirmDiscard: { [unowned self] action in self.confirmDiscard(for: action) },
+    discard: { [unowned self] in
+      self.localPresentation.discardAllDrafts()
+      self.settingsPresentation.discardAllDrafts()
+    },
+    perform: { [unowned self] action in
+      self.approvedTermination = true
+      if action == .restart {
+        self.updates.restartToUpdate()
+        if case .installing = self.updates.phase {} else { self.approvedTermination = false }
+      } else {
+        NSApp.terminate(nil)
+      }
+    })
   private let pages = PopoverPageController()
   /// Updates are user-visible state, so the controller lives for the app's
   /// lifetime and is shared by the popover and Settings.
   private lazy var updates = UpdateController(
-    feed: GitHubUpdateFeed(),
-    downloader: URLSessionUpdateDownloader(),
-    installer: DetachedScriptInstaller(
+    feed: PulseAppDelegate.runtimeServices.updateFeed,
+    downloader: PulseAppDelegate.runtimeServices.updateDownloader,
+    installer: PulseAppDelegate.runtimeServices.updateInstaller(
       scriptDirectory: UpdateController.defaultSupportDirectory.appendingPathComponent(
         "Scripts", isDirectory: true)),
     preferences: UpdatePreferences(defaults: PulseAppDelegate.runtimeDefaults),
@@ -49,7 +81,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     // the controller waits for the popover to be closed instead.
     canApplyAutomatically: { [weak self] in
       guard let self else { return false }
-      return !self.taskEditorActive && !self.popover.isShown
+      return self.exitPolicy.canInstallAutomatically
     }
   )
   private let popover = NSPopover()
@@ -88,10 +120,13 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   )
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    NSApp.mainMenu = PulseApplicationMenu.makeMainMenu()
+    NSApp.mainMenu = PulseApplicationMenu.makeMainMenu(target: self)
     NSApp.setActivationPolicy(.accessory)
+    vipConfiguration.refresh()
+    deepSeekConfiguration.refresh()
     configureStatusItem()
     configurePopover()
+    observeMenuInteractions()
 
     motionPreferencesSubscription = NSWorkspace.shared.notificationCenter
       .publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
@@ -118,7 +153,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   static func shouldStartLiveUsage(environment: [String: String]) -> Bool {
-    environment["PULSE_DISABLE_LIVE_USAGE"] != "1"
+    PulseRuntimeServices(environment: environment).permitsLiveAccess
   }
 
   func applicationWillTerminate(_ notification: Notification) {
@@ -135,7 +170,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     guard let button = statusItem.button else { return }
     button.image = loadMenuBarIcon()
     button.imagePosition = .imageLeading
-    button.toolTip = "Pulse · Loading Codex usage"
+    button.toolTip = PulseLocalization.string("Pulse · Loading Codex usage")
     button.target = self
     button.action = #selector(togglePopover)
     installTrackingArea(on: button, owner: statusTrackingOwner)
@@ -176,16 +211,114 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         pages: pages,
         onDeepSeekCredentialsChanged: { [weak self] in self?.deepSeekUsage.credentialsDidChange() },
         onVIPCredentialsChanged: { [weak self] in self?.vipUsage.credentialsDidChange() },
-        onQuit: { NSApp.terminate(nil) },
+        onQuit: { [weak self] in self?.requestQuit(nil) },
         onTaskEditingChanged: { [weak self] active in
           guard let self else { return }
           self.taskEditorActive = active
-          self.hoverController.setDismissalSuspended(active)
-        }
+          self.interactionHolds.set(.taskEditor, active: active)
+        },
+        localPresentation: localPresentation,
+        onOpenSettings: { [weak self] destination, provider in
+          self?.showSettings(destination, provider: provider)
+        },
+        onRestartRequested: { [weak self] in self?.requestExit(restarting: true) }
       )
     )
     popover.contentViewController = hostingController
     installTrackingArea(on: hostingController.view, owner: contentTrackingOwner)
+  }
+
+  private var exitPolicy: PulseExitPolicy {
+    PulseExitPolicy(
+      popoverOpen: popover.isShown,
+      settingsOpen: settingsController?.isOpen == true,
+      hasUnsavedEdits: localPresentation.hasUnsavedEdits || settingsPresentation.hasUnsavedEdits,
+      hasPendingWrites: localTasks.isSaving || localTasks.isUndoing
+        || localPresentation.hasPendingSubmissions)
+  }
+
+  @objc func openSettings(_ sender: Any?) { showSettings() }
+
+  private func showSettings(_ destination: SettingsDestination? = nil, provider: ProviderID? = nil)
+  {
+    settingsPresentation.open(destination, provider: provider)
+    if settingsController == nil {
+      settingsController = SettingsWindowController(
+        rootView: SettingsView(
+          config: config, deepSeekConfiguration: deepSeekConfiguration,
+          vipConfiguration: vipConfiguration, localTasks: localTasks, updates: updates,
+          onDeepSeekCredentialsChanged: { [weak self] in self?.deepSeekUsage.credentialsDidChange()
+          },
+          onVIPCredentialsChanged: { [weak self] in self?.vipUsage.credentialsDidChange() },
+          onQuit: { [weak self] in self?.requestQuit(nil) },
+          usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
+          presentation: settingsPresentation, localPresentation: localPresentation,
+          onRestartRequested: { [weak self] in self?.requestExit(restarting: true) },
+          onReturnToDraft: { [weak self] in
+            guard let self else { return }
+            self.settingsController?.close()
+            self.pages.showHome()
+            self.showPopover()
+          }))
+    }
+    // Establish activity before closing the popover: the updater cannot see a
+    // quiet gap between the two native surfaces.
+    settingsController?.prepareToOpen()
+    if popover.isShown { hoverController.requestClose() }
+    settingsController?.open()
+  }
+
+  private func observeMenuInteractions() {
+    interactionHolds.onChange = { [weak self] active in
+      self?.hoverController.setDismissalSuspended(active)
+    }
+    NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)
+      .sink { [weak self] notification in
+        guard let self, self.popover.isShown, let menu = notification.object as? NSMenu else {
+          return
+        }
+        let id = ObjectIdentifier(menu)
+        if self.menuLeases[id] == nil {
+          self.menuLeases[id] = self.interactionHolds.begin(.menu(id))
+        }
+      }.store(in: &menuSubscriptions)
+    NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)
+      .sink { [weak self] notification in
+        guard let self, let menu = notification.object as? NSMenu,
+          let lease = self.menuLeases.removeValue(forKey: ObjectIdentifier(menu))
+        else { return }
+        self.interactionHolds.end(lease)
+      }.store(in: &menuSubscriptions)
+  }
+
+  @objc func requestQuit(_ sender: Any?) { requestExit(restarting: false) }
+
+  private func requestExit(restarting: Bool) {
+    Task { [weak self] in
+      await self?.exitCoordinator.request(restarting ? .restart : .quit)
+    }
+  }
+
+  private func confirmDiscard(for action: PulseExitCoordinator.Action) -> Bool {
+    let alert = NSAlert()
+    alert.messageText = PulseLocalization.string(
+      action == .restart ? "Restart with unsaved changes?" : "Quit with unsaved changes?")
+    alert.informativeText = PulseLocalization.string(
+      "You have unfinished input in Pulse. Continue editing to keep it, or discard it before leaving."
+    )
+    alert.addButton(withTitle: PulseLocalization.string("Continue editing"))
+    alert.addButton(
+      withTitle: PulseLocalization.string(
+        action == .restart ? "Discard and restart" : "Discard and quit"))
+    NSApp.activate(ignoringOtherApps: true)
+    return alert.runModal() == .alertSecondButtonReturn
+  }
+
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    if approvedTermination { return .terminateNow }
+    if !exitPolicy.hasUnsavedEdits && !exitPolicy.hasPendingWrites { return .terminateNow }
+    requestExit(restarting: false)
+    return .terminateCancel
   }
 
   private func installTrackingArea(on view: NSView, owner: PopoverPointerTrackingOwner) {
@@ -222,10 +355,13 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     )
     switch usageState {
     case .loading:
-      button.toolTip = "Codex usage is loading"
+      button.toolTip = PulseLocalization.string("Codex usage is loading")
     case .success(let snapshot):
       button.toolTip =
-        "Codex usage · updated \(DateFormatter.localizedString(from: snapshot.fetchedAt, dateStyle: .none, timeStyle: .short))"
+        PulseLocalization.format(
+          "Codex usage · updated %@",
+          DateFormatter.localizedString(
+            from: snapshot.fetchedAt, dateStyle: .none, timeStyle: .short))
     case .unavailable(let message), .failure(let message):
       button.toolTip = message
     }
@@ -243,6 +379,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private func showPopover() {
     guard let button = statusItem.button, hoverController.state != .closing else { return }
     config.refreshLoginItemStatus()
+    vipConfiguration.refresh()
+    deepSeekConfiguration.refresh()
     vipUsage.refreshIfStale(maxAge: 60)
     deepSeekUsage.refreshIfStale(maxAge: 60)
     Task { [weak self] in
@@ -253,7 +391,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     }
     pages.reset()
     hoverController.beginOpening()
-    hoverController.setDismissalSuspended(taskEditorActive)
+    interactionHolds.set(.taskEditor, active: localPresentation.isInteractionActive)
+    hoverController.setDismissalSuspended(interactionHolds.isActive)
     updatePopoverMotion()
     popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     guard popover.isShown else {
@@ -284,6 +423,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   func popoverDidClose(_ notification: Notification) {
+    menuLeases.removeAll()
+    interactionHolds.reset()
     hoverController.reset()
     pages.reset()
   }

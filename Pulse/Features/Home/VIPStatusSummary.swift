@@ -3,13 +3,14 @@ import SwiftUI
 
 struct VIPStatusSummary: View {
   let state: UsageRefreshState
+  var isConfigured: Bool = true
   let onOpenUsage: () -> Void
 
   var body: some View {
     ProviderStatusButton(
       title: VIPUsageFormatter.title(for: state), providerName: "88VIP",
-      identifier: "openVIPUsageButton", onOpenUsage: onOpenUsage
-    ) { VIPProviderIcon(size: 14) }
+      identifier: "openVIPUsageButton", isConfigured: isConfigured, onOpenUsage: onOpenUsage
+    ) { VIPProviderIcon(size: 18) }
   }
 }
 

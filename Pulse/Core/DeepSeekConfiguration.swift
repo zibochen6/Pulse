@@ -6,7 +6,7 @@ final class DeepSeekConfiguration: APIKeyConfiguration {
 
   init(secretStore: any SecretStoring = KeychainSecretStore()) {
     super.init(
-      providerName: "DeepSeek", account: Self.keychainAccount, article: "a",
+      providerName: "DeepSeek", account: Self.keychainAccount,
       secretStore: secretStore)
   }
 }
