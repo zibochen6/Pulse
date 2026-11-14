@@ -106,7 +106,6 @@
 "Go to Todo" = "前往 Todo";
 "Installing the update and restarting…" = "正在安装更新并重启…";
 "Keep Pulse ready when you start your day." = "开始新一天时，Pulse 随时待命。";
-"Keep tag" = "保留标签";
 "Keep your daily companion up to date." = "让日常小助手保持最新。";
 "Later" = "稍后";
 "Launch at login" = "登录时启动";
@@ -191,10 +190,6 @@
 "Reload your tasks before making changes. The saved file has not been changed." = "请先重新加载任务再修改。已保存的文件未被更改。";
 "Remaining" = "剩余";
 "Remove" = "移除";
-"Remove tag" = "删除标签";
-"Remove tag…" = "删除标签…";
-"Remove “%@”? %lld tasks will move to Todo." = "删除“%@”标签？%lld 个任务将移至 Todo。";
-"Remove “%@”? Its tasks will move to Todo." = "删除“%@”标签？其中的任务将移至 Todo。";
 "Rename" = "重命名";
 "Rename…" = "重命名…";
 "Repeat daily" = "每日重复";
@@ -247,7 +242,6 @@
 "The update download was empty." = "下载的更新为空。";
 "These tasks were saved by a newer format. Update Pulse to read them; the file is unchanged." = "任务使用了较新的存储格式，请更新 Pulse 后读取。原文件未被更改。";
 "This tag already exists." = "此标签已存在。";
-"This tag has an unfinished draft. Save or discard it before removing the tag." = "此标签下还有未完成的草稿，请先保存或丢弃草稿，再删除标签。";
 "This task changed since it was created. Refresh before saving again." = "此任务自创建后已发生变化，请刷新后再保存。";
 "This task no longer exists. Refresh the list and try again." = "此任务已不存在，请刷新列表后重试。";
 "This task no longer repeats daily. Refresh the list and try again." = "此任务已不再每日重复，请刷新列表后重试。";
@@ -278,3 +272,16 @@
 "Your day, in focus." = "专注当下，从容一天。";
 "Your services, connected on your terms." = "连接所需服务，始终由你掌控。";
 "macOS cannot locate this app for login. Try an installed build." = "macOS 无法定位此应用的登录启动项，请使用已安装的版本。";
+"Delete list" = "删除列表";
+"Delete list…" = "删除列表…";
+"Delete “%@” and its %lld task?" = "删除“%@”列表及其中的 %lld 项任务？";
+"Delete “%@” and its %lld tasks?" = "删除“%@”列表及其中的 %lld 项任务？";
+"The entire list will be deleted. Undo keeps the last 20 deletions until Pulse quits." = "整个列表将被删除。退出 Pulse 前，可撤销最近 20 次删除。";
+"This list has an unfinished draft. Save or discard it before deleting the list." = "此列表还有未完成的草稿，请先保存或丢弃草稿，再删除列表。";
+"Deleted list “%@”" = "已删除“%@”列表";
+"Undo task deletion" = "撤销任务删除";
+"Undo list deletion" = "撤销列表删除";
+"Restore the last deleted list and its tasks (%lld available)" = "恢复最近删除的列表及其任务（还可撤销 %lld 项）";
+"This list changed since it was deleted. Resolve the conflict before trying Undo again." = "此列表自删除后已发生变化。请先解决冲突，再重试撤销。";
+"Continue current edit" = "继续当前编辑";
+"You are editing another task. Save or cancel that edit first; this list’s draft will be kept." = "你正在编辑另一项任务。请先保存或取消当前编辑；此列表的草稿会保留。";

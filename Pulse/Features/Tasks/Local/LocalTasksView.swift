@@ -159,18 +159,35 @@ final class LocalTaskPresentation: ObservableObject {
     ensureQuickDraft()
   }
 
-  func hasDraftBlockingTagDeletion(_ id: UUID) -> Bool {
-    if editDraft?.selectedTagID == id { return true }
+  func hasDraftBlockingTagDeletion(_ id: UUID, document: LocalTaskDocument? = nil) -> Bool {
+    if editedTaskAffectsTag(id, document: document) { return true }
     return quickDrafts.contains { origin, draft in
       draft.isDirty && (origin == .tag(id) || draft.selectedTagID == id)
     }
   }
 
+  private func editedTaskAffectsTag(_ id: UUID, document: LocalTaskDocument?) -> Bool {
+    guard let editDraft else { return false }
+    if editDraft.selectedTagID == id { return true }
+    guard let taskID = editDraft.taskID else { return false }
+    // A changed draft destination does not move the stored task until Save.
+    // Without confirmed storage, keep the edit protected rather than guessing.
+    guard let document else { return true }
+    return document.tasks.first(where: { $0.id == taskID })?.tagIDs.contains(id) == true
+  }
+
+  func needsCurrentEditFirst(forTagID id: UUID, document: LocalTaskDocument?) -> Bool {
+    editDraft != nil && !editedTaskAffectsTag(id, document: document)
+      && hasDraftBlockingTagDeletion(id, document: document)
+  }
+
   /// Called before leaving the manager. Draft identity and every other list's
   /// draft are preserved; the caller only needs to reveal Home.
-  func returnToDraft(affectedByTagID id: UUID) {
+  func returnToDraft(affectedByTagID id: UUID, document: LocalTaskDocument? = nil) {
     tagIntent = nil
-    if editDraft?.selectedTagID == id { return }
+    // Home shows the active task editor before any quick entry. Resolve that
+    // editor explicitly before changing selection to another retained draft.
+    if editDraft != nil { return }
     let candidates = quickDrafts.filter { origin, draft in
       draft.isDirty && (origin == .tag(id) || draft.selectedTagID == id)
     }
@@ -319,9 +336,13 @@ final class LocalTaskPresentation: ObservableObject {
     if let task { reveal(task, tags: tags) }
     editDraft = nil
   }
-  func captureTagSubmission() -> LocalTagIntent? {
+  func captureTagSubmission(document: LocalTaskDocument? = nil) -> LocalTagIntent? {
     guard let snapshot = tagIntent, !submittingIDs.contains(snapshot.id) else { return nil }
-    if case .delete(let id) = snapshot.action, hasDraftBlockingTagDeletion(id) { return nil }
+    if case .delete(let id) = snapshot.action,
+      hasDraftBlockingTagDeletion(id, document: document)
+    {
+      return nil
+    }
     submittingIDs.insert(snapshot.id)
     return snapshot
   }
@@ -397,6 +418,21 @@ final class LocalTaskPresentation: ObservableObject {
     revealedTaskID = task.id
     revealRequest = UUID()
   }
+  func revealRestoredDeletion(_ receipt: LocalDeletionReceipt, document: LocalTaskDocument) {
+    // Undo never replaces an editor or any retained per-list quick draft.
+    guard editDraft == nil else { return }
+    switch receipt {
+    case .task(let deletion):
+      if let task = document.tasks.first(where: { $0.id == deletion.task.id }) {
+        reveal(task, tags: document.tags)
+      }
+    case .tag(let deletion):
+      guard document.tags.contains(where: { $0.id == deletion.tag.id }) else { return }
+      selectedFilter = .tag(deletion.tag.id)
+      revealedTaskID = deletion.tasks.first?.task.id
+      revealRequest = UUID()
+    }
+  }
   func reconcileTags(_ tags: [TaskTag]) {
     let available = Set(tags.map(\.id))
     if let selectedTagID, !available.contains(selectedTagID) { selectedFilter = .untagged }
@@ -441,7 +477,7 @@ struct LocalTasksView: View {
   }
 
   var body: some View {
-    Group {
+    VStack(spacing: 0) {
       if let draft = presentation.editDraft {
         LocalTaskEditor(
           controller: controller, presentation: presentation,
@@ -454,6 +490,7 @@ struct LocalTasksView: View {
       } else {
         taskList
       }
+      LocalDeletionUndoBar(controller: controller, presentation: presentation)
     }
     .onAppear {
       presentation.reconcileTags(controller.document?.tags ?? [])
@@ -502,33 +539,7 @@ struct LocalTasksView: View {
           .font(.caption).foregroundStyle(.secondary)
           .padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       }
-      if let receipt = controller.deletionHistory.last {
-        Divider()
-        HStack(spacing: 8) {
-          Text("Deleted task").font(.caption).foregroundStyle(.secondary)
-          Spacer()
-          if controller.isUndoing { ProgressView().controlSize(.mini) }
-          Button("Undo") {
-            Task {
-              if await controller.undoDeletion(),
-                let restored = controller.document?.tasks.first(where: { $0.id == receipt.task.id })
-              {
-                presentation.reveal(restored, tags: controller.document?.tags ?? [])
-              }
-            }
-          }
-          .buttonStyle(PulseActionButtonStyle())
-          .disabled(controller.isSaving || controller.isUndoing)
-          .help("Restore the last deleted task (\(controller.deletionHistory.count) available)")
-          .accessibilityIdentifier("undoLocalTaskDeletionButton")
-        }
-        .padding(.horizontal, 14).padding(.vertical, 7)
-        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-      }
     }
-    .animation(
-      reduceMotion ? nil : PulseDesignTokens.insertionAnimation,
-      value: controller.deletionHistory.last?.id)
   }
 
   /// The ids in display order. Used as the animation key for the list surface:
@@ -854,7 +865,7 @@ struct LocalTasksView: View {
     .accessibilityAction(named: Text("Rename")) {
       presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
     }
-    .accessibilityAction(named: Text("Remove tag")) {
+    .accessibilityAction(named: Text("Delete list")) {
       presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
     }
     .accessibilityAction(named: Text("Move left")) { moveTag(tag, in: tagIDs, to: index - 1) }
@@ -866,7 +877,7 @@ struct LocalTasksView: View {
     Button("Rename…") {
       presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
     }
-    Button("Remove tag…", role: .destructive) {
+    Button("Delete list…", role: .destructive) {
       presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
     }
     Divider()
@@ -962,6 +973,76 @@ struct LocalTasksView: View {
 }
 
 @MainActor
+struct LocalDeletionUndoBar: View {
+  @ObservedObject var controller: LocalTaskController
+  @ObservedObject var presentation: LocalTaskPresentation
+
+  var body: some View {
+    if let receipt = controller.deletionHistory.last {
+      VStack(spacing: 0) {
+        Divider()
+        HStack(spacing: 8) {
+          Text(receipt.undoSummary).font(.caption).foregroundStyle(.secondary)
+            .lineLimit(1).help(receipt.undoSummary)
+          Spacer(minLength: 0)
+          if controller.isUndoing { ProgressView().controlSize(.mini) }
+          Button(receipt.undoButtonTitle) {
+            Task {
+              guard let receipt = controller.deletionHistory.last else { return }
+              if await controller.undoDeletion(), let document = controller.document {
+                presentation.revealRestoredDeletion(receipt, document: document)
+              }
+            }
+          }
+          .buttonStyle(PulseActionButtonStyle())
+          .fixedSize()
+          .disabled(controller.isSaving || controller.isUndoing)
+          .help(receipt.undoHelp(availableCount: controller.deletionHistory.count))
+          .accessibilityIdentifier("undoLocalTaskDeletionButton")
+        }
+        .padding(.horizontal, 14).padding(.vertical, 7)
+      }
+      .accessibilityIdentifier("localDeletionUndoBar")
+      .anchorPreference(key: LocalDeletionUndoBoundsKey.self, value: .bounds) { [$0] }
+    }
+  }
+}
+
+extension LocalDeletionReceipt {
+  var undoSummary: String {
+    switch self {
+    case .task: PulseLocalization.string("Deleted task")
+    case .tag(let receipt): PulseLocalization.format("Deleted list “%@”", receipt.tag.name)
+    }
+  }
+
+  var undoButtonTitle: String {
+    switch self {
+    case .task: PulseLocalization.string("Undo task deletion")
+    case .tag: PulseLocalization.string("Undo list deletion")
+    }
+  }
+
+  func undoHelp(availableCount: Int) -> String {
+    switch self {
+    case .task:
+      PulseLocalization.format("Restore the last deleted task (%lld available)", availableCount)
+    case .tag:
+      PulseLocalization.format(
+        "Restore the last deleted list and its tasks (%lld available)", availableCount)
+    }
+  }
+}
+
+/// Passive layout evidence for the shared control on Home and both managers.
+struct LocalDeletionUndoBoundsKey: PreferenceKey {
+  static let defaultValue: [Anchor<CGRect>] = []
+  static func reduce(value: inout [Anchor<CGRect>], nextValue: () -> [Anchor<CGRect>]) {
+    value.append(contentsOf: nextValue())
+  }
+}
+
+@MainActor
 struct LocalTagEntry: View {
   @ObservedObject var controller: LocalTaskController
   @ObservedObject var presentation: LocalTaskPresentation
@@ -976,23 +1057,42 @@ struct LocalTagEntry: View {
     VStack(alignment: .leading, spacing: 8) {
       if case .delete(let tagID) = intent.action {
         let taskCount = controller.document?.tasks.filter { $0.tagIDs.contains(tagID) }.count ?? 0
-        Text("Remove “\(intent.name)”? \(taskCount) tasks will move to Todo.")
-          .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
-        if presentation.hasDraftBlockingTagDeletion(tagID) {
-          Text("This tag has an unfinished draft. Save or discard it before removing the tag.")
-            .font(.system(size: 12)).foregroundStyle(.secondary)
-          Button("Return to draft") {
-            presentation.returnToDraft(affectedByTagID: tagID)
+        let name = tags.first(where: { $0.id == tagID })?.name ?? intent.name
+        let blocked = presentation.hasDraftBlockingTagDeletion(tagID, document: controller.document)
+        Text(
+          PulseLocalization.format(
+            taskCount == 1
+              ? "Delete “%@” and its %lld task?" : "Delete “%@” and its %lld tasks?", name,
+            taskCount)
+        )
+        .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+        Text("The entire list will be deleted. Undo keeps the last 20 deletions until Pulse quits.")
+          .font(.system(size: 12)).foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+        if blocked {
+          let needsCurrentEdit = presentation.needsCurrentEditFirst(
+            forTagID: tagID, document: controller.document)
+          Text(
+            LocalizedStringKey(
+              needsCurrentEdit
+                ? "You are editing another task. Save or cancel that edit first; this list’s draft will be kept."
+                : "This list has an unfinished draft. Save or discard it before deleting the list.")
+          )
+          .font(.system(size: 12)).foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          Button(LocalizedStringKey(needsCurrentEdit ? "Continue current edit" : "Return to draft"))
+          {
+            presentation.returnToDraft(affectedByTagID: tagID, document: controller.document)
             onReturnToDraft()
           }
           .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
           .accessibilityIdentifier("returnToBlockingTagDraftButton")
         }
         HStack {
-          Button("Keep tag") { presentation.tagIntent = nil }
+          Button("Cancel") { presentation.tagIntent = nil }
           Spacer()
-          Button("Remove tag", role: .destructive, action: submit)
-            .disabled(presentation.hasDraftBlockingTagDeletion(tagID) || controller.isSaving)
+          Button("Delete list", role: .destructive, action: submit)
+            .disabled(blocked || controller.isSaving)
             .accessibilityIdentifier("confirmDeleteLocalTagButton")
         }
       } else {
@@ -1057,7 +1157,9 @@ struct LocalTagEntry: View {
     } else if !intent.hasValidName(in: tags) {
       return
     }
-    guard let snapshot = presentation.captureTagSubmission() else { return }
+    guard let snapshot = presentation.captureTagSubmission(document: controller.document) else {
+      return
+    }
     Task {
       let saved: Bool
       switch snapshot.action {

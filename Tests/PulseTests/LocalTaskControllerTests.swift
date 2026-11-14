@@ -48,9 +48,9 @@ final class LocalTaskControllerTests: XCTestCase {
     XCTAssertTrue(try XCTUnwrap(controller.document?.tasks.first).completed)
     let renamed = await controller.renameTag(id: tags[0].id, name: "Job")
     XCTAssertTrue(renamed)
-    let detached = await controller.deleteTag(id: tags[0].id)
-    XCTAssertTrue(detached)
-    XCTAssertEqual(controller.document?.tasks.first?.tagIDs, [])
+    let listDeleted = await controller.deleteTag(id: tags[0].id)
+    XCTAssertTrue(listDeleted)
+    XCTAssertEqual(controller.document?.tasks.map(\.text), ["Untagged"])
     let deleted = await controller.deleteTask(id: tagged.id)
     XCTAssertTrue(deleted)
     let reopened = LocalTaskController(store: store)
@@ -300,16 +300,20 @@ final class LocalTaskControllerTests: XCTestCase {
     let controller = LocalTaskController(store: store)
     await controller.refresh()
     let deletedTag = await controller.deleteTag(id: original.tags[0].id)
-    XCTAssertFalse(deletedTag)
+    XCTAssertTrue(deletedTag)
     XCTAssertEqual(controller.document?.tags.count, 0)
     let retriedTag = await controller.deleteTag(id: original.tags[0].id)
     XCTAssertTrue(retriedTag)
-    XCTAssertEqual(controller.document?.tasks.count, 1)
+    XCTAssertEqual(controller.document?.tasks.count, 0)
     let deletedTask = await controller.deleteTask(id: original.tasks[0].id)
     // Reload confirmed the deletion despite byte-verification failure, so an
     // editor can close and show its recovered Undo receipt immediately.
     XCTAssertTrue(deletedTask)
     XCTAssertEqual(controller.deletionHistory.count, 1)
+    guard case .tag(let receipt) = controller.deletionHistory[0] else {
+      return XCTFail("A list retry must preserve the whole-list receipt")
+    }
+    XCTAssertEqual(receipt.tasks.map(\.task), original.tasks)
     XCTAssertEqual(controller.document?.tasks.count, 0)
     let retriedTask = await controller.deleteTask(id: original.tasks[0].id)
     XCTAssertTrue(retriedTask)
@@ -337,6 +341,151 @@ final class LocalTaskControllerTests: XCTestCase {
     XCTAssertEqual(controller.document?.tasks.map(\.id), [id])
     XCTAssertEqual(controller.document?.tags.map(\.name), ["Work"])
     XCTAssertNil(controller.errorMessage)
+  }
+
+  func testPendingListDeleteBlocksDuplicateAndOverlappingTaskDeleteAndUndo() async throws {
+    let tag = TaskTag(name: "Work")
+    let task = LocalTask(text: "Inside", tagIDs: [tag.id])
+    let original = LocalTaskDocument(tasks: [task], tags: [tag])
+    let storage = ControlledLocalTaskStore()
+    let controller = LocalTaskController(store: storage)
+    let initial = Task { await controller.refresh() }
+    try await waitUntil { await storage.loadCount == 1 }
+    await storage.finishLoad(0, result: .success(LocalTaskSnapshot(document: original)))
+    await initial.value
+
+    let deleting = Task { await controller.deleteTag(id: tag.id) }
+    try await waitUntil { await storage.mutationCount == 1 }
+    XCTAssertTrue(controller.pendingTaskIDs.contains(task.id))
+    let duplicate = await controller.deleteTag(id: tag.id)
+    let overlapping = await controller.deleteTask(id: task.id)
+    let undoWhileDeleting = await controller.undoDeletion()
+    XCTAssertFalse(duplicate)
+    XCTAssertFalse(overlapping)
+    XCTAssertFalse(undoWhileDeleting)
+    XCTAssertNil(controller.setCompleted(true, taskID: task.id))
+    let receipt = LocalTagDeletionReceipt(
+      tag: tag, index: 0, previousID: nil, nextID: nil,
+      tasks: [LocalTaskDeletionReceipt(task: task, index: 0, previousID: nil, nextID: nil)])
+    await storage.finishMutation(
+      0,
+      result: .success(
+        LocalTaskSnapshot(document: LocalTaskDocument(), tagDeletionReceipt: receipt)))
+    let deleted = await deleting.value
+    XCTAssertTrue(deleted)
+    XCTAssertTrue(controller.pendingTaskIDs.isEmpty)
+    XCTAssertEqual(controller.deletionHistory, [.tag(receipt)])
+
+    let restoring = Task { await controller.undoDeletion() }
+    try await waitUntil { await storage.mutationCount == 2 }
+    let duplicateUndo = await controller.undoDeletion()
+    let deleteDuringUndo = await controller.deleteTag(id: tag.id)
+    XCTAssertFalse(duplicateUndo)
+    XCTAssertFalse(deleteDuringUndo)
+    await storage.finishMutation(1, result: .success(LocalTaskSnapshot(document: original)))
+    let restored = await restoring.value
+    XCTAssertTrue(restored)
+    XCTAssertEqual(controller.document, original)
+    XCTAssertTrue(controller.deletionHistory.isEmpty)
+  }
+
+  func testOutOfOrderTaskAndListDeleteRepliesKeepTransactionHistoryOrder() async throws {
+    let tag = TaskTag(name: "Work")
+    let task = LocalTask(text: "Todo")
+    let original = LocalTaskDocument(tasks: [task], tags: [tag])
+    let storage = ControlledLocalTaskStore()
+    let controller = LocalTaskController(store: storage)
+    let initial = Task { await controller.refresh() }
+    try await waitUntil { await storage.loadCount == 1 }
+    await storage.finishLoad(0, result: .success(LocalTaskSnapshot(document: original)))
+    await initial.value
+    let deletingTask = Task { await controller.deleteTask(id: task.id) }
+    try await waitUntil { await storage.mutationCount == 1 }
+    let deletingList = Task { await controller.deleteTag(id: tag.id) }
+    try await waitUntil { await storage.mutationCount == 2 }
+
+    let taskReceipt = LocalTaskDeletionReceipt(task: task, index: 0, previousID: nil, nextID: nil)
+    let older = LocalTaskSnapshot(
+      document: LocalTaskDocument(tags: [tag]), deletionReceipt: taskReceipt)
+    let tagReceipt = LocalTagDeletionReceipt(
+      tag: tag, index: 0, previousID: nil, nextID: nil, tasks: [])
+    let newer = LocalTaskSnapshot(document: LocalTaskDocument(), tagDeletionReceipt: tagReceipt)
+    await storage.finishMutation(1, result: .success(newer))
+    let listDeleted = await deletingList.value
+    XCTAssertTrue(listDeleted)
+    await storage.finishMutation(0, result: .success(older))
+    let taskDeleted = await deletingTask.value
+    XCTAssertTrue(taskDeleted)
+    XCTAssertEqual(controller.document, LocalTaskDocument())
+    XCTAssertEqual(controller.deletionHistory, [.task(taskReceipt), .tag(tagReceipt)])
+  }
+
+  func testAmbiguousListDeleteDoesNotTreatLaterEditAsConfirmedDeletion() async throws {
+    let tag = TaskTag(name: "Work")
+    let task = LocalTask(text: "Original", tagIDs: [tag.id])
+    let original = LocalTaskDocument(tasks: [task], tags: [tag])
+    let storage = ControlledLocalTaskStore()
+    let controller = LocalTaskController(store: storage)
+    let initial = Task { await controller.refresh() }
+    try await waitUntil { await storage.loadCount == 1 }
+    await storage.finishLoad(0, result: .success(LocalTaskSnapshot(document: original)))
+    await initial.value
+    let deleting = Task { await controller.deleteTag(id: tag.id) }
+    try await waitUntil { await storage.mutationCount == 1 }
+    let receipt = LocalTagDeletionReceipt(
+      tag: tag, index: 0, previousID: nil, nextID: nil,
+      tasks: [LocalTaskDeletionReceipt(task: task, index: 0, previousID: nil, nextID: nil)])
+    await storage.finishMutation(
+      0, result: .failure(LocalTagDeletionError(receipt: receipt, cause: .verificationFailed)))
+    try await waitUntil { await storage.loadCount == 2 }
+    var edited = original
+    edited.tasks[0].text = "Later edit"
+    await storage.finishLoad(1, result: .success(LocalTaskSnapshot(document: edited)))
+    let deleted = await deleting.value
+    XCTAssertFalse(deleted)
+    XCTAssertEqual(controller.document, edited)
+    XCTAssertTrue(controller.deletionHistory.isEmpty)
+
+    // A conflicting present target did not prove that the write failed either.
+    // Preserve the receipt so a later confirmed absence can still recover it.
+    let refresh = Task { await controller.refresh() }
+    try await waitUntil { await storage.loadCount == 3 }
+    await storage.finishLoad(2, result: .success(LocalTaskSnapshot(document: LocalTaskDocument())))
+    await refresh.value
+    XCTAssertEqual(controller.deletionHistory, [.tag(receipt)])
+  }
+
+  func testOlderRefreshCannotDiscardUncertainListDeletionReceipt() async throws {
+    let tag = TaskTag(name: "Empty")
+    let original = LocalTaskDocument(tags: [tag])
+    let storage = ControlledLocalTaskStore()
+    let controller = LocalTaskController(store: storage)
+    let initial = Task { await controller.refresh() }
+    try await waitUntil { await storage.loadCount == 1 }
+    await storage.finishLoad(0, result: .success(LocalTaskSnapshot(document: original)))
+    await initial.value
+    let oldSnapshot = LocalTaskSnapshot(document: original)
+    let oldRefresh = Task { await controller.refresh() }
+    try await waitUntil { await storage.loadCount == 2 }
+    let deleting = Task { await controller.deleteTag(id: tag.id) }
+    try await waitUntil { await storage.mutationCount == 1 }
+    let receipt = LocalTagDeletionReceipt(
+      tag: tag, index: 0, previousID: nil, nextID: nil, tasks: [])
+    await storage.finishMutation(
+      0, result: .failure(LocalTagDeletionError(receipt: receipt, cause: .verificationFailed)))
+    try await waitUntil { await storage.loadCount == 3 }
+    await storage.finishLoad(2, result: .failure(LocalTaskStoreError.unreadable))
+    let deleted = await deleting.value
+    XCTAssertFalse(deleted)
+    await storage.finishLoad(1, result: .success(oldSnapshot))
+    await oldRefresh.value
+    XCTAssertTrue(controller.deletionHistory.isEmpty)
+
+    let refresh = Task { await controller.refresh() }
+    try await waitUntil { await storage.loadCount == 4 }
+    await storage.finishLoad(3, result: .success(LocalTaskSnapshot(document: LocalTaskDocument())))
+    await refresh.value
+    XCTAssertEqual(controller.deletionHistory, [.tag(receipt)])
   }
 }
 

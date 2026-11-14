@@ -25,7 +25,8 @@ there is no account, import, source selector, database or network sync.
   case; a duplicate offers the existing tag instead of creating another.
 - The selected tag's visible **…** menu and its context menu offer **Move Left**, **Move Right**, **Rename** and
   **Remove**. Settings → Lists & tags offers the same operations. Removing a custom tag
-  requires confirmation, moves its tasks to **Todo**, and never deletes tasks.
+  requires confirmation of the list name and task count, then deletes the tag
+  and all its tasks together. One Undo restores the entire list, even if empty.
   An affected retained draft blocks removal with a **Return to draft** action;
   save or explicitly discard it first. **All tags** opens searchable management
   with full names, task counts and creation. There is no tag-count cap.
@@ -65,12 +66,15 @@ there is no account, import, source selector, database or network sync.
 - Deleting from a row, its context menu or the editor removes the task without
   another confirmation. Row controls reserve their width so hovering does not
   shift text; keyboard users can reach the same action.
-- **Undo** restores the last deleted task, including its UUID, content,
-  completion/repeat data and position. The controller retains at most 20
-  deletions for the app session across tabs/pages/popover closure; there is no
-  countdown. Quit clears this in-memory history. If the original tag was
-  removed, restoration goes to **Todo**. Restoring a task never replaces the
-  whole document or overwrites unrelated subsequent changes.
+- **Undo** restores the latest task or list deletion. A list counts as one
+  operation and restores its tag, every task, identities, completion/repeat
+  data and relative positions. The controller retains at most 20 operations
+  for the app session across tabs/pages/popover closure; there is no countdown.
+  Quit clears this in-memory history. Undo is available on Home and in the tag
+  manager, including Settings. Restoring a separately deleted single task whose
+  tag no longer exists falls back to **Todo**. Restoration merges only the
+  receipt's targets, never the whole document or unrelated subsequent changes.
+  Conflicting IDs or tag names retain the receipt and report an error.
 - Text input retains native Undo/Redo and Cut/Copy/Paste/Select All through the
   AppKit responder chain. Task deletion does not hijack text undo.
 
@@ -138,8 +142,11 @@ change the machine clock to test failures/repeat.
 7. Delete via mouse, context menu and keyboard. Verify no text reflow, immediate
    feedback and multiple Undo operations. Remove the original tag, then undo a
    task deletion and verify fallback to Todo.
-8. Rename/remove custom tags from both tab menus and Settings. Confirm removal
-   retains tasks and the default Todo cannot be removed or duplicated.
+8. Rename/delete custom lists from both tab menus and Settings. Confirm deletion
+   removes exactly that tag and its tasks, leaves Todo/other lists unchanged,
+   and one Undo restores the group and order. Check empty-list undo, mixed task
+   and list deletion order, and a source task being edited toward another list.
+   The default Todo cannot be removed or duplicated.
 9. Verify text Undo/Redo, clipboard editing, typing/dirty-draft hover suspension,
    idle hover dismissal, outside click and the normal 300 ms opening guard /
    180 ms departure delay.

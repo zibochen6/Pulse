@@ -106,7 +106,6 @@
 "Go to Todo" = "Go to Todo";
 "Installing the update and restarting…" = "Installing the update and restarting…";
 "Keep Pulse ready when you start your day." = "Keep Pulse ready when you start your day.";
-"Keep tag" = "Keep tag";
 "Keep your daily companion up to date." = "Keep your daily companion up to date.";
 "Later" = "Later";
 "Launch at login" = "Launch at login";
@@ -191,10 +190,6 @@
 "Reload your tasks before making changes. The saved file has not been changed." = "Reload your tasks before making changes. The saved file has not been changed.";
 "Remaining" = "Remaining";
 "Remove" = "Remove";
-"Remove tag" = "Remove tag";
-"Remove tag…" = "Remove tag…";
-"Remove “%@”? %lld tasks will move to Todo." = "Remove “%@”? %lld tasks will move to Todo.";
-"Remove “%@”? Its tasks will move to Todo." = "Remove “%@”? Its tasks will move to Todo.";
 "Rename" = "Rename";
 "Rename…" = "Rename…";
 "Repeat daily" = "Repeat daily";
@@ -247,7 +242,6 @@
 "The update download was empty." = "The update download was empty.";
 "These tasks were saved by a newer format. Update Pulse to read them; the file is unchanged." = "These tasks were saved by a newer format. Update Pulse to read them; the file is unchanged.";
 "This tag already exists." = "This tag already exists.";
-"This tag has an unfinished draft. Save or discard it before removing the tag." = "This tag has an unfinished draft. Save or discard it before removing the tag.";
 "This task changed since it was created. Refresh before saving again." = "This task changed since it was created. Refresh before saving again.";
 "This task no longer exists. Refresh the list and try again." = "This task no longer exists. Refresh the list and try again.";
 "This task no longer repeats daily. Refresh the list and try again." = "This task no longer repeats daily. Refresh the list and try again.";
@@ -278,3 +272,16 @@
 "Your day, in focus." = "Your day, in focus.";
 "Your services, connected on your terms." = "Your services, connected on your terms.";
 "macOS cannot locate this app for login. Try an installed build." = "macOS cannot locate this app for login. Try an installed build.";
+"Delete list" = "Delete list";
+"Delete list…" = "Delete list…";
+"Delete “%@” and its %lld task?" = "Delete “%@” and its %lld task?";
+"Delete “%@” and its %lld tasks?" = "Delete “%@” and its %lld tasks?";
+"The entire list will be deleted. Undo keeps the last 20 deletions until Pulse quits." = "The entire list will be deleted. Undo keeps the last 20 deletions until Pulse quits.";
+"This list has an unfinished draft. Save or discard it before deleting the list." = "This list has an unfinished draft. Save or discard it before deleting the list.";
+"Deleted list “%@”" = "Deleted list “%@”";
+"Undo task deletion" = "Undo task deletion";
+"Undo list deletion" = "Undo list deletion";
+"Restore the last deleted list and its tasks (%lld available)" = "Restore the last deleted list and its tasks (%lld available)";
+"This list changed since it was deleted. Resolve the conflict before trying Undo again." = "This list changed since it was deleted. Resolve the conflict before trying Undo again.";
+"Continue current edit" = "Continue current edit";
+"You are editing another task. Save or cancel that edit first; this list’s draft will be kept." = "You are editing another task. Save or cancel that edit first; this list’s draft will be kept.";

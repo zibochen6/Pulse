@@ -85,6 +85,7 @@ struct LocalTagSettingsView: View {
             .buttonStyle(PulseActionButtonStyle())
         }
       }
+      LocalDeletionUndoBar(controller: controller, presentation: presentation)
     }
     .font(.system(size: 13))
     .onAppear { onEditingChanged(isEditing) }
@@ -134,7 +135,7 @@ struct LocalTagSettingsView: View {
         Button("Move Up") { moveTag(tag, to: index - 1) }.disabled(index == 0)
         Button("Move Down") { moveTag(tag, to: index + 1) }.disabled(index == tags.count - 1)
         Divider()
-        Button("Remove tag…", role: .destructive) {
+        Button("Delete list…", role: .destructive) {
           controller.dismissError()
           presentation.tagIntent = LocalTagIntent(action: .delete(tag.id), name: tag.name)
         }

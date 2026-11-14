@@ -435,6 +435,134 @@ final class LocalTasksRenderingTests: XCTestCase {
     XCTAssertNotNil(presentation.editDraft)
   }
 
+  func testListDeletionProtectsEditedTaskSourceAfterChangingDestination() throws {
+    let source = TaskTag(name: "Work")
+    let destination = TaskTag(name: "Personal")
+    let task = LocalTask(text: "Original task", tagIDs: [source.id])
+    let document = LocalTaskDocument(tasks: [task], tags: [source, destination])
+    for newDestination in [nil, destination.id] {
+      let presentation = LocalTaskPresentation()
+      presentation.quickDraft.text = "Keep Todo draft"
+      presentation.selectedFilter = .tag(destination.id)
+      presentation.quickDraft.text = "Keep Personal draft"
+      let retainedDrafts = presentation.quickDrafts
+      presentation.beginEditingTask(task)
+      presentation.editDraft?.text = "Unsaved edit"
+      presentation.editDraft?.choose(newDestination)
+      let edit = try XCTUnwrap(presentation.editDraft)
+      presentation.tagIntent = LocalTagIntent(action: .delete(source.id), name: source.name)
+
+      XCTAssertTrue(presentation.hasDraftBlockingTagDeletion(source.id, document: document))
+      XCTAssertNil(presentation.captureTagSubmission(document: document))
+      XCTAssertTrue(presentation.submittingIDs.isEmpty)
+      presentation.returnToDraft(affectedByTagID: source.id, document: document)
+      XCTAssertEqual(presentation.editDraft, edit)
+      XCTAssertEqual(presentation.quickDrafts, retainedDrafts)
+      XCTAssertEqual(presentation.selectedFilter, .tag(destination.id))
+      XCTAssertNil(presentation.tagIntent)
+    }
+  }
+
+  func testUnrelatedEditorAndDraftDoNotBlockAnotherListDeletion() throws {
+    let removed = TaskTag(name: "Work")
+    let retained = TaskTag(name: "Personal")
+    let task = LocalTask(text: "Keep editing", tagIDs: [retained.id])
+    let document = LocalTaskDocument(tasks: [task], tags: [removed, retained])
+    let presentation = LocalTaskPresentation()
+    presentation.quickDraft.text = "Keep Todo input"
+    presentation.beginEditingTask(task)
+    let edit = presentation.editDraft
+    let draft = presentation.quickDraft
+    presentation.tagIntent = LocalTagIntent(action: .delete(removed.id), name: removed.name)
+    XCTAssertFalse(presentation.hasDraftBlockingTagDeletion(removed.id, document: document))
+    let submission = try XCTUnwrap(presentation.captureTagSubmission(document: document))
+    presentation.finishTagSubmission(submission, saved: true)
+    XCTAssertEqual(presentation.editDraft, edit)
+    XCTAssertEqual(presentation.quickDraft, draft)
+  }
+
+  func testBlockedQuickDraftResolvesUnrelatedEditorBeforeChangingSelection() throws {
+    let blocked = TaskTag(name: "Work")
+    let current = TaskTag(name: "Personal")
+    let task = LocalTask(text: "Keep editing", tagIDs: [current.id])
+    let document = LocalTaskDocument(tasks: [task], tags: [blocked, current])
+    let presentation = LocalTaskPresentation()
+    presentation.selectedFilter = .tag(blocked.id)
+    presentation.quickDraft.text = "Unfinished Work draft"
+    presentation.selectedFilter = .tag(current.id)
+    presentation.quickDraft.text = "Unfinished Personal draft"
+    presentation.beginEditingTask(task)
+    presentation.editDraft?.text = "Unfinished task edit"
+    let edit = presentation.editDraft
+    let drafts = presentation.quickDrafts
+    presentation.tagIntent = LocalTagIntent(action: .delete(blocked.id), name: blocked.name)
+
+    XCTAssertTrue(presentation.needsCurrentEditFirst(forTagID: blocked.id, document: document))
+    XCTAssertNil(presentation.captureTagSubmission(document: document))
+    presentation.returnToDraft(affectedByTagID: blocked.id, document: document)
+    XCTAssertEqual(presentation.editDraft, edit)
+    XCTAssertEqual(presentation.quickDrafts, drafts)
+    XCTAssertEqual(presentation.selectedFilter, .tag(current.id))
+    XCTAssertNil(presentation.tagIntent)
+
+    // An explicit Cancel resolves the current editor. A later return can now
+    // reveal the blocking quick draft without changing any retained identity.
+    presentation.editDraft = nil
+    presentation.tagIntent = LocalTagIntent(action: .delete(blocked.id), name: blocked.name)
+    XCTAssertFalse(presentation.needsCurrentEditFirst(forTagID: blocked.id, document: document))
+    presentation.returnToDraft(affectedByTagID: blocked.id, document: document)
+    XCTAssertEqual(presentation.selectedFilter, .tag(blocked.id))
+    XCTAssertTrue(presentation.isComposerExpanded)
+    XCTAssertEqual(presentation.quickDrafts, drafts)
+    XCTAssertNil(presentation.tagIntent)
+  }
+
+  func testUndoRevealsRestoredListIncludingEmptyListAndPreservesDrafts() async throws {
+    for taskCount in [0, 2] {
+      let controller = try await controller()
+      let tag = TaskTag(name: "Work")
+      _ = await controller.createTag(id: tag.id, name: tag.name)
+      for index in 0..<taskCount {
+        _ = await controller.saveTask(
+          id: nil, text: "Restored \(index)", tagIDs: [tag.id], newTagNames: [])
+      }
+      _ = await controller.deleteTag(id: tag.id)
+      let receipt = try XCTUnwrap(controller.deletionHistory.last)
+      XCTAssertEqual(receipt.undoButtonTitle, PulseLocalization.string("Undo list deletion"))
+      let presentation = LocalTaskPresentation()
+      presentation.quickDraft.text = "Unfinished Todo input"
+      let todoDraft = presentation.quickDraft
+      let restored = await controller.undoDeletion()
+      XCTAssertTrue(restored)
+      let document = try XCTUnwrap(controller.document)
+      presentation.revealRestoredDeletion(receipt, document: document)
+      XCTAssertEqual(presentation.selectedFilter, .tag(tag.id))
+      XCTAssertEqual(presentation.quickDrafts[.untagged], todoDraft)
+      XCTAssertEqual(controller.tasks(matching: presentation.selectedFilter).count, taskCount)
+      XCTAssertEqual(presentation.revealedTaskID, document.tasks.first?.id)
+    }
+  }
+
+  func testUndoKeepsAnUnrelatedActiveEditorAndItsSelection() async throws {
+    let controller = try await controller()
+    let tag = TaskTag(name: "Work")
+    _ = await controller.createTag(id: tag.id, name: tag.name)
+    _ = await controller.saveTask(id: nil, text: "Todo edit", tagIDs: [], newTagNames: [])
+    let task = try XCTUnwrap(controller.document?.tasks.first)
+    let presentation = LocalTaskPresentation()
+    presentation.beginEditingTask(task)
+    presentation.editDraft?.text = "Unfinished editor text"
+    let edit = presentation.editDraft
+    _ = await controller.deleteTag(id: tag.id)
+    let receipt = try XCTUnwrap(controller.deletionHistory.last)
+    let restored = await controller.undoDeletion()
+    XCTAssertTrue(restored)
+    presentation.revealRestoredDeletion(receipt, document: try XCTUnwrap(controller.document))
+    XCTAssertEqual(presentation.editDraft, edit)
+    XCTAssertEqual(presentation.selectedFilter, .untagged)
+    XCTAssertEqual(controller.document?.tags, [tag])
+  }
+
   func testDiscardAllDraftsWaitsForSubmissionAndClearsHiddenDraftsWhenIdle() throws {
     let presentation = LocalTaskPresentation()
     presentation.quickDraft.text = "Pending"
@@ -886,6 +1014,74 @@ final class LocalTasksRenderingTests: XCTestCase {
     XCTAssertEqual(focuses, [true, false])
   }
 
+  func testOneUndoBarFitsHomeEditorAndBothManagersForTaskAndListDeletions() async throws {
+    let directory = URL(fileURLWithPath: "/tmp/PulseListDeletionRender", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    for kind in ["task", "list", "empty-list"] {
+      let controller = try await controller()
+      let tag = TaskTag(name: "工作 Work")
+      _ = await controller.createTag(id: tag.id, name: tag.name)
+      _ = await controller.saveTask(id: nil, text: "Keep editing", tagIDs: [], newTagNames: [])
+      let retained = try XCTUnwrap(controller.document?.tasks.first)
+      if kind != "empty-list" {
+        _ = await controller.saveTask(
+          id: nil, text: "Deleted task", tagIDs: [tag.id], newTagNames: [])
+      }
+      if kind == "task" {
+        _ = await controller.deleteTask(id: try XCTUnwrap(controller.document?.tasks.last?.id))
+      } else {
+        _ = await controller.deleteTag(id: tag.id)
+      }
+      XCTAssertEqual(controller.deletionHistory.count, 1)
+      for appearanceName in [NSAppearance.Name.aqua, .darkAqua] {
+        for surface in ["home", "editor", "panel-manager", "settings-manager"] {
+          let presentation = LocalTaskPresentation()
+          let content: AnyView
+          let size: CGSize
+          if surface.contains("manager") {
+            size =
+              surface == "settings-manager"
+              ? CGSize(width: 472, height: 400) : CGSize(width: 368, height: 400)
+            content = AnyView(
+              LocalTagSettingsView(controller: controller, presentation: presentation))
+          } else {
+            size = CGSize(width: 360, height: 274)
+            if surface == "editor" { presentation.beginEditingTask(retained) }
+            content = AnyView(
+              LocalTasksView(
+                controller: controller, presentation: presentation, onEditingChanged: { _ in }))
+          }
+          let capture = DeletionUndoBoundsCapture()
+          let root = content.frame(width: size.width, height: size.height)
+            .background(PulseDesignTokens.background)
+            .overlayPreferenceValue(LocalDeletionUndoBoundsKey.self) { anchors in
+              GeometryReader { proxy in
+                DeletionUndoBoundsCaptureView(frames: anchors.map { proxy[$0] }, capture: capture)
+              }
+              .allowsHitTesting(false)
+            }
+          let host = NSHostingView(rootView: root)
+          host.appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
+          host.frame = CGRect(origin: .zero, size: size)
+          host.layoutSubtreeIfNeeded()
+          XCTAssertEqual(capture.frames.count, 1, "Exactly one Undo bar on \(surface)")
+          let frame = try XCTUnwrap(capture.frames.first)
+          XCTAssertGreaterThan(frame.width, 0)
+          XCTAssertGreaterThan(frame.height, 24)
+          XCTAssertGreaterThanOrEqual(frame.minX, -1)
+          XCTAssertGreaterThanOrEqual(frame.minY, -1)
+          XCTAssertLessThanOrEqual(frame.maxX, size.width + 1)
+          XCTAssertLessThanOrEqual(frame.maxY, size.height + 1)
+          let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+          host.cacheDisplay(in: host.bounds, to: bitmap)
+          try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(
+            to: directory.appendingPathComponent(
+              "\(appearanceName.rawValue)-\(kind)-\(surface).png"))
+        }
+      }
+    }
+  }
+
   func testTaskStatesRenderAtPopoverSizeInBothAppearances() async throws {
     let controller = try await controller()
     let work = TaskTag(name: "Work")
@@ -1230,6 +1426,25 @@ private struct RowFrameKey: PreferenceKey {
   static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
     let next = nextValue()
     if next != .null { value = next }
+  }
+}
+
+@MainActor
+private final class DeletionUndoBoundsCapture {
+  var frames: [CGRect] = []
+}
+
+private struct DeletionUndoBoundsCaptureView: NSViewRepresentable {
+  let frames: [CGRect]
+  let capture: DeletionUndoBoundsCapture
+
+  func makeNSView(context: Context) -> NSView {
+    capture.frames = frames
+    return NSView()
+  }
+
+  func updateNSView(_ view: NSView, context: Context) {
+    capture.frames = frames
   }
 }
 

@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/builtin-tasks.md", "reason": "Transactional storage, recovery and single-task undo; PRD supersedes detach-to-Todo semantics."}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Draft ownership, native input identity and guarded async submission."}
+{"file": ".trellis/spec/frontend/ui-presentation.md", "reason": "Shared windows, localized actions and update safety."}

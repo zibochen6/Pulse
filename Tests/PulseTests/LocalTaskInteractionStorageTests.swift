@@ -34,6 +34,14 @@ final class LocalTaskInteractionStorageTests: XCTestCase {
     }
   }
 
+  private func taskReceipt(_ receipt: LocalDeletionReceipt?) throws -> LocalTaskDeletionReceipt {
+    guard case .task(let taskReceipt) = try XCTUnwrap(receipt) else {
+      XCTFail("Expected a task deletion")
+      throw LocalTaskStoreError.taskMissing
+    }
+    return taskReceipt
+  }
+
   func testStandaloneTagRetryKeepsEmptyListAndRejectsMultipleDestinationsAtomically() async throws {
     let url = try storageURL()
     let store = LocalTaskStore(fileURL: url)
@@ -171,7 +179,7 @@ final class LocalTaskInteractionStorageTests: XCTestCase {
     ).document.tasks[0]
     let deleted = await controller.deleteTask(id: target.id)
     XCTAssertTrue(deleted)
-    let receipt = try XCTUnwrap(controller.deletionHistory.last)
+    let receipt = try taskReceipt(controller.deletionHistory.last)
     XCTAssertEqual(receipt.task, completed)
     XCTAssertEqual(receipt.index, 0)
     XCTAssertNil(receipt.previousID)
@@ -240,7 +248,7 @@ final class LocalTaskInteractionStorageTests: XCTestCase {
     XCTAssertTrue(retried)
     XCTAssertEqual(controller.document?.tasks, [])
     XCTAssertEqual(controller.deletionHistory.count, 1)
-    XCTAssertEqual(controller.deletionHistory.first?.task, task)
+    XCTAssertEqual(try taskReceipt(controller.deletionHistory.first).task, task)
     let restored = await controller.undoDeletion()
     XCTAssertTrue(restored)
     XCTAssertEqual(controller.document?.tasks, [task])
@@ -283,15 +291,275 @@ final class LocalTaskInteractionStorageTests: XCTestCase {
       XCTAssertTrue(deleted)
     }
     XCTAssertEqual(
-      controller.deletionHistory.map { $0.task.id }, Array(tasks.dropFirst(2)).map(\.id))
+      try controller.deletionHistory.map { try taskReceipt($0).task.id },
+      Array(tasks.dropFirst(2)).map(\.id))
     await controller.refresh()
     XCTAssertEqual(controller.deletionHistory.count, 20)
     for task in tasks.dropFirst(2).reversed() {
-      XCTAssertEqual(controller.deletionHistory.last?.task.id, task.id)
+      XCTAssertEqual(try taskReceipt(controller.deletionHistory.last).task.id, task.id)
       let restored = await controller.undoDeletion()
       XCTAssertTrue(restored)
     }
     XCTAssertEqual(controller.document?.tasks, Array(tasks.dropFirst(2)))
+    XCTAssertTrue(controller.deletionHistory.isEmpty)
+  }
+
+  func testListReceiptUsesLatestNameMembershipAndTaskContents() async throws {
+    let url = try storageURL()
+    let tag = TaskTag(name: "Old name")
+    let target = LocalTask(text: "Old contents", tagIDs: [tag.id])
+    let moved = LocalTask(text: "Moved away", tagIDs: [tag.id])
+    _ = try seed(LocalTaskDocument(tasks: [target, moved], tags: [tag]), at: url)
+    let store = LocalTaskStore(fileURL: url)
+    let controller = LocalTaskController(store: store)
+    await controller.refresh()
+    _ = try await store.mutate(.renameTag(id: tag.id, name: "Current name"))
+    _ = try await store.mutate(
+      .saveTask(
+        id: target.id, text: "Current contents", tagIDs: [tag.id], newTagNames: [],
+        repeatsDaily: true))
+    _ = try await store.mutate(.completeRepeating(taskID: target.id, completedAt: Date()))
+    _ = try await store.mutate(
+      .saveTask(id: moved.id, text: moved.text, tagIDs: [], newTagNames: []))
+    let current = try await store.mutate(
+      .saveTask(id: nil, text: "Added after refresh", tagIDs: [tag.id], newTagNames: [])
+    ).document
+    let deleted = await controller.deleteTag(id: tag.id)
+    XCTAssertTrue(deleted)
+    guard case .tag(let receipt) = try XCTUnwrap(controller.deletionHistory.last) else {
+      return XCTFail("Expected whole-list receipt")
+    }
+    XCTAssertEqual(receipt.tag.name, "Current name")
+    XCTAssertEqual(receipt.tasks.map(\.task), [current.tasks[0], current.tasks[2]])
+    XCTAssertEqual(controller.document?.tasks, [current.tasks[1]])
+    let restored = await controller.undoDeletion()
+    XCTAssertTrue(restored)
+    XCTAssertEqual(controller.document, current)
+  }
+
+  func testListDeleteFailuresRecoverOneReceiptForEmptyAndPopulatedLists() async throws {
+    for taskCount in [0, 2] {
+      for fault in [InteractionFaultStore.Fault.noWrite, .trailingWhitespace] {
+        for failReload in [false, true] {
+          let url = try storageURL()
+          let tag = TaskTag(name: "Work")
+          let tasks = (0..<taskCount).map { LocalTask(text: "Task \($0)", tagIDs: [tag.id]) }
+          let original = LocalTaskDocument(tasks: tasks, tags: [tag])
+          _ = try seed(original, at: url)
+          let store = InteractionFaultStore(
+            fileURL: url, faults: [fault, .atomic], failReloadAfter: failReload ? [1] : [])
+          let controller = LocalTaskController(store: store)
+          await controller.refresh()
+          _ = await controller.deleteTag(id: tag.id)
+          if fault == .noWrite { XCTAssertTrue(controller.deletionHistory.isEmpty) }
+          let retry = await controller.deleteTag(id: tag.id)
+          XCTAssertTrue(retry)
+          XCTAssertEqual(controller.document, LocalTaskDocument())
+          XCTAssertEqual(controller.deletionHistory.count, 1)
+          guard case .tag(let receipt) = try XCTUnwrap(controller.deletionHistory.last) else {
+            return XCTFail("Retry must retain a whole-list receipt")
+          }
+          XCTAssertEqual(receipt.tag, tag)
+          XCTAssertEqual(receipt.tasks.map(\.task), tasks)
+          let restored = await controller.undoDeletion()
+          XCTAssertTrue(restored)
+          XCTAssertEqual(controller.document, original)
+          XCTAssertTrue(controller.deletionHistory.isEmpty)
+        }
+      }
+    }
+  }
+
+  func testListRestorePostWriteFailureRetainsReceiptAndRetriesIdempotently() async throws {
+    let url = try storageURL()
+    let tag = TaskTag(name: "Work")
+    let tasks = [
+      LocalTask(text: "One", tagIDs: [tag.id]), LocalTask(text: "Two", tagIDs: [tag.id]),
+    ]
+    let original = LocalTaskDocument(tasks: tasks, tags: [tag])
+    _ = try seed(original, at: url)
+    let store = InteractionFaultStore(
+      fileURL: url, faults: [.atomic, .trailingWhitespace, .atomic])
+    let controller = LocalTaskController(store: store)
+    await controller.refresh()
+    let deleted = await controller.deleteTag(id: tag.id)
+    XCTAssertTrue(deleted)
+    let history = controller.deletionHistory
+    let firstRestore = await controller.undoDeletion()
+    XCTAssertFalse(firstRestore)
+    XCTAssertEqual(controller.document, original)
+    XCTAssertEqual(controller.deletionHistory, history)
+    let retried = await controller.undoDeletion()
+    XCTAssertTrue(retried)
+    XCTAssertEqual(controller.document, original)
+    XCTAssertTrue(controller.deletionHistory.isEmpty)
+  }
+
+  func testTwoAmbiguousListDeleteAttemptsRestoreNewestTransactionContents() async throws {
+    let url = try storageURL()
+    let tag = TaskTag(name: "Original list")
+    let task = LocalTask(text: "Original task", tagIDs: [tag.id])
+    _ = try seed(LocalTaskDocument(tasks: [task], tags: [tag]), at: url)
+    let storage = InteractionFaultStore(
+      fileURL: url, faults: [.noWrite, .trailingWhitespace, .atomic], failReloadAfter: [1, 2])
+    let controller = LocalTaskController(store: storage)
+    await controller.refresh()
+    let firstAttempt = await controller.deleteTag(id: tag.id)
+    XCTAssertFalse(firstAttempt)
+    XCTAssertTrue(controller.deletionHistory.isEmpty)
+
+    let otherStore = LocalTaskStore(fileURL: url)
+    _ = try await otherStore.mutate(.renameTag(id: tag.id, name: "Current list"))
+    _ = try await otherStore.mutate(
+      .saveTask(
+        id: task.id, text: "Current task", tagIDs: [tag.id], newTagNames: [], repeatsDaily: true))
+    _ = try await otherStore.mutate(.completeRepeating(taskID: task.id, completedAt: Date()))
+    let latest = try await otherStore.mutate(
+      .saveTask(id: nil, text: "Added between attempts", tagIDs: [tag.id], newTagNames: [])
+    ).document
+    let secondAttempt = await controller.deleteTag(id: tag.id)
+    XCTAssertFalse(secondAttempt)
+    XCTAssertTrue(controller.deletionHistory.isEmpty)
+    await controller.refresh()
+    XCTAssertEqual(controller.deletionHistory.count, 1)
+    guard case .tag(let receipt) = try XCTUnwrap(controller.deletionHistory.last) else {
+      return XCTFail("Expected the latest whole-list receipt")
+    }
+    XCTAssertEqual(receipt.tag, latest.tags[0])
+    XCTAssertEqual(receipt.tasks.map(\.task), latest.tasks)
+    let restored = await controller.undoDeletion()
+    XCTAssertTrue(restored)
+    XCTAssertEqual(controller.document, latest)
+    let disk = try await otherStore.load().document
+    XCTAssertEqual(disk, latest)
+  }
+
+  func testTwoAmbiguousTaskDeleteAttemptsRestoreNewestTransactionContents() async throws {
+    let url = try storageURL()
+    let task = LocalTask(text: "Original")
+    _ = try seed(LocalTaskDocument(tasks: [task]), at: url)
+    let storage = InteractionFaultStore(
+      fileURL: url, faults: [.noWrite, .trailingWhitespace, .atomic], failReloadAfter: [1, 2])
+    let controller = LocalTaskController(store: storage)
+    await controller.refresh()
+    let firstAttempt = await controller.deleteTask(id: task.id)
+    XCTAssertFalse(firstAttempt)
+    let otherStore = LocalTaskStore(fileURL: url)
+    let latest = try await otherStore.mutate(
+      .saveTask(id: task.id, text: "Current", tagIDs: [], newTagNames: [], repeatsDaily: true)
+    ).document
+    let secondAttempt = await controller.deleteTask(id: task.id)
+    XCTAssertFalse(secondAttempt)
+    await controller.refresh()
+    XCTAssertEqual(controller.deletionHistory.count, 1)
+    XCTAssertEqual(try taskReceipt(controller.deletionHistory.last).task, latest.tasks[0])
+    let restored = await controller.undoDeletion()
+    XCTAssertTrue(restored)
+    XCTAssertEqual(controller.document, latest)
+  }
+
+  func testExternallyRestoredListDeletedAgainKeepsBothConfirmedOperations() async throws {
+    let url = try storageURL()
+    let tag = TaskTag(name: "Work")
+    let task = LocalTask(text: "Original", tagIDs: [tag.id])
+    _ = try seed(LocalTaskDocument(tasks: [task], tags: [tag]), at: url)
+    let storage = InteractionFaultStore(
+      fileURL: url, faults: [.atomic, .trailingWhitespace, .atomic], failReloadAfter: [2])
+    let controller = LocalTaskController(store: storage)
+    await controller.refresh()
+    let firstDeleted = await controller.deleteTag(id: tag.id)
+    XCTAssertTrue(firstDeleted)
+    guard case .tag(let firstReceipt) = try XCTUnwrap(controller.deletionHistory.last) else {
+      return XCTFail("Expected first list receipt")
+    }
+    let otherStore = LocalTaskStore(fileURL: url)
+    _ = try await otherStore.mutate(.restoreTag(firstReceipt))
+    let latest = try await otherStore.mutate(
+      .saveTask(id: task.id, text: "Second version", tagIDs: [tag.id], newTagNames: [])
+    ).document
+    await controller.refresh()
+    let secondAttempt = await controller.deleteTag(id: tag.id)
+    XCTAssertFalse(secondAttempt)
+    await controller.refresh()
+    XCTAssertEqual(controller.deletionHistory.count, 2)
+    XCTAssertEqual(controller.deletionHistory.first, .tag(firstReceipt))
+    guard case .tag(let secondReceipt) = try XCTUnwrap(controller.deletionHistory.last) else {
+      return XCTFail("Expected a separate second list receipt")
+    }
+    XCTAssertNotEqual(secondReceipt.id, firstReceipt.id)
+    XCTAssertEqual(secondReceipt.tasks.map(\.task), latest.tasks)
+    let newestRestored = await controller.undoDeletion()
+    XCTAssertTrue(newestRestored)
+    XCTAssertEqual(controller.document, latest)
+    XCTAssertEqual(controller.deletionHistory, [.tag(firstReceipt)])
+    let olderRestore = await controller.undoDeletion()
+    XCTAssertFalse(olderRestore)
+    XCTAssertEqual(controller.document, latest)
+    XCTAssertEqual(controller.deletionHistory, [.tag(firstReceipt)])
+  }
+
+  func testListRestoreConflictRetainsReceiptUntilConflictIsResolved() async throws {
+    let url = try storageURL()
+    let tag = TaskTag(name: "Work")
+    let original = LocalTaskDocument(tasks: [LocalTask(text: "One", tagIDs: [tag.id])], tags: [tag])
+    _ = try seed(original, at: url)
+    let store = LocalTaskStore(fileURL: url)
+    let controller = LocalTaskController(store: store)
+    await controller.refresh()
+    let deleted = await controller.deleteTag(id: tag.id)
+    XCTAssertTrue(deleted)
+    let history = controller.deletionHistory
+    let conflict = TaskTag(name: "WORK")
+    _ = try await store.mutate(.createTag(id: conflict.id, name: conflict.name))
+    let bytes = try Data(contentsOf: url)
+    let blocked = await controller.undoDeletion()
+    XCTAssertFalse(blocked)
+    XCTAssertNotNil(controller.errorMessage)
+    XCTAssertEqual(controller.deletionHistory, history)
+    XCTAssertEqual(try Data(contentsOf: url), bytes)
+    _ = try await store.mutate(.renameTag(id: conflict.id, name: "Other"))
+    let retried = await controller.undoDeletion()
+    XCTAssertTrue(retried)
+    XCTAssertEqual(controller.document?.tasks, original.tasks)
+    XCTAssertEqual(controller.document?.tags.first, tag)
+    XCTAssertEqual(controller.document?.tags.last, TaskTag(id: conflict.id, name: "Other"))
+    XCTAssertTrue(controller.deletionHistory.isEmpty)
+  }
+
+  func testMixedTaskAndListHistoryBoundsOperationsAndRestoresInLIFOOrder() async throws {
+    let url = try storageURL()
+    let tags = (0..<11).map { TaskTag(name: "List \($0)") }
+    let tasks = tags.enumerated().flatMap { index, tag in
+      [
+        LocalTask(text: "Todo \(index)"), LocalTask(text: "First", tagIDs: [tag.id]),
+        LocalTask(text: "Second", tagIDs: [tag.id]),
+      ]
+    }
+    _ = try seed(LocalTaskDocument(tasks: tasks, tags: tags), at: url)
+    let controller = LocalTaskController(store: LocalTaskStore(fileURL: url))
+    await controller.refresh()
+    for index in tags.indices {
+      let taskDeleted = await controller.deleteTask(id: tasks[index * 3].id)
+      XCTAssertTrue(taskDeleted)
+      let listDeleted = await controller.deleteTag(id: tags[index].id)
+      XCTAssertTrue(listDeleted)
+    }
+    XCTAssertEqual(controller.deletionHistory.count, 20)
+    await controller.refresh()
+    XCTAssertEqual(controller.deletionHistory.count, 20)
+    for index in (1..<11).reversed() {
+      guard case .tag(let receipt) = try XCTUnwrap(controller.deletionHistory.last) else {
+        return XCTFail("Expected list before its earlier task deletion")
+      }
+      XCTAssertEqual(receipt.tag, tags[index])
+      let listRestored = await controller.undoDeletion()
+      XCTAssertTrue(listRestored)
+      XCTAssertEqual(try taskReceipt(controller.deletionHistory.last).task.id, tasks[index * 3].id)
+      let taskRestored = await controller.undoDeletion()
+      XCTAssertTrue(taskRestored)
+    }
+    XCTAssertEqual(controller.document?.tags, Array(tags.dropFirst()))
+    XCTAssertEqual(controller.document?.tasks, Array(tasks.dropFirst(3)))
     XCTAssertTrue(controller.deletionHistory.isEmpty)
   }
 }

@@ -38,6 +38,41 @@ final class PulseLocalizationTests: XCTestCase {
     XCTAssertEqual(PulseLocalization.string("Todo", bundle: english), "Todo")
   }
 
+  func testListDeletionCopyExplainsCascadeAndSessionUndoInBothLanguages() throws {
+    let chinese = try localizedBundle("zh-Hans")
+    XCTAssertEqual(
+      PulseLocalization.format("Delete “%@” and its %lld tasks?", "工作 100%", 12, bundle: chinese),
+      "删除“工作 100%”列表及其中的 12 项任务？")
+    XCTAssertEqual(
+      PulseLocalization.format("Delete “%@” and its %lld tasks?", "Empty", 0, bundle: chinese),
+      "删除“Empty”列表及其中的 0 项任务？")
+    XCTAssertEqual(
+      PulseLocalization.format("Delete “%@” and its %lld task?", "Work", 1, bundle: chinese),
+      "删除“Work”列表及其中的 1 项任务？")
+    XCTAssertEqual(
+      PulseLocalization.string(
+        "The entire list will be deleted. Undo keeps the last 20 deletions until Pulse quits.",
+        bundle: chinese), "整个列表将被删除。退出 Pulse 前，可撤销最近 20 次删除。")
+    XCTAssertEqual(
+      PulseLocalization.format(
+        "Restore the last deleted list and its tasks (%lld available)", 3, bundle: chinese),
+      "恢复最近删除的列表及其任务（还可撤销 3 项）")
+    XCTAssertEqual(
+      PulseLocalization.string("Continue current edit", bundle: chinese), "继续当前编辑")
+    XCTAssertEqual(
+      PulseLocalization.string(
+        "You are editing another task. Save or cancel that edit first; this list’s draft will be kept.",
+        bundle: chinese), "你正在编辑另一项任务。请先保存或取消当前编辑；此列表的草稿会保留。")
+    for language in ["en", "zh-Hans"] {
+      let strings = try table(language)
+      XCTAssertNil(strings["Remove “%@”? %lld tasks will move to Todo."])
+      XCTAssertNotEqual(strings["Undo task deletion"], strings["Undo list deletion"])
+      XCTAssertNotNil(
+        strings[
+          "This list changed since it was deleted. Resolve the conflict before trying Undo again."])
+    }
+  }
+
   private func localizedBundle(_ language: String) throws -> Bundle {
     let path = try XCTUnwrap(Bundle.main.path(forResource: language, ofType: "lproj"))
     return try XCTUnwrap(Bundle(path: path))

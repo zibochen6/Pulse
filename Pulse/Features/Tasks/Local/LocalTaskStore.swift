@@ -11,6 +11,7 @@ enum LocalTaskStoreError: LocalizedError, Equatable {
   case taskConflict
   case taskNotRepeating
   case tagMissing
+  case tagConflict
   case saveFailed
   case verificationFailed
   case multipleLists
@@ -48,6 +49,9 @@ enum LocalTaskStoreError: LocalizedError, Equatable {
     case .tagMissing:
       PulseLocalization.string(
         "A selected tag no longer exists. Refresh and choose the tags again.")
+    case .tagConflict:
+      PulseLocalization.string(
+        "This list changed since it was deleted. Resolve the conflict before trying Undo again.")
     case .saveFailed:
       PulseLocalization.string("Pulse could not confirm the save. Check access and try again.")
     case .verificationFailed:
@@ -70,6 +74,7 @@ enum LocalTaskMutation: Sendable {
   case resetRepeatingTasks(today: Date)
   case createTag(id: UUID, name: String)
   case restoreTask(LocalTaskDeletionReceipt)
+  case restoreTag(LocalTagDeletionReceipt)
   case deleteTask(UUID)
   case renameTag(id: UUID, name: String)
   case deleteTag(UUID)
@@ -98,10 +103,94 @@ struct LocalTaskDeletionReceipt: Equatable, Identifiable, Sendable {
   }
 }
 
+/// A whole list is one deletion, including an empty list. Positions refer to
+/// the transaction's original document, before any of its targets are removed.
+struct LocalTagDeletionReceipt: Equatable, Identifiable, Sendable {
+  let id: UUID
+  let tag: TaskTag
+  let index: Int
+  let previousID: UUID?
+  let nextID: UUID?
+  let tasks: [LocalTaskDeletionReceipt]
+  let deletedAt: ContinuousClock.Instant
+
+  init(
+    tag: TaskTag, index: Int, previousID: UUID?, nextID: UUID?,
+    tasks: [LocalTaskDeletionReceipt]
+  ) {
+    id = UUID()
+    self.tag = tag
+    self.index = index
+    self.previousID = previousID
+    self.nextID = nextID
+    self.tasks = tasks
+    deletedAt = .now
+  }
+}
+
+enum LocalDeletionReceipt: Equatable, Identifiable, Sendable {
+  case task(LocalTaskDeletionReceipt)
+  case tag(LocalTagDeletionReceipt)
+
+  var id: UUID {
+    switch self {
+    case .task(let receipt): receipt.id
+    case .tag(let receipt): receipt.id
+    }
+  }
+
+  var deletedAt: ContinuousClock.Instant {
+    switch self {
+    case .task(let receipt): receipt.deletedAt
+    case .tag(let receipt): receipt.deletedAt
+    }
+  }
+
+  var restoreMutation: LocalTaskMutation {
+    switch self {
+    case .task(let receipt): .restoreTask(receipt)
+    case .tag(let receipt): .restoreTag(receipt)
+    }
+  }
+
+  func hasSameTarget(as other: Self) -> Bool {
+    switch (self, other) {
+    case (.task(let first), .task(let second)): first.task.id == second.task.id
+    case (.tag(let first), .tag(let second)): first.tag.id == second.tag.id
+    default: false
+    }
+  }
+
+  func targetIsAbsent(in document: LocalTaskDocument) -> Bool {
+    switch self {
+    case .task(let receipt): !document.tasks.contains { $0.id == receipt.task.id }
+    case .tag(let receipt): !document.tags.contains { $0.id == receipt.tag.id }
+    }
+  }
+
+  /// Changed contents alone do not establish that a deletion committed: an
+  /// ordinary edit may have followed a failed write. Keep that receipt pending
+  /// until a confirmed read establishes absence or the unchanged original.
+  func isUnchanged(in document: LocalTaskDocument) -> Bool {
+    switch self {
+    case .task(let receipt):
+      document.tasks.contains(receipt.task)
+    case .tag(let receipt):
+      document.tags.contains(receipt.tag)
+        && receipt.tasks.allSatisfy { document.tasks.contains($0.task) }
+    }
+  }
+}
+
 /// A replacement can commit before verification fails. Carry the receipt even
 /// through errors so the controller can reconcile with the actual file.
 struct LocalTaskDeletionError: Error, Sendable {
   let receipt: LocalTaskDeletionReceipt
+  let cause: LocalTaskStoreError
+}
+
+struct LocalTagDeletionError: Error, Sendable {
+  let receipt: LocalTagDeletionReceipt
   let cause: LocalTaskStoreError
 }
 
@@ -111,13 +200,22 @@ struct LocalTaskSnapshot: Sendable {
   let document: LocalTaskDocument
   let observedAt: ContinuousClock.Instant
   let deletionReceipt: LocalTaskDeletionReceipt?
+  let tagDeletionReceipt: LocalTagDeletionReceipt?
+
+  var operationDeletionReceipt: LocalDeletionReceipt? {
+    if let deletionReceipt { return .task(deletionReceipt) }
+    if let tagDeletionReceipt { return .tag(tagDeletionReceipt) }
+    return nil
+  }
 
   init(
     document: LocalTaskDocument, observedAt: ContinuousClock.Instant = .now,
-    deletionReceipt: LocalTaskDeletionReceipt? = nil
+    deletionReceipt: LocalTaskDeletionReceipt? = nil,
+    tagDeletionReceipt: LocalTagDeletionReceipt? = nil
   ) {
     self.document = document
     self.deletionReceipt = deletionReceipt
+    self.tagDeletionReceipt = tagDeletionReceipt
     self.observedAt = observedAt
   }
 }
@@ -173,12 +271,22 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
       if case .deleteTask(let id) = mutation,
         let index = original.tasks.firstIndex(where: { $0.id == id })
       {
-        receipt = LocalTaskDeletionReceipt(
-          task: original.tasks[index], index: index,
-          previousID: index > 0 ? original.tasks[index - 1].id : nil,
-          nextID: index + 1 < original.tasks.count ? original.tasks[index + 1].id : nil)
+        receipt = Self.taskReceipt(at: index, in: original.tasks)
       } else {
         receipt = nil
+      }
+      let tagReceipt: LocalTagDeletionReceipt?
+      if case .deleteTag(let id) = mutation,
+        let index = original.tags.firstIndex(where: { $0.id == id })
+      {
+        tagReceipt = LocalTagDeletionReceipt(
+          tag: original.tags[index], index: index,
+          previousID: index > 0 ? original.tags[index - 1].id : nil,
+          nextID: index + 1 < original.tags.count ? original.tags[index + 1].id : nil,
+          tasks: original.tasks.indices.filter { original.tasks[$0].tagIDs.contains(id) }
+            .map { Self.taskReceipt(at: $0, in: original.tasks) })
+      } else {
+        tagReceipt = nil
       }
       var updated = original
       try Self.apply(mutation, to: &updated)
@@ -191,9 +299,14 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
           throw LocalTaskDeletionError(
             receipt: receipt, cause: error as? LocalTaskStoreError ?? .saveFailed)
         }
+        if let tagReceipt {
+          throw LocalTagDeletionError(
+            receipt: tagReceipt, cause: error as? LocalTaskStoreError ?? .saveFailed)
+        }
         throw error
       }
-      return LocalTaskSnapshot(document: updated, deletionReceipt: receipt)
+      return LocalTaskSnapshot(
+        document: updated, deletionReceipt: receipt, tagDeletionReceipt: tagReceipt)
     }
   }
 
@@ -329,6 +442,27 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
       options: .caseInsensitive, locale: Locale(identifier: "en_US_POSIX"))
   }
 
+  private static func taskReceipt(at index: Int, in tasks: [LocalTask])
+    -> LocalTaskDeletionReceipt
+  {
+    LocalTaskDeletionReceipt(
+      task: tasks[index], index: index,
+      previousID: index > 0 ? tasks[index - 1].id : nil,
+      nextID: index + 1 < tasks.count ? tasks[index + 1].id : nil)
+  }
+
+  private static func insertionIndex<Item: Identifiable>(
+    in items: [Item], originalIndex: Int, previousID: UUID?, nextID: UUID?
+  ) -> Int where Item.ID == UUID {
+    if let nextID, let index = items.firstIndex(where: { $0.id == nextID }) {
+      return index
+    }
+    if let previousID, let index = items.firstIndex(where: { $0.id == previousID }) {
+      return index + 1
+    }
+    return max(0, min(originalIndex, items.count))
+  }
+
   private static func apply(_ mutation: LocalTaskMutation, to document: inout LocalTaskDocument)
     throws
   {
@@ -446,18 +580,48 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
         guard existing == task else { throw LocalTaskStoreError.taskConflict }
         return
       }
-      let insertion: Int
-      if let next = receipt.nextID, let index = document.tasks.firstIndex(where: { $0.id == next })
+      document.tasks.insert(
+        task,
+        at: insertionIndex(
+          in: document.tasks, originalIndex: receipt.index,
+          previousID: receipt.previousID, nextID: receipt.nextID))
+    case .restoreTag(let receipt):
+      // Check every conflict before staging inserts. Neither an unrelated name
+      // collision nor a reused task UUID may produce a partially restored list.
+      if let existing = document.tags.first(where: { $0.id == receipt.tag.id }),
+        existing != receipt.tag
       {
-        insertion = index
-      } else if let previous = receipt.previousID,
-        let index = document.tasks.firstIndex(where: { $0.id == previous })
-      {
-        insertion = index + 1
-      } else {
-        insertion = min(receipt.index, document.tasks.count)
+        throw LocalTaskStoreError.tagConflict
       }
-      document.tasks.insert(task, at: insertion)
+      guard
+        !document.tags.contains(where: {
+          $0.id != receipt.tag.id && canonicalName($0.name) == canonicalName(receipt.tag.name)
+        })
+      else { throw LocalTaskStoreError.tagConflict }
+      for taskReceipt in receipt.tasks {
+        if let existing = document.tasks.first(where: { $0.id == taskReceipt.task.id }),
+          existing != taskReceipt.task
+        {
+          throw LocalTaskStoreError.taskConflict
+        }
+      }
+      if !document.tags.contains(where: { $0.id == receipt.tag.id }) {
+        document.tags.insert(
+          receipt.tag,
+          at: insertionIndex(
+            in: document.tags, originalIndex: receipt.index,
+            previousID: receipt.previousID, nextID: receipt.nextID))
+      }
+      // Earlier restored targets become anchors for later contiguous targets.
+      // Identical existing targets are retries and keep their current position.
+      for taskReceipt in receipt.tasks.sorted(by: { $0.index < $1.index }) {
+        guard !document.tasks.contains(where: { $0.id == taskReceipt.task.id }) else { continue }
+        document.tasks.insert(
+          taskReceipt.task,
+          at: insertionIndex(
+            in: document.tasks, originalIndex: taskReceipt.index,
+            previousID: taskReceipt.previousID, nextID: taskReceipt.nextID))
+      }
     case .deleteTask(let id):
       guard let index = document.tasks.firstIndex(where: { $0.id == id }) else {
         return
@@ -483,7 +647,7 @@ final class LocalTaskStore: LocalTaskStoring, Sendable {
         return
       }
       document.tags.remove(at: index)
-      for index in document.tasks.indices { document.tasks[index].tagIDs.remove(id) }
+      document.tasks.removeAll { $0.tagIDs.contains(id) }
     case .moveTag(let id, let toIndex):
       // A tag removed while this drag was in flight is a stale request, not a
       // mistake to punish: refusing leaves the file consistent and the view

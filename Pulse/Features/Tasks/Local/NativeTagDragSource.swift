@@ -159,7 +159,7 @@ struct NativeTagDragSource: NSViewRepresentable {
       guard let configuration, configuration.isEnabled else { return nil }
       let menu = NSMenu()
       menu.addItem(TagActionItem("Rename…", action: configuration.onRename))
-      menu.addItem(TagActionItem("Remove tag…", action: configuration.onDelete))
+      menu.addItem(TagActionItem("Delete list…", action: configuration.onDelete))
       menu.addItem(.separator())
       let left = TagActionItem("Move Left", action: configuration.onMoveLeft)
       left.isEnabled = configuration.canMoveLeft

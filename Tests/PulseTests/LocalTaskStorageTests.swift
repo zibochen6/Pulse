@@ -96,7 +96,7 @@ final class LocalTaskStorageTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: url), original)
   }
 
-  func testTagRenameAndDeleteKeepTasksAndOnlyDetachAssociations() async throws {
+  func testTagRenameAndDeleteRemovesItsTasksAndSupportsWholeListRestore() async throws {
     let store = LocalTaskStore(fileURL: try storageURL())
     var document = try await store.mutate(
       .saveTask(id: nil, text: "Tagged", tagIDs: [], newTagNames: ["Work"])
@@ -111,13 +111,19 @@ final class LocalTaskStorageTests: XCTestCase {
     }
     document = try await store.mutate(.renameTag(id: work.id, name: " Job ")).document
     XCTAssertEqual(document.tags[0], TaskTag(id: work.id, name: "Job"))
-    document = try await store.mutate(.deleteTag(work.id)).document
-    XCTAssertEqual(document.tasks.map(\.id), [task.id])
-    XCTAssertTrue(document.tasks[0].completed)
-    XCTAssertEqual(document.tasks[0].tagIDs, [])
+    let deletion = try await store.mutate(.deleteTag(work.id))
+    document = deletion.document
+    XCTAssertTrue(document.tasks.isEmpty)
     XCTAssertEqual(document.tags, [home])
     document = try await store.mutate(.deleteTag(home.id)).document
-    XCTAssertEqual(document.tasks[0].tagIDs, [])
+    XCTAssertTrue(document.tasks.isEmpty)
+    XCTAssertTrue(document.tags.isEmpty)
+    document = try await store.mutate(.restoreTag(try XCTUnwrap(deletion.tagDeletionReceipt)))
+      .document
+    XCTAssertEqual(document.tags, [TaskTag(id: work.id, name: "Job")])
+    XCTAssertEqual(document.tasks.map(\.id), [task.id])
+    XCTAssertTrue(document.tasks[0].completed)
+    XCTAssertEqual(document.tasks[0].tagIDs, [work.id])
     XCTAssertEqual(document.tasks[0].text, "Tagged")
   }
 
@@ -137,6 +143,157 @@ final class LocalTaskStorageTests: XCTestCase {
     let reloaded = try await LocalTaskStore(fileURL: url).load().document
     XCTAssertEqual(reloaded.tags.map(\.id), [writing.id, home.id, work.id])
     XCTAssertEqual(reloaded.tags.map(\.name), ["Writing", "Home", "Work"])
+  }
+
+  func testWholeListDeletionAndRestorePreserveInterleavedTasksAndLaterEdits() async throws {
+    let url = try storageURL()
+    let before = TaskTag(name: "Before")
+    let work = TaskTag(name: "Work")
+    let after = TaskTag(name: "After")
+    let day = Calendar.current.startOfDay(for: Date())
+    let first = LocalTask(text: "Same title", tagIDs: [work.id])
+    // A previously detached task has no recoverable membership, even when its
+    // text matches a task in the deleted list. It must remain in Todo.
+    let todo = LocalTask(text: "Same title", completed: true)
+    let daily = LocalTask(
+      text: "Daily", completed: true, tagIDs: [work.id], repeatsDaily: true,
+      lastCompletedDay: day)
+    let adjacent = LocalTask(text: "Adjacent", tagIDs: [work.id])
+    let other = LocalTask(text: "Other list", tagIDs: [after.id])
+    let last = LocalTask(text: "Last", tagIDs: [work.id])
+    let original = LocalTaskDocument(
+      tasks: [first, todo, daily, adjacent, other, last], tags: [before, work, after])
+    try JSONEncoder().encode(original).write(to: url)
+    let store = LocalTaskStore(fileURL: url)
+
+    let deleted = try await store.mutate(.deleteTag(work.id))
+    XCTAssertEqual(deleted.document.tasks, [todo, other])
+    XCTAssertEqual(deleted.document.tags, [before, after])
+    let receipt = try XCTUnwrap(deleted.tagDeletionReceipt)
+    XCTAssertNil(deleted.deletionReceipt)
+    XCTAssertEqual(receipt.tag, work)
+    XCTAssertEqual(receipt.index, 1)
+    XCTAssertEqual(receipt.previousID, before.id)
+    XCTAssertEqual(receipt.nextID, after.id)
+    XCTAssertEqual(receipt.tasks.map(\.task), [first, daily, adjacent, last])
+    XCTAssertEqual(receipt.tasks.map(\.index), [0, 2, 3, 5])
+
+    _ = try await store.mutate(
+      .saveTask(id: todo.id, text: "Later edit", tagIDs: [], newTagNames: []))
+    _ = try await store.mutate(.renameTag(id: before.id, name: "Renamed before"))
+    let extra = LocalTask(text: "Later creation", tagIDs: [after.id])
+    _ = try await store.mutate(
+      .saveTask(
+        id: nil, text: extra.text, tagIDs: extra.tagIDs, newTagNames: [], creationID: extra.id))
+    let restored = try await store.mutate(.restoreTag(receipt)).document
+    var expected = original
+    expected.tasks[1].text = "Later edit"
+    expected.tags[0].name = "Renamed before"
+    expected.tasks.append(extra)
+    XCTAssertEqual(restored, expected)
+    XCTAssertEqual(restored.schemaVersion, 1)
+    // A retry must not even call the writer, and must preserve later changes.
+    let readOnlyStore = LocalTaskStore(fileURL: url, writer: FailingLocalWriter())
+    let retried = try await readOnlyStore.mutate(.restoreTag(receipt)).document
+    XCTAssertEqual(retried, expected)
+  }
+
+  func testEmptyListDeletionRestoresIdentityAndOrderWithoutTouchingTodo() async throws {
+    let url = try storageURL()
+    let first = TaskTag(name: "First")
+    let empty = TaskTag(name: "Empty")
+    let last = TaskTag(name: "Last")
+    let original = LocalTaskDocument(tasks: [LocalTask(text: "Todo")], tags: [first, empty, last])
+    try JSONEncoder().encode(original).write(to: url)
+    let store = LocalTaskStore(fileURL: url)
+    let deleted = try await store.mutate(.deleteTag(empty.id))
+    let receipt = try XCTUnwrap(deleted.tagDeletionReceipt)
+    XCTAssertTrue(receipt.tasks.isEmpty)
+    XCTAssertEqual(deleted.document.tags, [first, last])
+    XCTAssertEqual(deleted.document.tasks, original.tasks)
+    let restored = try await store.mutate(.restoreTag(receipt)).document
+    XCTAssertEqual(restored, original)
+  }
+
+  func testListRestoreUsesBoundedOriginalPositionsWhenBothNeighborsDisappear() async throws {
+    let url = try storageURL()
+    let tags = [TaskTag(name: "Before"), TaskTag(name: "Deleted"), TaskTag(name: "After")]
+    let tasks = [
+      LocalTask(text: "Before"), LocalTask(text: "Deleted", tagIDs: [tags[1].id]),
+      LocalTask(text: "After"),
+    ]
+    try JSONEncoder().encode(LocalTaskDocument(tasks: tasks, tags: tags)).write(to: url)
+    let store = LocalTaskStore(fileURL: url)
+    let deletion = try await store.mutate(.deleteTag(tags[1].id))
+    let receipt = try XCTUnwrap(deletion.tagDeletionReceipt)
+    for tag in [tags[0], tags[2]] { _ = try await store.mutate(.deleteTag(tag.id)) }
+    for task in [tasks[0], tasks[2]] { _ = try await store.mutate(.deleteTask(task.id)) }
+    let laterTag = TaskTag(name: "Later")
+    _ = try await store.mutate(.createTag(id: laterTag.id, name: laterTag.name))
+    let restored = try await store.mutate(.restoreTag(receipt)).document
+    XCTAssertEqual(restored.tags, [laterTag, tags[1]])
+    XCTAssertEqual(restored.tasks, [tasks[1]])
+  }
+
+  func testListRestoreRejectsNameTagIdentityAndTaskConflictsWithoutPartialWrites() async throws {
+    for conflict in 0..<3 {
+      let url = try storageURL()
+      let tag = TaskTag(name: "Work")
+      let tasks = [
+        LocalTask(text: "First", tagIDs: [tag.id]), LocalTask(text: "Second", tagIDs: [tag.id]),
+      ]
+      try JSONEncoder().encode(LocalTaskDocument(tasks: tasks, tags: [tag])).write(to: url)
+      let store = LocalTaskStore(fileURL: url)
+      let deletion = try await store.mutate(.deleteTag(tag.id))
+      let receipt = try XCTUnwrap(deletion.tagDeletionReceipt)
+      let expectedError: LocalTaskStoreError
+      switch conflict {
+      case 0:
+        _ = try await store.mutate(.createTag(id: UUID(), name: " wOrK "))
+        expectedError = .tagConflict
+      case 1:
+        _ = try await store.mutate(.createTag(id: tag.id, name: "Changed name"))
+        expectedError = .tagConflict
+      default:
+        _ = try await store.mutate(
+          .saveTask(
+            id: nil, text: "New contents", tagIDs: [], newTagNames: [], creationID: tasks[1].id))
+        expectedError = .taskConflict
+      }
+      let beforeRestore = try Data(contentsOf: url)
+      await assertStoreError(expectedError) { try await store.mutate(.restoreTag(receipt)) }
+      XCTAssertEqual(try Data(contentsOf: url), beforeRestore)
+      let unchanged = try await store.load().document
+      XCTAssertFalse(unchanged.tasks.contains(where: { $0.id == tasks[0].id }))
+    }
+  }
+
+  func testListDeleteVerificationFailureCarriesEveryTaskAndNoOpRetryCreatesNoReceipt() async throws
+  {
+    let url = try storageURL()
+    let tag = TaskTag(name: "Work")
+    let tasks = [
+      LocalTask(text: "One", tagIDs: [tag.id]), LocalTask(text: "Two", tagIDs: [tag.id]),
+    ]
+    let original = LocalTaskDocument(tasks: tasks, tags: [tag])
+    try JSONEncoder().encode(original).write(to: url)
+    let faultyStore = LocalTaskStore(fileURL: url, writer: TrailingWhitespaceLocalWriter())
+    let receipt: LocalTagDeletionReceipt
+    do {
+      _ = try await faultyStore.mutate(.deleteTag(tag.id))
+      return XCTFail("Expected post-write verification failure")
+    } catch let failure as LocalTagDeletionError {
+      XCTAssertEqual(failure.cause, .verificationFailed)
+      receipt = failure.receipt
+      XCTAssertEqual(receipt.tag, tag)
+      XCTAssertEqual(receipt.tasks.map(\.task), tasks)
+    }
+    let store = LocalTaskStore(fileURL: url)
+    let retry = try await store.mutate(.deleteTag(tag.id))
+    XCTAssertEqual(retry.document, LocalTaskDocument())
+    XCTAssertNil(retry.tagDeletionReceipt)
+    let restored = try await store.mutate(.restoreTag(receipt)).document
+    XCTAssertEqual(restored, original)
   }
 
   func testMovingToItsOwnSlotWritesNothing() async throws {

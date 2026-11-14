@@ -1,6 +1,7 @@
 # Native panel and Settings interaction
 
-This document describes the native UI introduced in Pulse 0.1.8.
+This document describes the native UI introduced in Pulse 0.1.8, with complete
+list deletion and Undo updated in 0.1.9.
 
 ## Surfaces and navigation
 
@@ -46,9 +47,11 @@ tag exposes an ellipsis menu, with context menus and keyboard reorder retained.
 All tags opens a searchable manager with full names and task counts. The same
 manager appears in Settings. There is no artificial tag-count limit.
 
-Delete-tag confirmation states that saved tasks move to Todo. Affected unsaved
-drafts block deletion and offer Return to draft; they cannot be silently hidden
-or overwritten. Task deletion retains its separate 20-entry session Undo history.
+Delete-list confirmation names the list and number of tasks being removed.
+Affected unsaved drafts block deletion and offer Return to draft; they cannot
+be silently hidden or overwritten. One Undo restores the complete list and its
+tasks. Task and list deletions share a 20-operation session Undo history, shown
+on Home and in tag management, including Settings.
 Per-list drafts and matching asynchronous save identity remain unchanged. See
 [built-in tasks](builtin-tasks.md) for data guarantees.
 

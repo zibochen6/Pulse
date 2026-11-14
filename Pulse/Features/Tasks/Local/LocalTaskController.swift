@@ -21,9 +21,9 @@ final class LocalTaskController: ObservableObject {
   @Published private(set) var errorMessage: String?
   @Published private(set) var completionFailures: [UUID: LocalTaskCompletionFailure] = [:]
 
-  @Published private(set) var deletionHistory: [LocalTaskDeletionReceipt] = []
+  @Published private(set) var deletionHistory: [LocalDeletionReceipt] = []
   @Published private(set) var isUndoing = false
-  private var uncertainDeletions: [UUID: LocalTaskDeletionReceipt] = [:]
+  private var uncertainDeletions: [UUID: LocalDeletionReceipt] = [:]
   private var pendingCreationIDs = Set<UUID>()
 
   private let store: any LocalTaskStoring
@@ -118,22 +118,61 @@ final class LocalTaskController: ObservableObject {
     guard !isUndoing, !isSaving, let receipt = deletionHistory.last else { return false }
     isUndoing = true
     defer { isUndoing = false }
-    let saved = await perform(.restoreTask(receipt))
+    let saved = await perform(receipt.restoreMutation)
     if saved { deletionHistory.removeAll { $0.id == receipt.id } }
     return saved
   }
 
-  private func rememberDeletion(_ receipt: LocalTaskDeletionReceipt) {
+  private func rememberDeletion(_ receipt: LocalDeletionReceipt) {
+    // A verified attempt supersedes older uncertain attempts. A newer receipt
+    // must survive an older reply, and confirmed operations retain their own
+    // identity (the same UUID may have been restored externally and deleted again).
+    uncertainDeletions = uncertainDeletions.filter {
+      !$0.value.hasSameTarget(as: receipt) || $0.value.deletedAt > receipt.deletedAt
+    }
     guard !deletionHistory.contains(where: { $0.id == receipt.id }) else { return }
     deletionHistory.append(receipt)
     deletionHistory.sort { $0.deletedAt < $1.deletedAt }
     if deletionHistory.count > 20 { deletionHistory.removeFirst(deletionHistory.count - 20) }
   }
 
+  private func retainUncertainDeletion(_ receipt: LocalDeletionReceipt) {
+    // A failed retry captures the latest transaction contents. Keep only that
+    // attempt per target, independently of callback and dictionary iteration order.
+    guard
+      !deletionHistory.contains(where: {
+        $0.hasSameTarget(as: receipt) && $0.deletedAt >= receipt.deletedAt
+      }),
+      !uncertainDeletions.values.contains(where: {
+        $0.hasSameTarget(as: receipt) && $0.deletedAt >= receipt.deletedAt
+      })
+    else { return }
+    uncertainDeletions = uncertainDeletions.filter { !$0.value.hasSameTarget(as: receipt) }
+    uncertainDeletions[receipt.id] = receipt
+  }
+
   func renameTag(id: UUID, name: String) async -> Bool {
     await perform(.renameTag(id: id, name: name))
   }
-  func deleteTag(id: UUID) async -> Bool { await perform(.deleteTag(id)) }
+  func deleteTag(id: UUID) async -> Bool {
+    let taskIDs = Set(document?.tasks.filter { $0.tagIDs.contains(id) }.map(\.id) ?? [])
+    guard !isUndoing, !pendingCreationIDs.contains(id),
+      taskIDs.isDisjoint(with: pendingTaskIDs), taskIDs.isDisjoint(with: pendingCreationIDs)
+    else { return false }
+    pendingCreationIDs.insert(id)
+    pendingTaskIDs.formUnion(taskIDs)
+    defer {
+      pendingCreationIDs.remove(id)
+      pendingTaskIDs.subtract(taskIDs)
+    }
+    let saved = await perform(.deleteTag(id))
+    let confirmedDeleted = document?.tags.contains(where: { $0.id == id }) == false
+    if saved || confirmedDeleted {
+      let remainingIDs = Set(document?.tasks.map(\.id) ?? [])
+      completionFailures = completionFailures.filter { remainingIDs.contains($0.key) }
+    }
+    return saved || confirmedDeleted
+  }
 
   /// Reorders a tag. The same pending guard as tag creation stops a second
   /// drag or a keyboard repeat from queueing a competing write for one tag.
@@ -207,8 +246,7 @@ final class LocalTaskController: ObservableObject {
   ) async -> Bool {
     do {
       let snapshot = try await store.mutate(mutation)
-      if let receipt = snapshot.deletionReceipt {
-        uncertainDeletions = uncertainDeletions.filter { $0.value.task.id != receipt.task.id }
+      if let receipt = snapshot.operationDeletionReceipt {
         rememberDeletion(receipt)
       }
       apply(snapshot)
@@ -220,7 +258,9 @@ final class LocalTaskController: ObservableObject {
       return true
     } catch {
       if let deletion = error as? LocalTaskDeletionError {
-        uncertainDeletions[deletion.receipt.id] = deletion.receipt
+        retainUncertainDeletion(.task(deletion.receipt))
+      } else if let deletion = error as? LocalTagDeletionError {
+        retainUncertainDeletion(.tag(deletion.receipt))
       }
       let failureMessage = message(for: error)
       // Verification can fail after replacement. Reload the real state instead
@@ -244,12 +284,13 @@ final class LocalTaskController: ObservableObject {
     // If a deletion committed but verification failed, a confirmed subsequent
     // read establishes that Undo is safe. Keep uncertain receipts if reads fail.
     for receipt in uncertainDeletions.values {
-      if !snapshot.document.tasks.contains(where: { $0.id == receipt.task.id }) {
-        if !deletionHistory.contains(where: { $0.task.id == receipt.task.id }) {
-          rememberDeletion(receipt)
-        }
+      guard snapshot.observedAt >= receipt.deletedAt else { continue }
+      if receipt.targetIsAbsent(in: snapshot.document) {
+        rememberDeletion(receipt)
+        uncertainDeletions.removeValue(forKey: receipt.id)
+      } else if receipt.isUnchanged(in: snapshot.document) {
+        uncertainDeletions.removeValue(forKey: receipt.id)
       }
-      uncertainDeletions.removeValue(forKey: receipt.id)
     }
   }
 
@@ -265,6 +306,7 @@ final class LocalTaskController: ObservableObject {
 
   private func message(for error: Error) -> String {
     (error as? LocalTaskDeletionError)?.cause.localizedDescription
+      ?? (error as? LocalTagDeletionError)?.cause.localizedDescription
       ?? (error as? LocalTaskStoreError)?.localizedDescription
       ?? PulseLocalization.string(
         "Pulse could not save or read your tasks. Check access and try again.")

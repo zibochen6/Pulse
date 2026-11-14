@@ -203,10 +203,16 @@ Tests use isolated defaults and a temporary store.
   nothing. Duplicate canonical names offer selecting existing tags. Todo is
   reserved and cannot be renamed/deleted/duplicated.
 - The selected tab ellipsis, context menu and searchable manager share tag
-  rename/remove operations. Remove requires confirmation explicitly stating
-  tasks move to Todo and are kept. Affected unfinished drafts block removal
-  with a Return to draft action; never strand a quickDrafts entry for a deleted
-  tag or overwrite a Todo draft.
+  rename/delete operations. Delete requires confirmation explicitly naming the
+  list and task count, whole-list removal and session-limited Undo. Affected
+  unfinished drafts block removal with Return to draft; check both a draft's
+  destination and its existing task's source membership in the current document,
+  including an edit being moved away. Enforce at submit as well as rendering;
+  never strand a quickDrafts entry or overwrite a Todo draft.
+  If another task editor is active while a quick draft blocks list deletion,
+  explain that the current editor must be resolved first and offer Continue
+  current edit. Do not promise to reveal a hidden quick draft while another
+  editor still occupies the surface, or silently discard either draft.
 - A left-aligned "+ Add task" row follows all task rows inside the
   task ScrollView. Presentation owns expansion per list alongside retained
   drafts. Explicit expansion scrolls entry into view after mount and requests
@@ -243,8 +249,12 @@ Tests use isolated defaults and a temporary store.
 - Reserve delete-control width; hover/focus changes visibility without text
   reflow. Keyboard and context-menu actions reach delete. Row/editor delete
   has no confirmation and exposes Undo after confirmed removal. Controller
-  history keeps 20 deletions through pages/popover closure until process exit.
-  Restoration reveals its task; missing original tags fall back to Todo.
+  history keeps 20 task/list deletion operations through pages/popover closure
+  until process exit. One Undo restores an entire list, including empty tags.
+  Share the Undo control with the tag manager/Settings and describe its receipt
+  kind. Keep Settings/manager in place after restoration; preserve active editors
+  and other drafts. Single-task restoration reveals its task when appropriate;
+  missing original tags fall back to Todo for single-task receipts only.
   Revealing a moved/restored completed task selects its destination list and
   scrolls the target into view after the updated rows are present.
 - Use existing adaptive opaque backgrounds, Pulse action/icon/row styles and

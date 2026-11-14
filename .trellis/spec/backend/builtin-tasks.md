@@ -20,6 +20,7 @@ enum LocalTaskMutation: Sendable {
   case restoreTask(LocalTaskDeletionReceipt)
   case renameTag(id: UUID, name: String)
   case deleteTag(UUID)
+  case restoreTag(LocalTagDeletionReceipt)
   case moveTag(id: UUID, toIndex: Int)
   case setCompleted(taskID: UUID, completed: Bool)
   case completeRepeating(taskID: UUID, completedAt: Date)
@@ -36,7 +37,12 @@ protocol LocalTaskStoring: Sendable {
 transaction-current deletion receipt. `LocalTaskDeletionReceipt` records the
 complete task, index, neighboring task IDs and receipt identity/time. A deletion
 write/verification error carries its receipt through `LocalTaskDeletionError`.
-The main-actor controller owns `deletionHistory` and `undoDeletion()`.
+The main-actor controller owns `deletionHistory` and `undoDeletion()`. History
+uses `LocalDeletionReceipt` to distinguish task and whole-list deletion. A
+`LocalTagDeletionReceipt` captures the tag and its position/neighbors plus every
+affected task receipt from the same transaction-current reread. Snapshots carry
+`tagDeletionReceipt`; `LocalTagDeletionError` preserves the group receipt through
+ambiguous write/verification failure.
 
 ## 3. Contracts
 
@@ -72,15 +78,32 @@ The main-actor controller owns `deletionHistory` and `undoDeletion()`.
   Successful deletion returns it; ambiguous write failure retains it while the
   controller reloads actual state. Do not register a deletion that did not occur
   or register two receipts for one successful retry.
-- Keep a bounded, ordered 20-receipt LIFO history for the app session, without a
+- Keep a bounded, ordered 20-operation LIFO history for the app session, without a
   timer. Tabs, Settings and popover closure do not clear it. Pending duplicate
   delete/restore operations are guarded. Failed restore retains its receipt.
 - Restore rereads latest state and inserts only the deleted task. Use surviving
   neighbors, falling back to the original bounded index. Remove references to
   deleted tags so the restored task lands in Todo. An already-identical task is
   a successful no-op retry; a conflicting UUID is an error, never an overwrite.
-- Tag deletion detaches classification only; tasks become default Todo. It never
-  deletes tasks or recreates removed tags during undo.
+- Deleting a custom tag deletes the complete list and all its current tasks in
+  one transaction. It must never detach them into default Todo. A group counts
+  as one history operation, including an empty tag. Default/other-list tasks
+  remain unchanged.
+- Whole-list Undo merges the original tag and its task receipts into the latest
+  document, preserving identities, content, completion/repeat data and relative
+  order. Conflicting tag IDs/names or task contents reject the entire restore
+  without writing; already-identical targets allow an idempotent retry. Do not
+  replace the full document or overwrite unrelated later changes.
+- Group deletion and restoration retain recovery information across ambiguous
+  write/verification failures. Reconcile actual disk state before registering
+  history; do not lose or duplicate a group receipt on retry. Older single-task
+  receipts retain their existing missing-tag fallback to Todo.
+- An unsuccessful delete followed by a concurrent edit is not proof of deletion.
+  Register only a confirmed absent target, discard an exact unchanged original,
+  and retain conflicting/ambiguous recovery internally. A snapshot observed
+  before a receipt cannot resolve it. Multiple uncertain attempts for the same
+  entity must deterministically retain the newest transaction receipt; never
+  let dictionary iteration choose the version of task data that Undo restores.
 
 ### Tag order
 
@@ -132,6 +155,8 @@ The main-actor controller owns `deletionHistory` and `undoDeletion()`.
 | Write succeeds but verification fails | Publish only reloaded confirmed state; retain stable retry/undo intent. |
 | Restore target tag disappeared | Restore task to default Todo. |
 | Restore UUID has different current contents | Conflict; retain undo receipt, preserve current task. |
+| Delete a list | Remove only its tag/tasks atomically; do not change Todo/other lists. |
+| Undo a list with conflicting tag ID/name | Reject the complete restore, retain receipt and existing data. |
 | Move a tag that was deleted mid-drag | `tagMissing`; file unchanged. |
 | Move a tag to its own slot | No-op transaction; do not write. |
 | Move to an index past either end of the array | Clamp to first/last; do not fail. |
@@ -154,7 +179,9 @@ concurrent stores, stable creation retry, postwrite verification, stale replies
 and pending deduplication. Delete tests assert transaction-current content,
 relative order, bounded LIFO history, intervening edits, missing-tag fallback,
 conflicting/already-restored IDs, failed writes and successful retry without
-duplicate history. Reorder tests cover both directions and both ends, ignored
+duplicate history. Whole-list tests also cover interleaved original positions,
+empty tags, mixed task/list LIFO history, same-name/UUID conflicts, all-or-nothing
+restore, and group receipt retention after post-write failure. Reorder tests cover both directions and both ends, ignored
 drops (own slot, left of Todo, unmeasured bar), clamped destinations, the
 no-write guarantee for a no-op move, `tagMissing`, and that membership, task
 order, text and tag names survive a move. Pure drop geometry is tested without
