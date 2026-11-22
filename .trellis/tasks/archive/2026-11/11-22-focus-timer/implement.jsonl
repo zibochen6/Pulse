@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/ui-presentation.md", "reason": "App-owned UI state, localization, and lifecycle"}
+{"file": ".trellis/spec/backend/auto-update.md", "reason": "Automatic install contract"}
