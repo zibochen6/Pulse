@@ -627,3 +627,26 @@ Changed custom tag deletion to atomic whole-list deletion with one Undo, mixed 2
 ### Status
 
 [OK] **Completed**
+
+
+## Session 26: Release Pulse 0.1.10 focus timer
+<!-- trellis-session: v=2 fp=d5ea163080988f96 -->
+
+**Date**: 2026-11-22
+**Task**: Release Pulse 0.1.10 focus timer
+**Branch**: `main`
+
+### Summary
+
+Shipped 0.1.10 build 14, verified the four GitHub release digests and rehearsed the signed 0.1.9 to 0.1.10 updater path on localhost. The English release test gate passed 264 tests with 2 skipped.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `06dc5bd` | feat: add 30-minute focus timer |
+| `fe157b0` | release: prepare Pulse 0.1.10 |
+
+### Status
+
+[OK] **Completed**
