@@ -20,6 +20,7 @@ struct HomeView: View {
   @ObservedObject var localPresentation = LocalTaskPresentation()
   var onOpenSettings: (SettingsDestination?, ProviderID?) -> Void = { _, _ in }
   var onRestartRequested: () -> Void = {}
+  @ObservedObject var focusTimer = FocusTimerController()
   @State private var hidesUpdateBanner = false
 
   var body: some View {
@@ -69,6 +70,9 @@ struct HomeView: View {
         Text(pageTitle).font(.system(size: 16, weight: .semibold))
       }
       Spacer(minLength: 0)
+      if pages.page == .home {
+        focusTimerButton
+      }
       Button {
         onOpenSettings(nil, nil)
       } label: {
@@ -82,6 +86,27 @@ struct HomeView: View {
       }
     }
     .padding(.horizontal, 16).padding(.vertical, 10)
+  }
+
+  private var focusTimerButton: some View {
+    let isRunning = focusTimer.isRunning
+    let title = PulseLocalization.string(
+      isRunning ? "Focusing · Cancel" : "Start 30 min focus")
+    return Button {
+      if isRunning {
+        focusTimer.cancel()
+      } else {
+        focusTimer.start()
+      }
+    } label: {
+      Label(title, systemImage: isRunning ? "stop.circle" : "timer")
+    }
+    .buttonStyle(PulseActionButtonStyle())
+    .accessibilityLabel(title)
+    .accessibilityIdentifier("focusTimerButton")
+    .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
+      ["focusTimerButton": $0]
+    }
   }
 
   private var pageTitle: String {

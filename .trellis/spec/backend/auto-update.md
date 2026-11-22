@@ -64,9 +64,11 @@ log: `~/Library/Logs/Pulse/update.log`.
   root too; the archive is deleted after successful verification. A leftover
   download is never installed without a fresh verification.
 - Restart safety: automatic installation requires both the popover and Settings
-  window closed, no retained task/settings drafts, and no pending local writes. Otherwise it stages the update, shows the
+  window closed, no retained task/settings drafts, no pending local writes, and
+  no active focus session. While blocked, Pulse stages the update, shows the
   "Pulse <version> is ready" banner above the task list with Restart/Later,
-  and keeps checking for a quiet moment. Later only hides the banner. An update
+  and checks for a quiet moment. Finishing or canceling a focus session re-arms
+  the idle check for a staged update. Later only hides the banner. An update
   still applies when the user quits; installation started by a quit must not
   relaunch the app. Explicit restart/quit preflight runs before installer launch;
   cancellation must leave installer invocation count zero. See frontend

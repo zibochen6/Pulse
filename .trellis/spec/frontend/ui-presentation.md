@@ -32,6 +32,11 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
 - Every UI explicit restart/quit performs preflight before installer invocation.
   Continue editing cancels; explicit discard clears session inputs and proceeds
   once writes finish. Ordinary window close does not discard or prompt.
+- The Home focus control observes an app-owned 30-minute session. It continues
+  across popover closes and counts sleep toward its continuous-clock deadline.
+  Completion plays one chime, cancellation is silent, and the status item
+  continues to show Codex usage. Explicit quit/restart ends the in-memory
+  session. A staged automatic update waits for the session to finish or cancel.
 - Preserve native text responder-chain Undo/Redo, Cut/Copy/Paste/Select All.
   App commands add Settings, Close and Quit without hijacking text Undo.
 - Holds are source-scoped. An old lease cannot end a later session after reset.

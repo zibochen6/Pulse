@@ -213,7 +213,8 @@ plan_text() {
 
   # 2. Tests (Debug, signing disabled)
   xcodebuild -project Pulse.xcodeproj -scheme Pulse -configuration Debug \
-    -destination 'platform=macOS' -derivedDataPath "$STAGE/DerivedData" CODE_SIGNING_ALLOWED=NO test
+    -destination 'platform=macOS' -testLanguage en -testRegion US \
+    -derivedDataPath "$STAGE/DerivedData" CODE_SIGNING_ALLOWED=NO test
 
   # 3. Version bump: project.yml only (0.1.2/build @CURBUILD@ -> @VERSION@/@BUILD@), then regenerate
   sed -i '' -E 's|^([[:space:]]*)MARKETING_VERSION:.*$|\1MARKETING_VERSION: @VERSION@|' project.yml
@@ -541,8 +542,10 @@ step "2/10 Tests (Debug, code signing disabled)"
 if [ "$SKIP_TESTS" = 1 ]; then
   printf '  skipped (--skip-tests)\n'
 else
+  # Some tests assert English copy. Keep the release gate independent of the Mac's language.
   if ! xcodebuild -project Pulse.xcodeproj -scheme Pulse -configuration Debug -destination 'platform=macOS' \
-      -derivedDataPath "$STAGE/DerivedData" CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$STAGE/tests.log"; then
+      -testLanguage en -testRegion US -derivedDataPath "$STAGE/DerivedData" \
+      CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$STAGE/tests.log"; then
     die "Unit tests failed (xcodebuild exited non-zero). Log: $STAGE/tests.log. No version bump or build was performed."
   fi
   if grep -q '\*\* TEST FAILED \*\*' "$STAGE/tests.log"; then die "Unit tests reported '** TEST FAILED **'. Log: $STAGE/tests.log"; fi

@@ -53,6 +53,7 @@ final class DeepSeekRenderingTests: XCTestCase {
         let bitmap = try render(host, appearance: appearance)
         let ids = [
           "openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton", "openSettingsButton",
+          "focusTimerButton",
         ]
         XCTAssertEqual(Set(capture.frames.keys), Set(ids))
         for id in ids {
@@ -69,6 +70,9 @@ final class DeepSeekRenderingTests: XCTestCase {
         }
         let codex = try XCTUnwrap(capture.frames["openUsageButton"])
         let settings = try XCTUnwrap(capture.frames["openSettingsButton"])
+        let focusTimer = try XCTUnwrap(capture.frames["focusTimerButton"])
+        XCTAssertLessThanOrEqual(focusTimer.maxX, settings.minX)
+        XCTAssertEqual(focusTimer.midY, settings.midY, accuracy: 0.5)
         // The gear shares the toolbar with the brand and the quota strip is its
         // own band underneath, so the header's height no longer depends on how
         // long the amounts happen to be.

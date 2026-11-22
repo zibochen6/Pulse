@@ -68,6 +68,13 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       }
     })
   private let pages = PopoverPageController()
+  private lazy var focusChime = NSSound(named: "Glass")
+  private lazy var focusTimer = FocusTimerController(onCompletion: { [weak self] in
+    guard let self else { return }
+    if self.focusChime?.play() != true { NSSound.beep() }
+  })
+  private var focusTimerSubscription: AnyCancellable?
+  private var wakeSubscription: AnyCancellable?
   /// Updates are user-visible state, so the controller lives for the app's
   /// lifetime and is shared by the popover and Settings.
   private lazy var updates = UpdateController(
@@ -128,6 +135,15 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     configurePopover()
     observeMenuInteractions()
 
+    focusTimerSubscription = focusTimer.$isRunning.dropFirst()
+      .sink { [weak self] isRunning in
+        if !isRunning { self?.updates.scheduleAutomaticInstallWhenIdle() }
+      }
+    wakeSubscription = NSWorkspace.shared.notificationCenter
+      .publisher(for: NSWorkspace.didWakeNotification)
+      .receive(on: RunLoop.main)
+      .sink { [weak self] _ in self?.focusTimer.finishIfDue() }
+
     motionPreferencesSubscription = NSWorkspace.shared.notificationCenter
       .publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
       .receive(on: RunLoop.main)
@@ -158,6 +174,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   func applicationWillTerminate(_ notification: Notification) {
     hoverController.reset()
+    focusTimerSubscription?.cancel()
+    focusTimer.cancel()
     // A staged update is applied here when the user quits before restarting;
     // the installer does not relaunch in that case.
     updates.applyOnTerminate()
@@ -221,7 +239,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         onOpenSettings: { [weak self] destination, provider in
           self?.showSettings(destination, provider: provider)
         },
-        onRestartRequested: { [weak self] in self?.requestExit(restarting: true) }
+        onRestartRequested: { [weak self] in self?.requestExit(restarting: true) },
+        focusTimer: focusTimer
       )
     )
     popover.contentViewController = hostingController
@@ -234,7 +253,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       settingsOpen: settingsController?.isOpen == true,
       hasUnsavedEdits: localPresentation.hasUnsavedEdits || settingsPresentation.hasUnsavedEdits,
       hasPendingWrites: localTasks.isSaving || localTasks.isUndoing
-        || localPresentation.hasPendingSubmissions)
+        || localPresentation.hasPendingSubmissions,
+      focusSessionActive: focusTimer.isRunning)
   }
 
   @objc func openSettings(_ sender: Any?) { showSettings() }

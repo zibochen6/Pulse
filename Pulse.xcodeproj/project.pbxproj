@@ -47,6 +47,7 @@
 		780A50D97F7C17764B8A85BB /* DeepSeekConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2379293C4F1BE631DDFEB05 /* DeepSeekConfiguration.swift */; };
 		78C6122344747E555A5DF17A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AE5E25194558D68B33915D /* SettingsView.swift */; };
 		7DA5A5C4CA1C06CF699C8B92 /* UpdateArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D4228C05D50510CB51BF48D /* UpdateArchive.swift */; };
+		7E0E2B77D6F861B25FE8CC4C /* FocusTimerControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F20723DA614DC71D74482F3 /* FocusTimerControllerTests.swift */; };
 		7E34A08890FA1C69D98C08BA /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = CCBB61532DD26923ED79657C /* Localizable.strings */; };
 		84E4BF6159673FA92DAAD65D /* LocalTaskStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21776204749CB9D05914233B /* LocalTaskStorageTests.swift */; };
 		85B40BEF67AA1C3909B2B0A7 /* LocalTaskController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A96382B34E302A7A4571435 /* LocalTaskController.swift */; };
@@ -55,6 +56,7 @@
 		92526D6A0C60CAA531B5A941 /* DeepSeekUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D031446E76DE601D0D7B2F /* DeepSeekUsageTests.swift */; };
 		92AD78C730D8747970CAD1EA /* UpdatePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A78C1EC9187C29E8EB5C633 /* UpdatePreferences.swift */; };
 		94B880F789FC10F3C8FD7AE2 /* PopoverPageControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */; };
+		9D307042CBF01C7C0DBDD507 /* FocusTimerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A17CC977D21AFECB6D29525 /* FocusTimerController.swift */; };
 		9D9FE44395812CDEE6AFDBBA /* CodexColorIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = F2A0A8DFBF3B7B1C314D8AEB /* CodexColorIcon.png */; };
 		9FD6F0B4FAC12F4391AF57DE /* TagBarLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B18B860E348E399CC39811F5 /* TagBarLayoutTests.swift */; };
 		A3783F8905D5253B8A9BAAF4 /* CodexUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D549FC743240543EAF1AF1D /* CodexUsageTests.swift */; };
@@ -143,6 +145,7 @@
 		4FBA30D234A433E58E16508B /* PulseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PulseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5763D22FF29A87447FD82E62 /* UsageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageController.swift; sourceTree = "<group>"; };
 		5823C23B8E4F0D4F7DA8E7A9 /* VIPConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPConfiguration.swift; sourceTree = "<group>"; };
+		5A17CC977D21AFECB6D29525 /* FocusTimerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusTimerController.swift; sourceTree = "<group>"; };
 		5BC0456615A31D8440AB8ECE /* LocalTagReorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTagReorder.swift; sourceTree = "<group>"; };
 		5D2A75EAE51FAE72110F2B62 /* PulseLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseLocalization.swift; sourceTree = "<group>"; };
 		5F293341995B6DF958E21987 /* CodexProviderIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProviderIcon.swift; sourceTree = "<group>"; };
@@ -165,6 +168,7 @@
 		9A9B38DEB4334CADF3F5F6F6 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
 		9C97740D0274E93D479A5EC8 /* PopoverPageControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverPageControllerTests.swift; sourceTree = "<group>"; };
 		9D4228C05D50510CB51BF48D /* UpdateArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateArchive.swift; sourceTree = "<group>"; };
+		9F20723DA614DC71D74482F3 /* FocusTimerControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusTimerControllerTests.swift; sourceTree = "<group>"; };
 		A4D3B10002AC4D6C42BE2340 /* PopoverInteractionHoldsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverInteractionHoldsTests.swift; sourceTree = "<group>"; };
 		AA5304F589667B9760522B5D /* VIPUsageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIPUsageTests.swift; sourceTree = "<group>"; };
 		AD0210F151F1BAE5E7BC8820 /* APIKeyConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyConfiguration.swift; sourceTree = "<group>"; };
@@ -350,6 +354,7 @@
 			children = (
 				713E8909A7BD912071712C5E /* AIStatusSummary.swift */,
 				73F8F59654EFDBD6A6BC4CD8 /* DeepSeekStatusSummary.swift */,
+				5A17CC977D21AFECB6D29525 /* FocusTimerController.swift */,
 				C0D1390EE653F2D9B57F24AA /* HomeView.swift */,
 				AE9BB2D02767F384B6D283C4 /* ProviderStatusButton.swift */,
 				DF2CBFBC24A2CBB339C09DAA /* ProviderStatusLayout.swift */,
@@ -395,6 +400,7 @@
 				34978B23EACA2BD148421E33 /* DailyRepeatTests.swift */,
 				D901E427033AC23A76278F78 /* DeepSeekRenderingTests.swift */,
 				C7D031446E76DE601D0D7B2F /* DeepSeekUsageTests.swift */,
+				9F20723DA614DC71D74482F3 /* FocusTimerControllerTests.swift */,
 				F6D8CE154204D50F7F604EA7 /* HomeViewRenderingTests.swift */,
 				402C0DD8A31339CF72B6E6E2 /* LocalTagReorderTests.swift */,
 				FAA059DD49514947DEAEB889 /* LocalTaskControllerTests.swift */,
@@ -528,6 +534,7 @@
 				EED8931DC294D2E343BC8ABB /* DailyRepeatTests.swift in Sources */,
 				AAF52EB9E8D5324CA25B00ED /* DeepSeekRenderingTests.swift in Sources */,
 				92526D6A0C60CAA531B5A941 /* DeepSeekUsageTests.swift in Sources */,
+				7E0E2B77D6F861B25FE8CC4C /* FocusTimerControllerTests.swift in Sources */,
 				0C383B38114059B25D399365 /* HomeViewRenderingTests.swift in Sources */,
 				C76F41A89EE4860FCCCEE76D /* LocalTagReorderTests.swift in Sources */,
 				68FA78572F380260FE065046 /* LocalTaskControllerTests.swift in Sources */,
@@ -564,6 +571,7 @@
 				63E04A2143D91B14A4FA735D /* DeepSeekProvider.swift in Sources */,
 				D0B2C24325FFB34F4EC3C153 /* DeepSeekProviderIcon.swift in Sources */,
 				C5D93053CF6CF9C2F860D56A /* DeepSeekStatusSummary.swift in Sources */,
+				9D307042CBF01C7C0DBDD507 /* FocusTimerController.swift in Sources */,
 				3ADA9E9BB62E2F868A936DC4 /* HomeView.swift in Sources */,
 				884D1158FED36B0697BDED86 /* LocalTagReorder.swift in Sources */,
 				41EA3DB12BEA80C13861F06F /* LocalTagSettingsView.swift in Sources */,

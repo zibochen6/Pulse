@@ -7,9 +7,10 @@ struct PulseExitPolicy {
   var settingsOpen: Bool
   var hasUnsavedEdits: Bool
   var hasPendingWrites: Bool
+  var focusSessionActive = false
 
   var canInstallAutomatically: Bool {
-    !popoverOpen && !settingsOpen && !hasUnsavedEdits && !hasPendingWrites
+    !popoverOpen && !settingsOpen && !hasUnsavedEdits && !hasPendingWrites && !focusSessionActive
   }
   var requiresDiscardConfirmation: Bool { hasUnsavedEdits }
   var mustWaitForWrites: Bool { hasPendingWrites }

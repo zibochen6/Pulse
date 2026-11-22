@@ -2,7 +2,7 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services every day. The intended product brings AI usage status and daily to-dos into one quick daily entry point.
 
-**Pulse 0.1.9:** Pulse combines real Codex usage, optional 88VIP and DeepSeek balances, and local to-dos. The redesigned app uses a spacious 400 × 520 menu-bar panel, discoverable tag management, soft adaptive colors and a separate categorized Settings window. English and Simplified Chinese follow the system language.
+**Pulse 0.1.10:** Start a 30-minute focus timer from Home and hear a chime when it ends. Pulse combines real Codex usage, optional 88VIP and DeepSeek balances, and local to-dos. The redesigned app uses a spacious 400 × 520 menu-bar panel, discoverable tag management, soft adaptive colors and a separate categorized Settings window. English and Simplified Chinese follow the system language.
 
 The menu bar remains Codex-only. Select a provider to inspect its own usage, or connect an optional service from its status card. Tasks support independent tag lists, quick entry, daily repeat and deletion undo. Everything stays local; API keys are stored in macOS Keychain. See [UI and interaction](docs/ui-layout-refactor.md) and [motion](docs/popover-motion.md) for the current behavior.
 
@@ -10,12 +10,12 @@ The menu bar remains Codex-only. Select a provider to inspect its own usage, or 
 
 ## Download and install
 
-Download [Pulse 0.1.9](https://github.com/zibochen6/Pulse/releases/tag/v0.1.9)
+Download [Pulse 0.1.10](https://github.com/zibochen6/Pulse/releases/tag/v0.1.10)
 for macOS 13 or newer (Apple Silicon and Intel). Open the DMG and drag Pulse
 to Applications. Quit the previous Pulse instance before replacing it, then
 launch `/Applications/Pulse.app`; its settings and task storage are retained.
-The release publishes `Pulse-0.1.9.dmg` with a SHA-256 checksum for manual
-installs, plus `Pulse-0.1.9.zip` and its checksum for the in-app updater; the
+The release publishes `Pulse-0.1.10.dmg` with a SHA-256 checksum for manual
+installs, plus `Pulse-0.1.10.zip` and its checksum for the in-app updater; the
 DMG and ZIP contain the same signed app.
 
 This preview is signed with an Apple Development certificate, **not Developer ID
@@ -23,7 +23,7 @@ signed or notarized**. macOS may block first launch. If you trust the downloaded
 build, use the available **Open Anyway** option in System Settings → Privacy &
 Security after attempting to launch; follow [Apple's guidance](https://support.apple.com/102445)
 and do not disable Gatekeeper. Source builds
-remain available below. See [0.1.9 release notes](docs/releases/0.1.9.md) for
+remain available below. See [0.1.10 release notes](docs/releases/0.1.10.md) for
 changes and current limits.
 
 ## Automatic updates
@@ -178,7 +178,7 @@ See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration]
 
 ## 中文简介
 
-Pulse 是本地优先的 macOS 菜单栏工具，将 AI 服务状态和每日待办放在一起。0.1.9 采用 400 × 520 主面板、柔和彩色视觉、独立分类设置窗口，并支持跟随系统的中英文界面。可从上方链接下载新版本。
+Pulse 是本地优先的 macOS 菜单栏工具，将 AI 服务状态和每日待办放在一起。0.1.10 新增 30 分钟番茄钟，关闭面板后继续计时，到点发声。可从上方链接下载新版本。
 
 - **AI 状态**：Codex 额度、88VIP USD 余额和 DeepSeek 原币种余额。点击哪个服务，就查看哪个服务；未配置、验证中、连接成功和失败分别表达，保存密钥不冒充连接成功。
 - **标签即列表**：Todo 固定保留，自定义标签可通过可见的省略号菜单编辑、删除和排序；全部标签入口支持搜索，没有人为数量上限。删除标签会一并删除列表任务，一次撤销可恢复整组；最多保留当前运行内最近 20 次删除，并保护未提交草稿。

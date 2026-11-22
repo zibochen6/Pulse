@@ -344,10 +344,11 @@ final class UpdateController: ObservableObject {
     )
   }
 
-  private func scheduleAutomaticInstallWhenIdle() {
+  func scheduleAutomaticInstallWhenIdle() {
+    guard case .staged = phase else { return }
     automaticInstallTask?.cancel()
     automaticInstallTask = Task { [weak self] in
-      // Poll for a quiet moment: the popover closed and no task draft open.
+      // Poll until the app's automatic-install policy allows a restart.
       for _ in 0..<400 {
         try? await Task.sleep(for: .seconds(3))
         if Task.isCancelled { return }
