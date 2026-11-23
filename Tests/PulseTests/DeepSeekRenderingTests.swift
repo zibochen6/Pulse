@@ -6,6 +6,25 @@ import XCTest
 
 @MainActor
 final class DeepSeekRenderingTests: XCTestCase {
+  func testAntigravityIconRendersColoredPixelsAtHomeSize() throws {
+    let renderer = ImageRenderer(content: AntigravityProviderIcon(size: 16))
+    renderer.scale = 2
+    let image = try XCTUnwrap(renderer.nsImage?.tiffRepresentation)
+    let bitmap = try XCTUnwrap(NSBitmapImageRep(data: image))
+    let colored = (0..<bitmap.pixelsHigh).reduce(0) { count, y in
+      count
+        + (0..<bitmap.pixelsWide).filter { x in
+          guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+            return false
+          }
+          let channels = [color.redComponent, color.greenComponent, color.blueComponent]
+          let spread = (channels.max() ?? 0) - (channels.min() ?? 0)
+          return color.alphaComponent > 0.8 && spread > 0.25
+        }.count
+    }
+    XCTAssertGreaterThan(colored, 45, "A white tile or monochrome fallback is insufficient")
+  }
+
   func testActualHeaderFramesAndRepresentativeRendersInBothAppearances() async throws {
     let suite = "PulseDeepSeekRender.\(UUID())"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
