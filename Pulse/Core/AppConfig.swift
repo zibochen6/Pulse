@@ -6,10 +6,12 @@ final class AppConfig: ObservableObject {
   private enum Key {
     static let launchAtLoginRequested = "launchAtLoginRequested"
     static let showMenuBarLabel = "showMenuBarLabel"
+    static let antigravityEnabled = "antigravityEnabled"
   }
 
   @Published private(set) var launchAtLoginRequested: Bool
   @Published private(set) var showMenuBarLabel: Bool
+  @Published private(set) var antigravityEnabled: Bool
   @Published private(set) var loginItemStatus: LoginItemStatus
   @Published private(set) var loginItemError: String?
 
@@ -24,12 +26,19 @@ final class AppConfig: ObservableObject {
     self.loginItemService = loginItemService
     launchAtLoginRequested = defaults.bool(forKey: Key.launchAtLoginRequested)
     showMenuBarLabel = defaults.bool(forKey: Key.showMenuBarLabel)
+    antigravityEnabled = defaults.bool(forKey: Key.antigravityEnabled)
     loginItemStatus = loginItemService.status
   }
 
   func setShowMenuBarLabel(_ enabled: Bool) {
     showMenuBarLabel = enabled
     defaults.set(enabled, forKey: Key.showMenuBarLabel)
+  }
+
+  func setAntigravityEnabled(_ enabled: Bool) {
+    guard antigravityEnabled != enabled else { return }
+    antigravityEnabled = enabled
+    defaults.set(enabled, forKey: Key.antigravityEnabled)
   }
 
   func setLaunchAtLogin(_ enabled: Bool) {

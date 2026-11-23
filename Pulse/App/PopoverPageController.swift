@@ -4,6 +4,7 @@ enum ProviderID: String, CaseIterable, Identifiable {
   case codex
   case vip = "88vip"
   case deepSeek = "deepseek"
+  case antigravity
 
   var id: String { rawValue }
   var name: String {
@@ -11,6 +12,7 @@ enum ProviderID: String, CaseIterable, Identifiable {
     case .codex: "Codex"
     case .vip: "88VIP"
     case .deepSeek: "DeepSeek"
+    case .antigravity: "Gemini"
     }
   }
 }

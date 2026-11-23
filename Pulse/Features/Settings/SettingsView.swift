@@ -10,6 +10,7 @@ struct SettingsView: View {
   @ObservedObject var usage: UsageController
   @ObservedObject var vipUsage: UsageController
   @ObservedObject var deepSeekUsage: UsageController
+  @ObservedObject var antigravityUsage: UsageController
   @ObservedObject var presentation: SettingsPresentation
   @ObservedObject var localPresentation: LocalTaskPresentation
   let onDeepSeekCredentialsChanged: () -> Void
@@ -29,7 +30,8 @@ struct SettingsView: View {
     onVIPCredentialsChanged: @escaping () -> Void, onQuit: @escaping () -> Void,
     onTaskEditingChanged: @escaping (Bool) -> Void = { _ in },
     usage: UsageController? = nil, vipUsage: UsageController? = nil,
-    deepSeekUsage: UsageController? = nil, presentation: SettingsPresentation? = nil,
+    deepSeekUsage: UsageController? = nil, antigravityUsage: UsageController? = nil,
+    presentation: SettingsPresentation? = nil,
     localPresentation: LocalTaskPresentation? = nil,
     onRestartRequested: @escaping () -> Void = {},
     onReturnToDraft: @escaping () -> Void = {}
@@ -42,6 +44,8 @@ struct SettingsView: View {
     self.usage = usage ?? UsageController(provider: InactiveSettingsProvider())
     self.vipUsage = vipUsage ?? UsageController(provider: InactiveSettingsProvider())
     self.deepSeekUsage = deepSeekUsage ?? UsageController(provider: InactiveSettingsProvider())
+    self.antigravityUsage =
+      antigravityUsage ?? UsageController(provider: InactiveSettingsProvider())
     self.presentation = presentation ?? SettingsPresentation(destination: destination ?? .general)
     self.localPresentation = localPresentation ?? LocalTaskPresentation()
     self.onDeepSeekCredentialsChanged = onDeepSeekCredentialsChanged
@@ -239,6 +243,41 @@ struct SettingsView: View {
         onEditingChanged: { editing.set(source: "deepSeekAPIKeyField", editing: $0) }
       ) { DeepSeekProviderIcon(size: 26) }
       .id(ProviderID.deepSeek)
+      antigravitySettings
+        .id(ProviderID.antigravity)
+    }
+  }
+
+  private var antigravitySettings: some View {
+    let connection = ProviderConnectionState.resolve(
+      hasCredential: config.antigravityEnabled, state: antigravityUsage.state)
+    return settingsCard {
+      HStack(spacing: 12) {
+        GeminiProviderIcon(size: 26)
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Gemini · Antigravity").font(.system(size: 15, weight: .semibold))
+          Text(connection.title).font(.system(size: 12)).foregroundStyle(.secondary)
+        }
+        Spacer()
+        if config.antigravityEnabled {
+          Button("Check connection") { antigravityUsage.requestRefresh() }
+            .buttonStyle(PulseActionButtonStyle())
+            .disabled(antigravityUsage.isRefreshing)
+            .accessibilityIdentifier("checkAntigravityConnection")
+        }
+      }
+      Toggle(
+        "Track Gemini model quotas",
+        isOn: Binding(
+          get: { config.antigravityEnabled }, set: { config.setAntigravityEnabled($0) })
+      )
+      .toggleStyle(.switch)
+      .accessibilityIdentifier("antigravityUsageToggle")
+      Text("Uses your local Antigravity sign-in.")
+        .font(.system(size: 12)).foregroundStyle(.secondary)
+      if case .needsAttention(let message) = connection {
+        Text(message).font(.system(size: 12)).foregroundStyle(PulseDesignTokens.warning)
+      }
     }
   }
 

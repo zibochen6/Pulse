@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
   private static let runtimeServices = PulseRuntimeServices()
+  private static let antigravityRefreshSeconds: TimeInterval = 600
   private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   // The XCTest host must not migrate the real user's source preference or use
   // their local task file. Production always uses the normal preferences.
@@ -36,6 +37,9 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private let vipUsage = UsageController(
     provider: PulseAppDelegate.runtimeServices.usageProvider(VIPProvider()),
     refreshInterval: .seconds(600))
+  private let antigravityUsage = UsageController(
+    provider: PulseAppDelegate.runtimeServices.usageProvider(AntigravityProvider()),
+    refreshInterval: .seconds(PulseAppDelegate.antigravityRefreshSeconds))
   private let localTasks = LocalTaskController(
     store: LocalTaskStore(
       fileURL:
@@ -93,6 +97,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   )
   private let popover = NSPopover()
   private var preferencesSubscription: AnyCancellable?
+  private var antigravitySubscription: AnyCancellable?
   private var usageSubscription: AnyCancellable?
   private var motionPreferencesSubscription: AnyCancellable?
   private lazy var hoverController = PopoverHoverController(
@@ -164,6 +169,14 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       usage.start()
       vipUsage.start()
       deepSeekUsage.start()
+      antigravitySubscription = config.$antigravityEnabled.sink { [weak self] enabled in
+        guard let self else { return }
+        if enabled {
+          self.antigravityUsage.start()
+        } else {
+          self.antigravityUsage.stop(reset: true)
+        }
+      }
       updates.start()
     }
   }
@@ -182,6 +195,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     usage.stop()
     vipUsage.stop()
     deepSeekUsage.stop()
+    antigravitySubscription?.cancel()
+    antigravityUsage.stop()
   }
 
   private func configureStatusItem() {
@@ -240,7 +255,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
           self?.showSettings(destination, provider: provider)
         },
         onRestartRequested: { [weak self] in self?.requestExit(restarting: true) },
-        focusTimer: focusTimer
+        focusTimer: focusTimer,
+        antigravityUsage: antigravityUsage
       )
     )
     popover.contentViewController = hostingController
@@ -272,6 +288,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
           onVIPCredentialsChanged: { [weak self] in self?.vipUsage.credentialsDidChange() },
           onQuit: { [weak self] in self?.requestQuit(nil) },
           usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
+          antigravityUsage: antigravityUsage,
           presentation: settingsPresentation, localPresentation: localPresentation,
           onRestartRequested: { [weak self] in self?.requestExit(restarting: true) },
           onReturnToDraft: { [weak self] in
@@ -403,6 +420,9 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     deepSeekConfiguration.refresh()
     vipUsage.refreshIfStale(maxAge: 60)
     deepSeekUsage.refreshIfStale(maxAge: 60)
+    if config.antigravityEnabled, case .success = antigravityUsage.state {
+      antigravityUsage.refreshIfStale(maxAge: Self.antigravityRefreshSeconds)
+    }
     Task { [weak self] in
       await self?.localTasks.refresh()
       // A repeating task finished yesterday is re-armed when Pulse is actually

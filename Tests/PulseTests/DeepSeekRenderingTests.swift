@@ -112,6 +112,61 @@ final class DeepSeekRenderingTests: XCTestCase {
     }
   }
 
+  func testEnabledGeminiCardFitsAndItsDetailsRenderInBothAppearances() async throws {
+    let suite = "PulseGeminiRender.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let localTasks = LocalTaskController(
+      store: LocalTaskStore(
+        fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json")))
+    let usage = UsageController(provider: RenderSnapshotProvider(snapshot: codexSnapshot(count: 1)))
+    let vip = UsageController(
+      provider: RenderSnapshotProvider(
+        snapshot: moneySnapshot(provider: "88vip", amount: "104.22", currency: "USD")))
+    let deepSeek = UsageController(
+      provider: RenderSnapshotProvider(
+        snapshot: moneySnapshot(provider: "deepseek", amount: "42.68", currency: "CNY")))
+    let gemini = UsageController(
+      provider: RenderSnapshotProvider(
+        snapshot: UsageSnapshot(
+          providerID: "antigravity", fetchedAt: .now,
+          metrics: zip(AntigravityQuotaBucket.allCases, [71, 84, 99]).map { bucket, percent in
+            .quota(
+              QuotaWindow(
+                durationMinutes: bucket.durationMinutes, remainingPercent: percent, resetsAt: .now,
+                bucketID: bucket.rawValue, displayNameKey: bucket.displayNameKey))
+          })))
+    for controller in [usage, vip, deepSeek, gemini] { await controller.refresh() }
+
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+      let pages = PopoverPageController()
+      let root = home(
+        defaults: defaults, localTasks: localTasks, usage: usage, vipUsage: vip,
+        deepSeekUsage: deepSeek, pages: pages, antigravityUsage: gemini)
+      let capture = HeaderFrameCapture()
+      let host = NSHostingView(
+        rootView: root.overlayPreferenceValue(ProviderHeaderBoundsKey.self) { anchors in
+          GeometryReader { proxy in
+            HeaderFrameCaptureView(frames: anchors.mapValues { proxy[$0] }, capture: capture)
+          }
+          .allowsHitTesting(false)
+        })
+      _ = try render(host, appearance: appearance)
+      let card = try XCTUnwrap(capture.frames["openAntigravityUsageButton"])
+      XCTAssertGreaterThanOrEqual(card.minX, PulseDesignTokens.contentInset - 0.5)
+      XCTAssertLessThanOrEqual(
+        card.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset)
+      XCTAssertGreaterThanOrEqual(card.height, 50)
+      for id in ["openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton"] {
+        let other = try XCTUnwrap(capture.frames[id])
+        XCTAssertFalse(card.intersects(other), id)
+      }
+      pages.showUsage(.antigravity)
+      let bitmap = try render(NSHostingView(rootView: root), appearance: appearance)
+      XCTAssertGreaterThan(bitmap.pixelsHigh, 0)
+    }
+  }
+
   func testDeepSeekStatesUsageAndSettingsRenderInBothAppearances() async throws {
     let suite = "PulseDeepSeekStates.\(UUID())"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -206,21 +261,25 @@ final class DeepSeekRenderingTests: XCTestCase {
 
   private func home(
     defaults: UserDefaults, localTasks: LocalTaskController, usage: UsageController,
-    vipUsage: UsageController, deepSeekUsage: UsageController, pages: PopoverPageController
+    vipUsage: UsageController, deepSeekUsage: UsageController, pages: PopoverPageController,
+    antigravityUsage: UsageController? = nil
   ) -> HomeView {
     let deepSeekConfiguration = DeepSeekConfiguration(secretStore: RenderSecrets())
     let vipConfiguration = VIPConfiguration(secretStore: RenderSecrets())
+    let config = AppConfig(defaults: defaults, loginItemService: RenderLoginItems())
+    config.setAntigravityEnabled(antigravityUsage != nil)
     deepSeekConfiguration.refresh()
     vipConfiguration.refresh()
     return HomeView(
-      config: AppConfig(defaults: defaults, loginItemService: RenderLoginItems()),
+      config: config,
       usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
       deepSeekConfiguration: deepSeekConfiguration,
       vipConfiguration: vipConfiguration,
       localTasks: localTasks,
       updates: makeInactiveUpdateController(defaults: defaults),
       pages: pages, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-      onQuit: {})
+      onQuit: {},
+      antigravityUsage: antigravityUsage ?? UsageController(provider: InactiveSettingsProvider()))
   }
 
   private func render<Content: View>(

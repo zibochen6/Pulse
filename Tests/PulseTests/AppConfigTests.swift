@@ -12,13 +12,16 @@ final class AppConfigTests: XCTestCase {
     let initial = AppConfig(defaults: defaults, loginItemService: service)
     XCTAssertFalse(initial.launchAtLoginRequested)
     XCTAssertFalse(initial.showMenuBarLabel)
+    XCTAssertFalse(initial.antigravityEnabled)
 
     initial.setShowMenuBarLabel(true)
     initial.setLaunchAtLogin(true)
+    initial.setAntigravityEnabled(true)
 
     let restored = AppConfig(defaults: defaults, loginItemService: service)
     XCTAssertTrue(restored.showMenuBarLabel)
     XCTAssertTrue(restored.launchAtLoginRequested)
+    XCTAssertTrue(restored.antigravityEnabled)
     XCTAssertEqual(service.requests, [true])
     XCTAssertEqual(restored.loginItemStatus, .enabled)
   }

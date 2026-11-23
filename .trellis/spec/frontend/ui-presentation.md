@@ -7,7 +7,7 @@ session drafts, native menu/drag holds, localization and restart/quit routing.
 ## 2. Signatures
 `SettingsWindowController` owns one 720 × 560 native window. `SettingsPresentation`
 owns category, expanded providers and in-memory credential drafts. `ProviderID`
-is codex/vip/deepSeek. `ProviderConnectionState.resolve(hasCredential:configurationError:state:)`
+is codex/vip/deepSeek/antigravity. `ProviderConnectionState.resolve(hasCredential:configurationError:state:)`
 maps the existing refresh result. `PulseExitPolicy` computes automatic-install,
 pending-write and discard-confirmation decisions. `PopoverInteractionHolds`
 aggregates editor/menu/drag sources and issues identity-checked leases.
@@ -22,6 +22,9 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
 - Credential text lives only in memory until an explicit Keychain save. It
   survives category changes; success/cancel clears its matching draft. No
   credential text in logs, preferences, snapshots or promotion fixtures.
+- The opt-in Gemini card uses the Antigravity controller. Its percentage is
+  the 5-hour bucket by ID. Its detail page keeps the shared Gemini weekly and
+  Gemini 4 Argon weekly allowances visibly distinct.
 - Stored key alone means configured, not connected. No key -> Not connected;
   loading with key -> Verifying; successful data -> Connected; failed/partial
   data -> Needs attention. Reuse existing credentialsDidChange generation

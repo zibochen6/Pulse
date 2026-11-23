@@ -21,6 +21,7 @@ struct HomeView: View {
   var onOpenSettings: (SettingsDestination?, ProviderID?) -> Void = { _, _ in }
   var onRestartRequested: () -> Void = {}
   @ObservedObject var focusTimer = FocusTimerController()
+  @ObservedObject var antigravityUsage = UsageController(provider: InactiveSettingsProvider())
   @State private var hidesUpdateBanner = false
 
   var body: some View {
@@ -142,6 +143,11 @@ struct HomeView: View {
             onOpenSettings(.providers, .deepSeek)
           }
         }
+        if config.antigravityEnabled {
+          AntigravityStatusSummary(state: antigravityUsage.state) {
+            pages.showUsage(.antigravity)
+          }
+        }
       }
       .padding(.horizontal, 16).padding(.bottom, 12)
       Rectangle().fill(PulseDesignTokens.border).frame(height: 1).padding(.horizontal, 16)
@@ -169,6 +175,7 @@ struct HomeView: View {
     ScrollView {
       UsageView(
         usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
+        antigravityUsage: antigravityUsage,
         onAddProvider: { onOpenSettings(.providers, provider) }, provider: provider
       )
       .padding(16)

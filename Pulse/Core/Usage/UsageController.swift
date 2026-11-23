@@ -34,18 +34,24 @@ final class UsageController: ObservableObject {
     }
   }
 
-  func stop() {
+  func stop(reset: Bool = false) {
     loop?.cancel()
     loop = nil
     generation &+= 1
     activeRefresh?.cancel()
     activeRefresh = nil
     isRefreshing = false
+    if reset { state = .loading }
   }
 
   @discardableResult
   func requestRefresh() -> Task<Void, Never> {
-    Task { await refresh() }
+    // A manual refresh may still be queued when the provider is turned off.
+    let requestedGeneration = generation
+    return Task {
+      guard requestedGeneration == generation else { return }
+      await refresh()
+    }
   }
 
   /// Refreshes only when no current successful snapshot is recent enough.

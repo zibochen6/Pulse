@@ -20,6 +20,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 | [Codex Usage](./codex-usage.md) | Local app-server protocol, normalization, and display contract | Phase 2A |
+| [Antigravity Usage](./antigravity-usage.md) | Local CLI model allowance queries, identity and opt-in refresh | Current |
 | [88VIP Usage](./vip-usage.md) | 88API billing, Keychain credential, and balance normalization contract | Phase 3 |
 | [DeepSeek Usage](./deepseek-usage.md) | Official native-currency balances, isolated Keychain credential, and refresh invalidation | Current |
 | [Release Delivery](./release-delivery.md) | Universal preview signing, recoverable local installation, and GitHub artifact/source publication | Current |

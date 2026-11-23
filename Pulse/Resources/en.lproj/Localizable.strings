@@ -26,6 +26,8 @@
 "Add task (Return)" = "Add task (Return)";
 "Add to %@…" = "Add to %@…";
 "All tags" = "All tags";
+"Antigravity did not report Gemini model quotas." = "Antigravity did not report Gemini model quotas.";
+"Antigravity quota is unavailable for this account or region." = "Antigravity quota is unavailable for this account or region.";
 "Appearance, language and reduced motion follow your Mac’s settings." = "Appearance, language and reduced motion follow your Mac’s settings.";
 "Approve Pulse in System Settings > General > Login Items." = "Approve Pulse in System Settings > General > Login Items.";
 "Back to Home" = "Back to Home";
@@ -60,8 +62,11 @@
 "Connected" = "Connected";
 "Continue editing" = "Continue editing";
 "Copy" = "Copy";
+"Could not check Gemini quotas. Try again." = "Could not check Gemini quotas. Try again.";
 "Could not reach 88VIP. Check your network and try again." = "Could not reach 88VIP. Check your network and try again.";
+"Could not reach Antigravity. Check your network and try again." = "Could not reach Antigravity. Check your network and try again.";
 "Could not reach DeepSeek. Check your network and try again." = "Could not reach DeepSeek. Check your network and try again.";
+"Could not read the Antigravity quota report." = "Could not read the Antigravity quota report.";
 "Could not read the saved %@ API key from Keychain." = "Could not read the saved %@ API key from Keychain.";
 "Could not refresh 88VIP balance." = "Could not refresh 88VIP balance.";
 "Could not refresh Codex usage." = "Could not refresh Codex usage.";
@@ -69,6 +74,7 @@
 "Could not refresh usage. Try again." = "Could not refresh usage. Try again.";
 "Could not remove the %@ API key from Keychain." = "Could not remove the %@ API key from Keychain.";
 "Could not save the %@ API key to Keychain." = "Could not save the %@ API key to Keychain.";
+"Could not start the Antigravity CLI." = "Could not start the Antigravity CLI.";
 "Could not start the Codex app-server." = "Could not start the Codex app-server.";
 "Could not update Login Items: %@" = "Could not update Login Items: %@";
 "Create" = "Create";
@@ -99,11 +105,16 @@
 "Enter a tag name." = "Enter a tag name.";
 "Enter a task before saving." = "Enter a task before saving.";
 "Enter your %@ API key before saving." = "Enter your %@ API key before saving.";
+"Gemini 4 Argon weekly quota" = "Gemini 4 Argon weekly quota";
+"Gemini 5-hour quota" = "Gemini 5-hour quota";
+"Gemini weekly quota" = "Gemini weekly quota";
+"Gemini · Antigravity" = "Gemini · Antigravity";
 "General" = "General";
 "GitHub answered the update check with HTTP %lld." = "GitHub answered the update check with HTTP %lld.";
 "GitHub is rate-limiting update checks. Pulse will try again later." = "GitHub is rate-limiting update checks. Pulse will try again later.";
 "Go to %@" = "Go to %@";
 "Go to Todo" = "Go to Todo";
+"Install the Antigravity CLI (agy) to check Gemini quotas." = "Install the Antigravity CLI (agy) to check Gemini quotas.";
 "Installing the update and restarting…" = "Installing the update and restarting…";
 "Keep Pulse ready when you start your day." = "Keep Pulse ready when you start your day.";
 "Keep your daily companion up to date." = "Keep your daily companion up to date.";
@@ -181,9 +192,11 @@
 "Refresh 88VIP balance" = "Refresh 88VIP balance";
 "Refresh Codex usage" = "Refresh Codex usage";
 "Refresh DeepSeek balance" = "Refresh DeepSeek balance";
+"Refresh Gemini quotas" = "Refresh Gemini quotas";
 "Refreshing 88VIP balance" = "Refreshing 88VIP balance";
 "Refreshing Codex usage" = "Refreshing Codex usage";
 "Refreshing DeepSeek balance" = "Refreshing DeepSeek balance";
+"Refreshing Gemini quotas" = "Refreshing Gemini quotas";
 "Refreshing…" = "Refreshing…";
 "Release notes" = "Release notes";
 "Reload" = "Reload";
@@ -209,6 +222,7 @@
 "Settings" = "Settings";
 "Settings…" = "Settings…";
 "Show Pulse name in menu bar" = "Show Pulse name in menu bar";
+"Sign in to Antigravity in a terminal, then try again." = "Sign in to Antigravity in a terminal, then try again.";
 "Skip this version" = "Skip this version";
 "Some account data is unavailable." = "Some account data is unavailable.";
 "Tag name" = "Tag name";
@@ -217,6 +231,7 @@
 "Tasks could not be loaded. Your saved file has not been cleared." = "Tasks could not be loaded. Your saved file has not been cleared.";
 "Tasks stay on this Mac. API keys stay in macOS Keychain. Pulse has no analytics." = "Tasks stay on this Mac. API keys stay in macOS Keychain. Pulse has no analytics.";
 "The 88VIP API key is invalid or no longer active." = "The 88VIP API key is invalid or no longer active.";
+"The Antigravity quota check timed out. Try again." = "The Antigravity quota check timed out. Try again.";
 "The DeepSeek API key is invalid or no longer active." = "The DeepSeek API key is invalid or no longer active.";
 "The DeepSeek balance request timed out. Try again." = "The DeepSeek balance request timed out. Try again.";
 "The download address for “%@” is not usable." = "The download address for “%@” is not usable.";
@@ -248,9 +263,11 @@
 "Todo is the default list." = "Todo is the default list.";
 "Todo is the default list. Choose Todo instead." = "Todo is the default list. Choose Todo instead.";
 "Total balance (%@)" = "Total balance (%@)";
+"Track Gemini model quotas" = "Track Gemini model quotas";
 "Try again" = "Try again";
 "Undo" = "Undo";
 "Unlimited" = "Unlimited";
+"Update the Antigravity CLI to check Gemini quotas." = "Update the Antigravity CLI to check Gemini quotas.";
 "Updated %@" = "Updated %@";
 "Updates" = "Updates";
 "Updates are checked automatically." = "Updates are checked automatically.";
@@ -261,6 +278,7 @@
 "Use tag" = "Use tag";
 "Used" = "Used";
 "Uses the Codex account signed in on this Mac. No API key needed." = "Uses the Codex account signed in on this Mac. No API key needed.";
+"Uses your local Antigravity sign-in." = "Uses your local Antigravity sign-in.";
 "Verified updates install when you’re not working in Pulse." = "Verified updates install when you’re not working in Pulse.";
 "Verifying Pulse %@…" = "Verifying Pulse %@…";
 "Verifying…" = "Verifying…";

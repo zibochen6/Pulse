@@ -4,6 +4,7 @@ struct UsageView: View {
   @ObservedObject var usage: UsageController
   @ObservedObject var vipUsage: UsageController
   @ObservedObject var deepSeekUsage: UsageController
+  @ObservedObject var antigravityUsage: UsageController
   let onAddProvider: () -> Void
   var provider: ProviderID? = nil
 
@@ -14,6 +15,7 @@ struct UsageView: View {
       if provider == nil || provider == .vip { vipContent }
       if provider == nil { Divider() }
       if provider == nil || provider == .deepSeek { deepSeekContent }
+      if provider == .antigravity { antigravityContent }
       Divider()
       Button("Manage AI services", action: onAddProvider)
         .buttonStyle(PulseActionButtonStyle())
@@ -24,10 +26,27 @@ struct UsageView: View {
   }
 
   private var codexContent: some View {
+    quotaContent(
+      usage: usage, provider: .codex, refreshTitle: "Refresh Codex usage",
+      refreshingTitle: "Refreshing Codex usage", identifier: "refreshCodexUsageButton"
+    ) { CodexProviderIcon(size: 16) }
+  }
+
+  private var antigravityContent: some View {
+    quotaContent(
+      usage: antigravityUsage, provider: .antigravity, refreshTitle: "Refresh Gemini quotas",
+      refreshingTitle: "Refreshing Gemini quotas", identifier: "refreshAntigravityUsageButton"
+    ) { GeminiProviderIcon(size: 16) }
+  }
+
+  private func quotaContent<Icon: View>(
+    usage: UsageController, provider: ProviderID, refreshTitle: String, refreshingTitle: String,
+    identifier: String, @ViewBuilder icon: () -> Icon
+  ) -> some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 8) {
-        codexIcon
-        Text("Codex")
+        icon()
+        Text(provider.name)
           .font(.subheadline.weight(.semibold))
         Spacer()
         Button {
@@ -45,11 +64,10 @@ struct UsageView: View {
         .buttonStyle(.borderless)
         .disabled(usage.isRefreshing)
         .help(
-          PulseLocalization.string(
-            usage.isRefreshing ? "Refreshing Codex usage" : "Refresh Codex usage")
+          PulseLocalization.string(usage.isRefreshing ? refreshingTitle : refreshTitle)
         )
-        .accessibilityLabel("Refresh Codex usage")
-        .accessibilityIdentifier("refreshCodexUsageButton")
+        .accessibilityLabel(PulseLocalization.string(refreshTitle))
+        .accessibilityIdentifier(identifier)
       }
 
       switch usage.state {
@@ -287,6 +305,4 @@ struct UsageView: View {
       return reason
     }
   }
-
-  private var codexIcon: some View { CodexProviderIcon(size: 16) }
 }

@@ -38,6 +38,18 @@ final class PulseLocalizationTests: XCTestCase {
     XCTAssertEqual(PulseLocalization.string("Todo", bundle: english), "Todo")
   }
 
+  func testGeminiQuotaLabelsDistinguishBothWeeklyBuckets() throws {
+    let english = try localizedBundle("en")
+    let chinese = try localizedBundle("zh-Hans")
+    for (bucket, translation) in zip(
+      AntigravityQuotaBucket.allCases, ["Gemini 5 小时额度", "Gemini 每周额度", "Gemini 4 Argon 每周额度"])
+    {
+      XCTAssertEqual(
+        PulseLocalization.string(bucket.displayNameKey, bundle: english), bucket.displayNameKey)
+      XCTAssertEqual(PulseLocalization.string(bucket.displayNameKey, bundle: chinese), translation)
+    }
+  }
+
   func testListDeletionCopyExplainsCascadeAndSessionUndoInBothLanguages() throws {
     let chinese = try localizedBundle("zh-Hans")
     XCTAssertEqual(

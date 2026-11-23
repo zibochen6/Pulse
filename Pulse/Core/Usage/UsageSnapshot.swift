@@ -36,6 +36,19 @@ struct QuotaWindow: Equatable, Sendable {
   let durationMinutes: Int?
   let remainingPercent: Int?
   let resetsAt: Date?
+  let bucketID: String?
+  private let displayNameKey: String?
+
+  init(
+    durationMinutes: Int?, remainingPercent: Int?, resetsAt: Date?,
+    bucketID: String? = nil, displayNameKey: String? = nil
+  ) {
+    self.durationMinutes = durationMinutes
+    self.remainingPercent = remainingPercent
+    self.resetsAt = resetsAt
+    self.bucketID = bucketID
+    self.displayNameKey = displayNameKey
+  }
 
   var shortLabel: String {
     guard let durationMinutes, durationMinutes > 0 else { return "?" }
@@ -45,6 +58,7 @@ struct QuotaWindow: Equatable, Sendable {
   }
 
   var displayName: String {
+    if let displayNameKey { return PulseLocalization.string(displayNameKey) }
     guard let durationMinutes else { return PulseLocalization.string("Limit window") }
     if durationMinutes == 300 { return PulseLocalization.string("5-hour window") }
     if durationMinutes == 10_080 { return PulseLocalization.string("Weekly window") }
