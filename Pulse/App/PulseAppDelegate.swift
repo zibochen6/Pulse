@@ -314,11 +314,9 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
             guard let self else { return }
             self.settingsController?.close()
             self.pages.showHome()
-            self.todayPresentation.showsLocalTasks = true
             self.showPopover()
           },
-          todayBridge: todayBridge,
-          onObsidianVaultChanged: { [weak self] in self?.todayPresentation.showsLocalTasks = false }
+          todayBridge: todayBridge
         ))
     }
     // Establish activity before closing the popover: the updater cannot see a
@@ -443,7 +441,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     pages.reset()
     hoverController.beginOpening()
     let taskEditorActive: Bool
-    if let vault = todayBridge.vaultURL, !todayPresentation.showsLocalTasks {
+    if let vault = todayBridge.vaultURL {
       taskEditorActive = todayPresentation.isEditing(in: vault)
     } else {
       taskEditorActive = localPresentation.isInteractionActive
@@ -484,12 +482,14 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     if config.antigravityEnabled, case .success = antigravityUsage.state {
       antigravityUsage.refreshIfStale(maxAge: Self.antigravityRefreshSeconds)
     }
-    Task { [weak self] in await self?.todayBridge.refresh() }
-    Task { [weak self] in
-      await self?.localTasks.refresh()
-      // A repeating task finished yesterday is re-armed when Pulse is actually
-      // opened, so the list never waits for a render to catch up with the date.
-      await self?.localTasks.resetRepeatingTasks()
+    if todayBridge.isEnabled {
+      Task { [weak self] in await self?.todayBridge.refresh() }
+    } else {
+      Task { [weak self] in
+        await self?.localTasks.refresh()
+        // Re-arm local repeats when their list is opened.
+        await self?.localTasks.resetRepeatingTasks()
+      }
     }
   }
 

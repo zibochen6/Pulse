@@ -24,7 +24,7 @@ enum SettingsDestination: String, CaseIterable, Hashable, Identifiable {
     switch self {
     case .general: PulseLocalization.string("General")
     case .providers: PulseLocalization.string("AI services")
-    case .tasks: PulseLocalization.string("Lists & tags")
+    case .tasks: PulseLocalization.string("Tasks")
     case .updates: PulseLocalization.string("Updates")
     case .about: PulseLocalization.string("About")
     }
@@ -33,7 +33,7 @@ enum SettingsDestination: String, CaseIterable, Hashable, Identifiable {
     switch self {
     case .general: "slider.horizontal.3"
     case .providers: "square.stack.3d.up"
-    case .tasks: "tag"
+    case .tasks: "checklist"
     case .updates: "arrow.down.circle"
     case .about: "info.circle"
     }

@@ -20,7 +20,6 @@ struct SettingsView: View {
   let onReturnToDraft: () -> Void
   var onTaskEditingChanged: (Bool) -> Void
   var todayBridge: TodayTaskBridge?
-  var onObsidianVaultChanged: () -> Void
   @StateObject private var editing = PulseEditingRegistry()
 
   init(
@@ -37,8 +36,7 @@ struct SettingsView: View {
     localPresentation: LocalTaskPresentation? = nil,
     onRestartRequested: @escaping () -> Void = {},
     onReturnToDraft: @escaping () -> Void = {},
-    todayBridge: TodayTaskBridge? = nil,
-    onObsidianVaultChanged: @escaping () -> Void = {}
+    todayBridge: TodayTaskBridge? = nil
   ) {
     self.config = config
     self.deepSeekConfiguration = deepSeekConfiguration
@@ -59,7 +57,6 @@ struct SettingsView: View {
     self.onRestartRequested = onRestartRequested
     self.onReturnToDraft = onReturnToDraft
     self.todayBridge = todayBridge
-    self.onObsidianVaultChanged = onObsidianVaultChanged
   }
 
   var body: some View {
@@ -112,7 +109,7 @@ struct SettingsView: View {
       config.refreshLoginItemStatus()
       vipConfiguration.refresh()
       deepSeekConfiguration.refresh()
-      Task { await localTasks.refresh() }
+      if todayBridge?.isEnabled != true { Task { await localTasks.refresh() } }
     }
     .onChange(of: editing.isEditing) { onTaskEditingChanged($0) }
     .onDisappear {
@@ -287,18 +284,19 @@ struct SettingsView: View {
     }
   }
 
-  private var tasksContent: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      if let todayBridge {
-        settingsCard {
-          TodayTasksSettings(bridge: todayBridge, onVaultChanged: onObsidianVaultChanged)
-        }
-      }
-      LocalTagSettingsView(
-        controller: localTasks, presentation: localPresentation,
-        onEditingChanged: { editing.set(source: "tagEditor", editing: $0) },
-        onReturnToDraft: onReturnToDraft)
+  @ViewBuilder private var tasksContent: some View {
+    if let todayBridge {
+      TodayTasksSettings(bridge: todayBridge, localSettings: localTagSettings)
+    } else {
+      localTagSettings
     }
+  }
+
+  private var localTagSettings: LocalTagSettingsView {
+    LocalTagSettingsView(
+      controller: localTasks, presentation: localPresentation,
+      onEditingChanged: { editing.set(source: "tagEditor", editing: $0) },
+      onReturnToDraft: onReturnToDraft)
   }
 
   private var updatesContent: some View {
@@ -377,12 +375,6 @@ struct SettingsView: View {
     }
   }
 
-  private func settingsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-    VStack(alignment: .leading, spacing: 12, content: content)
-      .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-      .background(PulseDesignTokens.surface, in: RoundedRectangle(cornerRadius: 12))
-      .overlay(RoundedRectangle(cornerRadius: 12).stroke(PulseDesignTokens.border, lineWidth: 1))
-  }
   private func preferenceRow(_ title: String, detail: String, binding: Binding<Bool>) -> some View {
     HStack(spacing: 16) {
       VStack(alignment: .leading, spacing: 4) {
@@ -419,14 +411,28 @@ struct SettingsView: View {
   }
 }
 
+private func settingsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+  VStack(alignment: .leading, spacing: 12, content: content)
+    .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+    .background(PulseDesignTokens.surface, in: RoundedRectangle(cornerRadius: 12))
+    .overlay(RoundedRectangle(cornerRadius: 12).stroke(PulseDesignTokens.border, lineWidth: 1))
+}
+
 @MainActor
 private struct TodayTasksSettings: View {
   @ObservedObject var bridge: TodayTaskBridge
-  let onVaultChanged: () -> Void
+  let localSettings: LocalTagSettingsView
   @State private var busy = false
   @State private var errorMessage: String?
 
   var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      settingsCard { connectionSettings }
+      if !bridge.isEnabled { localSettings }
+    }
+  }
+
+  private var connectionSettings: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(alignment: .top, spacing: 12) {
         VStack(alignment: .leading, spacing: 4) {
@@ -508,7 +514,6 @@ private struct TodayTasksSettings: View {
       defer { busy = false }
       do {
         try await action()
-        onVaultChanged()
       } catch {
         errorMessage = error.localizedDescription
       }

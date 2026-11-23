@@ -6,11 +6,10 @@ struct TodayTaskDraft {
   var focusRequest: UUID? = UUID()
 }
 
-/// The quick panel and Settings share the selected surface. Unsaved input
-/// belongs to the originating vault, even when another tab or vault is shown.
+/// Unsaved input belongs to the originating vault across panel closures and
+/// changes in the paired vault.
 @MainActor
 final class TodayTaskPresentation: ObservableObject {
-  @Published var showsLocalTasks = false
   @Published private(set) var drafts: [URL: TodayTaskDraft] = [:]
   @Published private(set) var actionErrors: [URL: String] = [:]
   @Published private(set) var submittingDrafts = Set<UUID>()
@@ -115,7 +114,7 @@ struct HomeTaskLists: View {
   let onManageTags: () -> Void
 
   var body: some View {
-    if let vault = bridge.vaultURL, !presentation.showsLocalTasks {
+    if let vault = bridge.vaultURL {
       TodayTasksView(
         vault: vault, bridge: bridge, presentation: presentation, onEditingChanged: onEditingChanged
       )
@@ -123,8 +122,7 @@ struct HomeTaskLists: View {
     } else {
       LocalTasksView(
         controller: localTasks, presentation: localPresentation,
-        onEditingChanged: onEditingChanged, onManageTags: onManageTags,
-        onShowToday: bridge.vaultURL == nil ? nil : { presentation.showsLocalTasks = false })
+        onEditingChanged: onEditingChanged, onManageTags: onManageTags)
     }
   }
 }
@@ -143,22 +141,13 @@ private struct TodayTasksView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      HStack(spacing: 4) {
-        PulsePillTab(
-          title: PulseLocalization.string("Today Tasks"), isSelected: true, action: {}
-        )
-        .fixedSize(horizontal: true, vertical: false)
-        .accessibilityIdentifier("todayTasksTab")
-        PulsePillTab(
-          title: PulseLocalization.string("Local Todo"), isSelected: false,
-          action: { presentation.showsLocalTasks = true }
-        )
-        .fixedSize(horizontal: true, vertical: false)
-        .accessibilityIdentifier("showLocalTasksTab")
-        Spacer(minLength: 0)
-      }
-      .padding(.horizontal, PulseDesignTokens.contentInset)
-      .padding(.vertical, 6)
+      Text("Today Tasks")
+        .font(.system(size: PulseDesignTokens.footnote, weight: .semibold))
+        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+        .padding(.horizontal, PulseDesignTokens.contentInset)
+        .padding(.vertical, 6)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("todayTasksHeading")
       Divider().padding(.horizontal, PulseDesignTokens.contentInset)
       ScrollViewReader { proxy in
         ScrollView {

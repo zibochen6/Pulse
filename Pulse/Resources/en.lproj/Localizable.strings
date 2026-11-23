@@ -123,7 +123,7 @@
 "Limit" = "Limit";
 "Limit window" = "Limit window";
 "List" = "List";
-"Lists & tags" = "Lists & tags";
+"Tasks" = "Tasks";
 "Loading tags" = "Loading tags";
 "Loading tasks" = "Loading tasks";
 "Local by design" = "Local by design";
@@ -307,7 +307,6 @@
 "%@ · Cancel" = "%@ · Cancel";
 "You are editing another task. Save or cancel that edit first; this list’s draft will be kept." = "You are editing another task. Save or cancel that edit first; this list’s draft will be kept.";
 "Today Tasks" = "Today Tasks";
-"Local Todo" = "Local Todo";
 "Obsidian Today Tasks" = "Obsidian Today Tasks";
 "Sync Today Tasks from the Personal Dashboard on this Mac." = "Sync Today Tasks from the Personal Dashboard on this Mac.";
 "Choose vault…" = "Choose vault…";

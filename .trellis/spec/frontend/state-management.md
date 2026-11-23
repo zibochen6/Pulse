@@ -178,7 +178,10 @@ pages.showUsage(.deepSeek)
 The app delegate owns one `LocalTaskController` and one
 `LocalTaskPresentation`, injected into Home and Settings. Tabs, quick entry, editing and
 Settings use that shared state. The optional Obsidian Today surface shares one
-`TodayTaskBridge` and one `TodayTaskPresentation` across Home and Settings.
+`TodayTaskBridge` and one `TodayTaskPresentation` across Home and Settings. A
+paired vault makes Today the only task surface and hides local tag management
+in Settings. A missing heartbeat still shows Today with its sync status.
+Disconnecting the vault restores the native interface and retained drafts.
 Tests use isolated defaults and temporary stores.
 
 ### 2. Interfaces and ownership

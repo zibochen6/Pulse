@@ -147,12 +147,8 @@ struct HomeView: View {
       LocalTagSettingsView(
         controller: localTasks, presentation: localPresentation,
         onEditingChanged: onTaskEditingChanged,
-        onReturnToDraft: {
-          todayPresentation.showsLocalTasks = true
-          pages.showHome()
-        },
+        onReturnToDraft: { pages.showHome() },
         onSelectTag: { id in
-          todayPresentation.showsLocalTasks = true
           localPresentation.selectedFilter = id.map(LocalTaskFilter.tag) ?? .untagged
           pages.showHome()
         }

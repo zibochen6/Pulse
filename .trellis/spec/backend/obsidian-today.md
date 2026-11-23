@@ -3,8 +3,9 @@
 ## Scope and ownership
 
 The desktop Personal Dashboard plugin owns the Today Tasks projection and its
-writeback to Markdown. Pulse displays that projection through an opt-in Today
-Tasks tab, with separate native Todo, tag lists and persistence. Day boundaries
+writeback to Markdown. After pairing, Pulse displays only Today Tasks, including
+while Obsidian is unavailable. Each app's storage remains separate. Disconnecting
+the vault restores access to Pulse's native Todo and tag lists. Day boundaries
 follow the Mac's local calendar date. Pending adds take the day of their first
 writeback. Targeted changes require the task to still be in that day's plan.
 
