@@ -22,8 +22,8 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Pulse
         INFOPLIST_KEY_LSUIElement: YES
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: 0.1.11
-        CURRENT_PROJECT_VERSION: 15
+        MARKETING_VERSION: 0.1.12
+        CURRENT_PROJECT_VERSION: 16
   PulseTests:
     type: bundle.unit-test
     platform: macOS
