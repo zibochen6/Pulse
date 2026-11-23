@@ -99,6 +99,34 @@ final class SettingsLifecycleTests: XCTestCase {
     XCTAssertFalse(presentation.hasUnsavedEdits)
   }
 
+  func testTodayDraftBelongsToOriginalVaultAndRejectsRetiredField() throws {
+    let presentation = TodayTaskPresentation()
+    let firstVault = URL(fileURLWithPath: "/fixture/first", isDirectory: true)
+    let secondVault = URL(fileURLWithPath: "/fixture/second", isDirectory: true)
+    XCTAssertFalse(presentation.showsLocalTasks)
+    presentation.beginDraft(in: firstVault)
+    let firstRequest = try XCTUnwrap(presentation.drafts[firstVault]?.focusRequest)
+    presentation.setTitle("Keep this draft", in: firstVault, request: firstRequest)
+    XCTAssertTrue(presentation.isEditing(in: firstVault))
+    presentation.collapseDraft(in: firstVault)
+    presentation.setTitle("Late field event", in: firstVault, request: firstRequest)
+    XCTAssertFalse(presentation.isEditing(in: firstVault))
+    XCTAssertTrue(presentation.hasUnsavedEdits)
+    presentation.showsLocalTasks = true
+    presentation.beginDraft(in: secondVault)
+    XCTAssertEqual(presentation.drafts[secondVault]?.title, "")
+    presentation.discardDraft(in: secondVault)
+    presentation.showsLocalTasks = false
+    presentation.beginDraft(in: firstVault)
+    presentation.setTitle("Late field after reopen", in: firstVault, request: firstRequest)
+    XCTAssertEqual(presentation.drafts[firstVault]?.title, "Keep this draft")
+    presentation.discardAllDrafts()
+    presentation.beginDraft(in: firstVault)
+    presentation.setTitle("Retired field event", in: firstVault, request: firstRequest)
+    XCTAssertEqual(presentation.drafts[firstVault]?.title, "")
+    XCTAssertFalse(presentation.hasUnsavedEdits)
+  }
+
   func testWindowReusesInstanceAndCloseKeepsSession() {
     let presentation = SettingsPresentation()
     presentation.setDraft("kept only in memory", for: .deepSeek)

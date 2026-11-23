@@ -2,10 +2,11 @@
 
 ## 1. Scope / Trigger
 
-Pulse's only task system is local JSON at
+Pulse's native task lists use local JSON at
 `Application Support/Pulse/tasks.json`. Task data never lives in UserDefaults.
 Default Todo is a virtual list represented by empty `tagIDs`; custom lists use
-one tag UUID. No database, reminder service, sync or new dependency is introduced.
+one tag UUID. The optional Obsidian Today Tasks integration uses its own
+channel and leaves native task transactions local. See [Today Tasks sync](./obsidian-today.md).
 Test callers inject a temporary URL; never test against the user's real file.
 
 ## 2. Signatures

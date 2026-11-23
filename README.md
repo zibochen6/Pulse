@@ -2,7 +2,7 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services every day. The intended product brings AI usage status and daily to-dos into one quick daily entry point.
 
-**Pulse 0.1.12:** The menu bar panel has a cleaner focus timer, balanced usage cards and a more consistent Todo layout. The countdown stays the same width while running. Refresh feedback stays in place, and page changes use a short fade.
+**Pulse 0.1.13** can sync the Obsidian Personal Dashboard's Today Tasks card. Add, complete, reopen or delete a task from either app. Edits made while Obsidian is closed are saved on this Mac and sent when the dashboard plugin opens again.
 
 The menu bar remains Codex-only. Select a provider to inspect its own usage, or connect an optional service from its status card. Tasks support independent tag lists, quick entry, daily repeat and deletion undo. Everything stays local; API keys are stored in macOS Keychain. See [UI and interaction](docs/ui-layout-refactor.md) and [motion](docs/popover-motion.md) for the current behavior.
 
@@ -10,12 +10,12 @@ The menu bar remains Codex-only. Select a provider to inspect its own usage, or 
 
 ## Download and install
 
-Download [Pulse 0.1.12](https://github.com/zibochen6/Pulse/releases/tag/v0.1.12)
+Download [Pulse 0.1.13](https://github.com/zibochen6/Pulse/releases/tag/v0.1.13)
 for macOS 13 or newer (Apple Silicon and Intel). Open the DMG and drag Pulse
 to Applications. Quit the previous Pulse instance before replacing it, then
 launch `/Applications/Pulse.app`; its settings and task storage are retained.
-The release publishes `Pulse-0.1.12.dmg` with a SHA-256 checksum for manual
-installs, plus `Pulse-0.1.12.zip` and its checksum for the in-app updater; the
+The release publishes `Pulse-0.1.13.dmg` with a SHA-256 checksum for manual
+installs, plus `Pulse-0.1.13.zip` and its checksum for the in-app updater; the
 DMG and ZIP contain the same signed app.
 
 This preview is signed with an Apple Development certificate, **not Developer ID
@@ -23,7 +23,7 @@ signed or notarized**. macOS may block first launch. If you trust the downloaded
 build, use the available **Open Anyway** option in System Settings → Privacy &
 Security after attempting to launch; follow [Apple's guidance](https://support.apple.com/102445)
 and do not disable Gatekeeper. Source builds
-remain available below. See [0.1.12 release notes](docs/releases/0.1.12.md) for
+remain available below. See [0.1.13 release notes](docs/releases/0.1.13.md) for
 changes and current limits.
 
 ## Automatic updates
@@ -168,23 +168,38 @@ untagged tasks become reachable in Todo. Data stays local in schema-version-1
 JSON. See [the task interaction and storage contract](docs/builtin-tasks.md)
 for failure behavior, compatibility and manual acceptance.
 
+## Obsidian Today Tasks
+
+Install the compatible **Personal Dashboard** plugin (0.6.10 or later) in
+Obsidian desktop and enable it for the vault you want to connect. In Pulse, open
+**Settings → Tasks → Choose Vault** and select that vault's folder. Pulse opens
+**Today Tasks** by default after pairing. Select **Local Todo** to use your
+existing Pulse lists.
+
+Both apps share the dashboard's Today Tasks, including project tasks scheduled
+for today. Deleting a quick capture removes its Markdown checkbox. Removing a
+project task from Today preserves the checkbox in its project note. While
+Obsidian is closed, Pulse shows queued edits and sends them when the connected
+vault opens again. Coordination is local to this Mac.
+
 ## Direction
 
 - **AI status:** Codex, 88VIP, and DeepSeek are connected. Provider-specific capabilities for OpenAI API, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window are displayed as different kinds of information.
-- **Local to-dos:** the native list is Pulse's single task system — tag tabs you can drag into your own order, a left-aligned add-task row, completed rows kept visible, and per-task daily repeat. Everything is stored locally in one JSON file on this Mac.
-- **Privacy:** the app runs locally. 88VIP and DeepSeek API keys are stored in macOS Keychain; ordinary preferences use UserDefaults. Tasks are stored locally; Pulse keeps no imported note content and has no analytics.
+- **Tasks:** native lists support tags and daily repeat. The optional Obsidian connection brings the dashboard's Today Tasks into the same menu bar panel.
+- **Privacy:** the app runs locally. 88VIP and DeepSeek API keys are stored in macOS Keychain. Native tasks, the paired vault preference and its sync state stay on this Mac. Pulse has no analytics.
 
 See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
 
 ## 中文简介
 
-Pulse 是本地优先的 macOS 菜单栏工具，将 AI 服务状态和每日待办放在一起。0.1.12 调整了专注按钮、额度卡和待办列表，优化了切页和加载反馈。可从上方链接下载新版本。
+Pulse 是本地优先的 macOS 菜单栏工具，将 AI 服务状态和每日待办放在一起。0.1.13 可接入 Obsidian 个人看板的「今日待办」。可从上方链接下载新版本。
 
 - **AI 状态**：Codex 额度、88VIP USD 余额和 DeepSeek 原币种余额。点击哪个服务，就查看哪个服务；未配置、验证中、连接成功和失败分别表达，保存密钥不冒充连接成功。
 - **标签即列表**：Todo 固定保留，自定义标签可通过可见的省略号菜单编辑、删除和排序；全部标签入口支持搜索，没有人为数量上限。删除标签会一并删除列表任务，一次撤销可恢复整组；最多保留当前运行内最近 20 次删除，并保护未提交草稿。
 - **日常操作**：列表下方添加任务，支持每日重复；完成任务原地显示，删除任务可以撤销。跨标签、页面和窗口保留草稿；中文输入法确认候选词不会误提交。
 - **设置与动画**：使用齿轮或 ⌘, 打开独立设置。保留鼠标移出 180 毫秒后关闭面板的习惯，输入、菜单和拖拽期间暂停；跟随系统减少动态效果。
-- **本地数据**：任务文件保持 schema 1，密钥只保存在 macOS Keychain；没有云同步或使用情况追踪。
+- **今日待办同步**：在 Pulse 的「设置 → 待办」选择已安装兼容看板插件的知识库。本地 Todo 仍可使用。两端可新增、勾选、撤销完成和删除，Obsidian 关闭时操作会在本机排队。
+- **本地数据**：原有任务文件保持 schema 1，密钥保存在 macOS Keychain，待办同步通过本机文件完成。
 
 更多细节见 [界面与交互](docs/ui-layout-refactor.md)、[本地任务](docs/builtin-tasks.md) 和 [推广展示](docs/07-community-launch-plan.md)。
 

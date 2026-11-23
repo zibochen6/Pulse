@@ -48,8 +48,15 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         ? FileManager.default.temporaryDirectory.appendingPathComponent(
           "PulseTestHost-\(ProcessInfo.processInfo.processIdentifier)/tasks.json")
         : LocalTaskStore.defaultFileURL))
-  private var taskEditorActive = false
   private let localPresentation = LocalTaskPresentation()
+  private let todayBridge = TodayTaskBridge(
+    defaults: PulseAppDelegate.runtimeDefaults,
+    bridgeRoot: PulseAppDelegate.runtimeServices.permitsLiveAccess
+      ? TodayBridgeStorage.defaultRoot
+      : FileManager.default.temporaryDirectory.appendingPathComponent(
+        "PulseTestHost-\(ProcessInfo.processInfo.processIdentifier)/ObsidianToday/v1",
+        isDirectory: true))
+  private let todayPresentation = TodayTaskPresentation()
   private let settingsPresentation = SettingsPresentation()
   private var settingsController: SettingsWindowController?
   private let interactionHolds = PopoverInteractionHolds()
@@ -61,6 +68,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     confirmDiscard: { [unowned self] action in self.confirmDiscard(for: action) },
     discard: { [unowned self] in
       self.localPresentation.discardAllDrafts()
+      self.todayPresentation.discardAllDrafts()
       self.settingsPresentation.discardAllDrafts()
     },
     perform: { [unowned self] action in
@@ -143,6 +151,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     configureStatusItem()
     configurePopover()
     observeMenuInteractions()
+    todayBridge.start()
 
     focusTimerSubscription = focusTimer.$isRunning.dropFirst()
       .sink { [weak self] isRunning in
@@ -151,7 +160,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     wakeSubscription = NSWorkspace.shared.notificationCenter
       .publisher(for: NSWorkspace.didWakeNotification)
       .receive(on: RunLoop.main)
-      .sink { [weak self] _ in self?.focusTimer.finishIfDue() }
+      .sink { [weak self] _ in
+        self?.focusTimer.finishIfDue()
+        Task { [weak self] in await self?.todayBridge.refresh() }
+      }
 
     motionPreferencesSubscription = NSWorkspace.shared.notificationCenter
       .publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
@@ -252,9 +264,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         onVIPCredentialsChanged: { [weak self] in self?.vipUsage.credentialsDidChange() },
         onQuit: { [weak self] in self?.requestQuit(nil) },
         onTaskEditingChanged: { [weak self] active in
-          guard let self else { return }
-          self.taskEditorActive = active
-          self.interactionHolds.set(.taskEditor, active: active)
+          self?.interactionHolds.set(.taskEditor, active: active)
         },
         localPresentation: localPresentation,
         onOpenSettings: { [weak self] destination, provider in
@@ -262,7 +272,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         },
         onRestartRequested: { [weak self] in self?.requestExit(restarting: true) },
         focusTimer: focusTimer,
-        antigravityUsage: antigravityUsage
+        antigravityUsage: antigravityUsage,
+        todayBridge: todayBridge, todayPresentation: todayPresentation
       ).environment(\.pulsePopoverFocus, popoverFocus)
     )
     popover.contentViewController = hostingController
@@ -273,9 +284,11 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     PulseExitPolicy(
       popoverOpen: popover.isShown,
       settingsOpen: settingsController?.isOpen == true,
-      hasUnsavedEdits: localPresentation.hasUnsavedEdits || settingsPresentation.hasUnsavedEdits,
+      hasUnsavedEdits: localPresentation.hasUnsavedEdits || todayPresentation.hasUnsavedEdits
+        || settingsPresentation.hasUnsavedEdits,
       hasPendingWrites: localTasks.isSaving || localTasks.isUndoing
-        || localPresentation.hasPendingSubmissions,
+        || localPresentation.hasPendingSubmissions || todayPresentation.hasPendingSubmission
+        || todayBridge.hasPendingWrite,
       focusSessionActive: focusTimer.isRunning)
   }
 
@@ -301,8 +314,12 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
             guard let self else { return }
             self.settingsController?.close()
             self.pages.showHome()
+            self.todayPresentation.showsLocalTasks = true
             self.showPopover()
-          }))
+          },
+          todayBridge: todayBridge,
+          onObsidianVaultChanged: { [weak self] in self?.todayPresentation.showsLocalTasks = false }
+        ))
     }
     // Establish activity before closing the popover: the updater cannot see a
     // quiet gap between the two native surfaces.
@@ -425,7 +442,13 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     popoverFocus.setKeyboardNavigation(viaKeyboard)
     pages.reset()
     hoverController.beginOpening()
-    interactionHolds.set(.taskEditor, active: localPresentation.isInteractionActive)
+    let taskEditorActive: Bool
+    if let vault = todayBridge.vaultURL, !todayPresentation.showsLocalTasks {
+      taskEditorActive = todayPresentation.isEditing(in: vault)
+    } else {
+      taskEditorActive = localPresentation.isInteractionActive
+    }
+    interactionHolds.set(.taskEditor, active: taskEditorActive)
     hoverController.setDismissalSuspended(interactionHolds.isActive)
     updatePopoverMotion()
     popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -461,6 +484,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     if config.antigravityEnabled, case .success = antigravityUsage.state {
       antigravityUsage.refreshIfStale(maxAge: Self.antigravityRefreshSeconds)
     }
+    Task { [weak self] in await self?.todayBridge.refresh() }
     Task { [weak self] in
       await self?.localTasks.refresh()
       // A repeating task finished yesterday is re-armed when Pulse is actually

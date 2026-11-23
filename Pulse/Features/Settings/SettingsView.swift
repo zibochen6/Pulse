@@ -19,6 +19,8 @@ struct SettingsView: View {
   let onRestartRequested: () -> Void
   let onReturnToDraft: () -> Void
   var onTaskEditingChanged: (Bool) -> Void
+  var todayBridge: TodayTaskBridge?
+  var onObsidianVaultChanged: () -> Void
   @StateObject private var editing = PulseEditingRegistry()
 
   init(
@@ -34,7 +36,9 @@ struct SettingsView: View {
     presentation: SettingsPresentation? = nil,
     localPresentation: LocalTaskPresentation? = nil,
     onRestartRequested: @escaping () -> Void = {},
-    onReturnToDraft: @escaping () -> Void = {}
+    onReturnToDraft: @escaping () -> Void = {},
+    todayBridge: TodayTaskBridge? = nil,
+    onObsidianVaultChanged: @escaping () -> Void = {}
   ) {
     self.config = config
     self.deepSeekConfiguration = deepSeekConfiguration
@@ -54,6 +58,8 @@ struct SettingsView: View {
     self.onTaskEditingChanged = onTaskEditingChanged
     self.onRestartRequested = onRestartRequested
     self.onReturnToDraft = onReturnToDraft
+    self.todayBridge = todayBridge
+    self.onObsidianVaultChanged = onObsidianVaultChanged
   }
 
   var body: some View {
@@ -282,10 +288,17 @@ struct SettingsView: View {
   }
 
   private var tasksContent: some View {
-    LocalTagSettingsView(
-      controller: localTasks, presentation: localPresentation,
-      onEditingChanged: { editing.set(source: "tagEditor", editing: $0) },
-      onReturnToDraft: onReturnToDraft)
+    VStack(alignment: .leading, spacing: 14) {
+      if let todayBridge {
+        settingsCard {
+          TodayTasksSettings(bridge: todayBridge, onVaultChanged: onObsidianVaultChanged)
+        }
+      }
+      LocalTagSettingsView(
+        controller: localTasks, presentation: localPresentation,
+        onEditingChanged: { editing.set(source: "tagEditor", editing: $0) },
+        onReturnToDraft: onReturnToDraft)
+    }
   }
 
   private var updatesContent: some View {
@@ -350,7 +363,11 @@ struct SettingsView: View {
       settingsCard {
         Label("Local by design", systemImage: "lock.shield").font(
           .system(size: 14, weight: .semibold))
-        Text("Tasks stay on this Mac. API keys stay in macOS Keychain. Pulse has no analytics.")
+        Text(
+          "Local tasks stay on this Mac. Synced tasks are saved in your Obsidian vault."
+        )
+        .font(.system(size: 13)).foregroundStyle(.secondary)
+        Text("API keys stay in macOS Keychain. Pulse has no analytics.")
           .font(.system(size: 13)).foregroundStyle(.secondary)
         if let url = Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "md") {
           Button("Open third-party notices") { NSWorkspace.shared.open(url) }
@@ -398,6 +415,103 @@ struct SettingsView: View {
     case .notRegistered: PulseLocalization.string("Not enabled in macOS Login Items.")
     case .notFound:
       PulseLocalization.string("macOS cannot locate this app for login. Try an installed build.")
+    }
+  }
+}
+
+@MainActor
+private struct TodayTasksSettings: View {
+  @ObservedObject var bridge: TodayTaskBridge
+  let onVaultChanged: () -> Void
+  @State private var busy = false
+  @State private var errorMessage: String?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 4) {
+          Label("Obsidian Today Tasks", systemImage: "calendar")
+            .font(.system(size: PulseDesignTokens.label, weight: .semibold))
+            .foregroundStyle(.primary)
+          if let vault = bridge.vaultURL {
+            Text(vault.lastPathComponent)
+              .lineLimit(1).truncationMode(.middle).help(vault.path)
+              .accessibilityIdentifier("todayTasksVaultName")
+            Text(bridge.connection.todayTaskMessage)
+              .accessibilityIdentifier("todayTasksSettingsConnectionStatus")
+            if bridge.pendingCount > 0 { Text(bridge.pendingStatus) }
+          } else {
+            Text("Sync Today Tasks from the Personal Dashboard on this Mac.")
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+        .font(.system(size: PulseDesignTokens.caption)).foregroundStyle(.secondary)
+        Spacer(minLength: 8)
+        VStack(alignment: .trailing, spacing: 4) {
+          Button(
+            LocalizedStringKey(bridge.vaultURL == nil ? "Choose vault…" : "Change vault…"),
+            action: chooseVault
+          )
+          .buttonStyle(PulseActionButtonStyle()).accessibilityIdentifier("chooseTodayTasksVault")
+          if bridge.vaultURL != nil {
+            Button("Disconnect") { disconnect() }
+              .font(.system(size: PulseDesignTokens.caption))
+              .buttonStyle(.borderless)
+              .accessibilityIdentifier("disconnectTodayTasksVault")
+          }
+        }
+        .disabled(busy || bridge.hasPendingWrite)
+      }
+      if let errorMessage {
+        PulseErrorBanner(message: errorMessage, accessibilityIdentifier: "todayTasksSettingsError")
+        {
+          Button("Dismiss") { self.errorMessage = nil }
+        }
+      }
+    }
+  }
+
+  private func chooseVault() {
+    guard !busy else { return }
+    let panel = NSOpenPanel()
+    panel.title = PulseLocalization.string("Choose an Obsidian vault")
+    panel.prompt = PulseLocalization.string("Select vault")
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.allowsMultipleSelection = false
+    if let vault = bridge.vaultURL { panel.directoryURL = vault.deletingLastPathComponent() }
+    busy = true
+    if let window = NSApp.keyWindow {
+      panel.beginSheetModal(for: window) { finishSelection($0, panel: panel) }
+    } else {
+      panel.begin { finishSelection($0, panel: panel) }
+    }
+  }
+
+  private func finishSelection(_ response: NSApplication.ModalResponse, panel: NSOpenPanel) {
+    guard response == .OK, let url = panel.url else {
+      busy = false
+      return
+    }
+    changeVault { try await bridge.connect(to: url) }
+  }
+
+  private func disconnect() {
+    guard !busy else { return }
+    busy = true
+    changeVault { try await bridge.disconnect() }
+  }
+
+  private func changeVault(_ action: @escaping @MainActor () async throws -> Void) {
+    errorMessage = nil
+    Task {
+      defer { busy = false }
+      do {
+        try await action()
+        onVaultChanged()
+      } catch {
+        errorMessage = error.localizedDescription
+      }
     }
   }
 }

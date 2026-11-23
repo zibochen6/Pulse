@@ -22,6 +22,8 @@ struct HomeView: View {
   var onRestartRequested: () -> Void = {}
   var focusTimer = FocusTimerController()
   var antigravityUsage = UsageController(provider: InactiveSettingsProvider())
+  var todayBridge: TodayTaskBridge?
+  var todayPresentation = TodayTaskPresentation()
   @State private var hidesUpdateBanner = false
 
   var body: some View {
@@ -111,12 +113,20 @@ struct HomeView: View {
           updates: updates, onRestart: onRestartRequested,
           onDismiss: { hidesUpdateBanner = true })
       }
-      LocalTasksView(
-        controller: localTasks, presentation: localPresentation,
-        onEditingChanged: onTaskEditingChanged,
-        onManageTags: { pages.showTagManagement() }
-      )
+      Group {
+        if let todayBridge {
+          HomeTaskLists(
+            bridge: todayBridge, presentation: todayPresentation,
+            localTasks: localTasks, localPresentation: localPresentation,
+            onEditingChanged: onTaskEditingChanged, onManageTags: { pages.showTagManagement() })
+        } else {
+          LocalTasksView(
+            controller: localTasks, presentation: localPresentation,
+            onEditingChanged: onTaskEditingChanged, onManageTags: { pages.showTagManagement() })
+        }
+      }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .accessibilityElement(children: .contain)
       .accessibilityIdentifier("tasksRegion")
     }
   }
@@ -137,8 +147,12 @@ struct HomeView: View {
       LocalTagSettingsView(
         controller: localTasks, presentation: localPresentation,
         onEditingChanged: onTaskEditingChanged,
-        onReturnToDraft: { pages.showHome() },
+        onReturnToDraft: {
+          todayPresentation.showsLocalTasks = true
+          pages.showHome()
+        },
         onSelectTag: { id in
+          todayPresentation.showsLocalTasks = true
           localPresentation.selectedFilter = id.map(LocalTaskFilter.tag) ?? .untagged
           pages.showHome()
         }

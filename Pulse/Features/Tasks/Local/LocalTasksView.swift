@@ -454,6 +454,7 @@ struct LocalTasksView: View {
   @ObservedObject var presentation: LocalTaskPresentation
   let onEditingChanged: (Bool) -> Void
   var onManageTags: () -> Void = {}
+  var onShowToday: (() -> Void)?
   @State private var tagViewportWidth: CGFloat = 0
   @State private var tagContentWidth: CGFloat = 0
   @State private var tagContentMinX: CGFloat = 0
@@ -654,8 +655,16 @@ struct LocalTasksView: View {
     let tagIDs = displayed.map(\.id)
     let overflows = tagContentWidth > tagViewportWidth + 1
     return HStack(spacing: 4) {
+      if let onShowToday {
+        PulsePillTab(
+          title: PulseLocalization.string("Today Tasks"), isSelected: false, action: onShowToday
+        )
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityIdentifier("todayTasksTab")
+      }
       PulsePillTab(
-        title: "Todo", isSelected: presentation.selectedFilter == .untagged,
+        title: onShowToday == nil ? "Todo" : PulseLocalization.string("Local Todo"),
+        isSelected: presentation.selectedFilter == .untagged,
         action: { presentation.selectedFilter = .untagged }
       )
       .fixedSize(horizontal: true, vertical: false)

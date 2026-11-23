@@ -177,8 +177,9 @@ pages.showUsage(.deepSeek)
 
 The app delegate owns one `LocalTaskController` and one
 `LocalTaskPresentation`, injected into Home and Settings. Tabs, quick entry, editing and
-Settings use that shared state. No task source preference/selector exists.
-Tests use isolated defaults and a temporary store.
+Settings use that shared state. The optional Obsidian Today surface shares one
+`TodayTaskBridge` and one `TodayTaskPresentation` across Home and Settings.
+Tests use isolated defaults and temporary stores.
 
 ### 2. Interfaces and ownership
 

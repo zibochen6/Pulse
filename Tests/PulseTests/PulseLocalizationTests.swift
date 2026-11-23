@@ -50,6 +50,17 @@ final class PulseLocalizationTests: XCTestCase {
     }
   }
 
+  func testTodayTaskCopyKeepsUserTextAndPendingCount() throws {
+    let chinese = try localizedBundle("zh-Hans")
+    XCTAssertEqual(PulseLocalization.string("Today Tasks", bundle: chinese), "今日待办")
+    XCTAssertEqual(
+      PulseLocalization.format("Remove from Today: %@", "阅读 100% 📖", bundle: chinese),
+      "移出今日待办：阅读 100% 📖")
+    XCTAssertEqual(
+      PulseLocalization.format("%lld changes waiting to sync", 3, bundle: chinese),
+      "3 项改动待同步")
+  }
+
   func testListDeletionCopyExplainsCascadeAndSessionUndoInBothLanguages() throws {
     let chinese = try localizedBundle("zh-Hans")
     XCTAssertEqual(

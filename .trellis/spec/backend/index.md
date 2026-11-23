@@ -26,6 +26,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Release Delivery](./release-delivery.md) | Universal preview signing, recoverable local installation, and GitHub artifact/source publication | Current |
 | [Auto Update](./auto-update.md) | GitHub latest-release feed, digest + code-signature verification, staged install with rollback | Current |
 | [Built-in Tasks](./builtin-tasks.md) | Local JSON transactions, tags, daily repeat, retry and schema compatibility | Current |
+| [Obsidian Today Tasks](./obsidian-today.md) | Vault pairing, durable offline operations and local snapshot/receipt contract | Current |
 
 ---
 
