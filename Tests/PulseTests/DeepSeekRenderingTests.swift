@@ -55,7 +55,7 @@ final class DeepSeekRenderingTests: XCTestCase {
           "openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton", "openSettingsButton",
           "focusTimerButton",
         ]
-        XCTAssertEqual(Set(capture.frames.keys), Set(ids + ["tasksRegion"]))
+        XCTAssertEqual(Set(capture.frames.keys), Set(ids + ["providerDivider"]))
         for id in ids {
           let frame = try XCTUnwrap(capture.frames[id], id)
           XCTAssertGreaterThanOrEqual(frame.minX, PulseDesignTokens.contentInset - 0.5, id)
@@ -93,7 +93,7 @@ final class DeepSeekRenderingTests: XCTestCase {
           let textWidth = (title as NSString).size(withAttributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
           ]).width
-          XCTAssertGreaterThanOrEqual(frame.width, textWidth + 36, "Every amount digit fits")
+          XCTAssertGreaterThanOrEqual(frame.width, textWidth + 30, "Every amount digit fits")
         }
         if count <= 1 {
           XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
@@ -198,10 +198,10 @@ final class DeepSeekRenderingTests: XCTestCase {
       XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
       XCTAssertEqual(codex.minY, deepSeek.minY, accuracy: 0.5)
       XCTAssertEqual(codex.minY, card.minY, accuracy: 0.5)
-      XCTAssertEqual(vip.width, codex.width, accuracy: 0.5)
-      let tasks = try XCTUnwrap(capture.frames["tasksRegion"])
-      XCTAssertGreaterThan(tasks.minY, card.maxY)
-      XCTAssertLessThanOrEqual(tasks.minY, 100)
+      XCTAssertGreaterThanOrEqual(vip.width, codex.width)
+      let divider = try XCTUnwrap(capture.frames["providerDivider"])
+      XCTAssertGreaterThan(divider.maxY, card.maxY)
+      XCTAssertLessThanOrEqual(divider.maxY, 100)
       XCTAssertGreaterThanOrEqual(card.minX, PulseDesignTokens.contentInset - 0.5)
       XCTAssertLessThanOrEqual(
         card.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset)

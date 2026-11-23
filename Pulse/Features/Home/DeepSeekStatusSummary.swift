@@ -9,7 +9,7 @@ struct DeepSeekStatusSummary: View {
     ProviderStatusButton(
       title: DeepSeekUsageFormatter.title(for: state), providerName: "DeepSeek",
       identifier: "openDeepSeekUsageButton", isConfigured: isConfigured, onOpenUsage: onOpenUsage
-    ) { DeepSeekProviderIcon(size: 18) }
+    ) { DeepSeekProviderIcon(size: 16) }
   }
 }
 

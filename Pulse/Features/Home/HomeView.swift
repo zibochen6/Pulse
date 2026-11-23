@@ -128,7 +128,6 @@ struct HomeView: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .accessibilityElement(children: .contain)
       .accessibilityIdentifier("tasksRegion")
-      .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) { ["tasksRegion": $0] }
     }
   }
 
@@ -223,6 +222,9 @@ private struct HomeProviderStrip: View {
       .frame(height: 32)
       .padding(.bottom, 8)
       Rectangle().fill(PulseDesignTokens.border).frame(height: 1)
+        .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
+          ["providerDivider": $0]
+        }
     }
     .padding(.horizontal, PulseDesignTokens.contentInset)
   }

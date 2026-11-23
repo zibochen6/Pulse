@@ -9,7 +9,7 @@ struct AIStatusSummary: View {
     ProviderStatusButton(
       title: title, providerName: "Codex",
       identifier: "openUsageButton", onOpenUsage: onOpenUsage
-    ) { CodexProviderIcon(size: 18) }
+    ) { CodexProviderIcon(size: 16) }
   }
   private var title: String {
     guard case .success(let snapshot) = state else { return UsageMenuFormatter.title(for: state) }
@@ -27,7 +27,7 @@ struct AntigravityStatusSummary: View {
     ProviderStatusButton(
       title: Self.title(for: state), providerName: ProviderID.antigravity.name,
       identifier: "openAntigravityUsageButton", onOpenUsage: onOpenUsage
-    ) { AntigravityProviderIcon(size: 18) }
+    ) { AntigravityProviderIcon(size: 16) }
   }
 
   static func title(for state: UsageRefreshState) -> String {

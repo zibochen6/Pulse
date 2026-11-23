@@ -12,7 +12,7 @@ struct ProviderStatusButton<Icon: View>: View {
   var body: some View {
     Button(action: onOpenUsage) {
       label
-        .padding(.horizontal, 7)
+        .padding(.horizontal, 5)
         .frame(height: 32)
         .frame(maxWidth: .infinity)
         .contentShape(RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge))
