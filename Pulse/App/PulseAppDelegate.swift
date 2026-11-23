@@ -273,7 +273,11 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         onRestartRequested: { [weak self] in self?.requestExit(restarting: true) },
         focusTimer: focusTimer,
         antigravityUsage: antigravityUsage,
-        todayBridge: todayBridge, todayPresentation: todayPresentation
+        todayBridge: todayBridge, todayPresentation: todayPresentation,
+        onPopoverSizeChanged: { [weak self] size in
+          guard let self, self.popover.contentSize != size else { return }
+          self.popover.contentSize = size
+        }
       ).environment(\.pulsePopoverFocus, popoverFocus)
     )
     popover.contentViewController = hostingController

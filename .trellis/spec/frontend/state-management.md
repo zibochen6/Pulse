@@ -80,8 +80,8 @@ config.$showMenuBarLabel.sink { [weak self] showName in
 ## Scenario: quick-panel navigation, Settings and guarded dismissal
 
 ### 1. Scope / Trigger
-Home, provider-specific Usage and tag management share the fixed 400 × 520
-popover. Settings is a separate singleton 720 × 560 window. The approved
+Home, provider-specific Usage and tag management share a 400-point-wide
+popover capped at 520 points tall. Settings is a separate singleton 720 × 560 window. The approved
 redesign intentionally replaces the older in-popover Settings architecture.
 
 ### 2. Signatures
@@ -109,8 +109,9 @@ interaction-hold and update preflight contracts.
 - Clicking a configured provider refreshes only it and opens its Usage detail.
   Missing optional credentials offer connection configuration; unavailable and
   failure remain distinct from a successful reading. Never invent values.
-- Main panel size is fixed while content loads, saves or expands. AppKit and
-  SwiftUI share HomeView.popoverSize. Background remains opaque in both themes.
+- Paired Today Tasks fits the measured header and list, capped at 520 points.
+  Long lists scroll. Other pages and an active update banner use the full
+  surface. Sync the SwiftUI frame to NSPopover.contentSize.
 - Settings navigation never lives in PopoverPage. Its ordinary reopen restores
   category and session inputs; contextual links select their provider/category.
 - Opening waits for both 300 ms minimum guard and native popoverDidShow.

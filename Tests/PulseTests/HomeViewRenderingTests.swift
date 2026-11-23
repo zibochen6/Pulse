@@ -18,11 +18,12 @@ final class HomeViewRenderingTests: XCTestCase {
     UsageController(provider: PreviewVIPUsageProvider())
   }
 
-  /// The popover's size is part of the product contract: one fixed surface, so
-  /// typing, completing a task or a background refresh never resizes the panel
-  /// under the pointer.
-  func testPopoverSizeIsTheFixedRoundOneSurface() {
+  func testTodayPopoverUsesMeasuredContentWithAHeightCap() {
     XCTAssertEqual(HomeView.popoverSize, NSSize(width: 400, height: 520))
+    XCTAssertEqual(HomeView.sizeForToday(header: 97, tasks: 220.2), NSSize(width: 400, height: 318))
+    XCTAssertEqual(HomeView.sizeForToday(header: 97, tasks: 600), HomeView.popoverSize)
+    XCTAssertEqual(HomeView.sizeForToday(header: 97, tasks: nil), HomeView.popoverSize)
+    XCTAssertEqual(HomeView.sizeForToday(header: 0, tasks: 220), HomeView.popoverSize)
   }
 
   func testPopoverBodySwapsInPlaceAndSkipsFadeWithReduceMotion() throws {

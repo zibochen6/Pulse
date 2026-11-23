@@ -24,17 +24,41 @@ struct HomeView: View {
   var antigravityUsage = UsageController(provider: InactiveSettingsProvider())
   var todayBridge: TodayTaskBridge?
   var todayPresentation = TodayTaskPresentation()
+  var onPopoverSizeChanged: ((NSSize) -> Void)?
   @State private var hidesUpdateBanner = false
+  @State private var headerHeight: CGFloat = 0
+  @State private var todayHeight: CGFloat?
+
+  static func sizeForToday(header: CGFloat, tasks: CGFloat?) -> NSSize {
+    guard header > 0, let tasks else { return popoverSize }
+    return NSSize(width: popoverSize.width, height: min(popoverSize.height, ceil(header + tasks)))
+  }
+
+  private var panelSize: NSSize {
+    guard onPopoverSizeChanged != nil, pages.page == .home,
+      hidesUpdateBanner || updates.stagedRelease == nil
+    else { return Self.popoverSize }
+    return Self.sizeForToday(header: headerHeight, tasks: todayHeight)
+  }
 
   var body: some View {
     VStack(spacing: 0) {
-      toolbar
-      HomeProviderStrip(
-        config: config, usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
-        antigravityUsage: antigravityUsage, deepSeekConfiguration: deepSeekConfiguration,
-        vipConfiguration: vipConfiguration, onOpenUsage: { pages.showUsage($0) },
-        onOpenSettings: { onOpenSettings(.providers, $0) }
-      )
+      VStack(spacing: 0) {
+        toolbar
+        HomeProviderStrip(
+          config: config, usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
+          antigravityUsage: antigravityUsage, deepSeekConfiguration: deepSeekConfiguration,
+          vipConfiguration: vipConfiguration, onOpenUsage: { pages.showUsage($0) },
+          onOpenSettings: { onOpenSettings(.providers, $0) }
+        )
+      }
+      .background {
+        GeometryReader { geometry in
+          Color.clear
+            .onAppear { headerHeight = geometry.size.height }
+            .onChange(of: geometry.size.height) { headerHeight = $0 }
+        }
+      }
       PopoverContentTransition(page: pages.page) {
         Group {
           switch pages.page {
@@ -48,7 +72,9 @@ struct HomeView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(width: Self.popoverSize.width, height: Self.popoverSize.height)
+    .frame(width: panelSize.width, height: panelSize.height)
+    .onAppear { onPopoverSizeChanged?(panelSize) }
+    .onChange(of: panelSize) { onPopoverSizeChanged?($0) }
     .background(PulseDesignTokens.background)
     .tint(PulseDesignTokens.accent)
     .clipped()
@@ -118,7 +144,8 @@ struct HomeView: View {
           HomeTaskLists(
             bridge: todayBridge, presentation: todayPresentation,
             localTasks: localTasks, localPresentation: localPresentation,
-            onEditingChanged: onTaskEditingChanged, onManageTags: { pages.showTagManagement() })
+            onEditingChanged: onTaskEditingChanged, onManageTags: { pages.showTagManagement() },
+            onTodayHeight: { todayHeight = $0 })
         } else {
           LocalTasksView(
             controller: localTasks, presentation: localPresentation,

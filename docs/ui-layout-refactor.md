@@ -5,7 +5,8 @@ list deletion and Undo updated in 0.1.9.
 
 ## Surfaces and navigation
 
-The menu-bar panel has a fixed 400 × 520 content surface. A stable toolbar with
+The menu-bar panel is 400 points wide and has a 520-point height cap.
+The paired Today Tasks view shrinks to fit short lists and scrolls long ones. A stable toolbar with
 the focus timer and settings entry sits above AI status controls, a tag strip
 and the scrolling task list. Settings
 opens in one independent 720 × 560 native window, with General, AI services,

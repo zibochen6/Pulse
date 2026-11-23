@@ -112,17 +112,22 @@ struct HomeTaskLists: View {
   let localPresentation: LocalTaskPresentation
   let onEditingChanged: (Bool) -> Void
   let onManageTags: () -> Void
+  var onTodayHeight: (CGFloat?) -> Void = { _ in }
 
   var body: some View {
     if let vault = bridge.vaultURL {
       TodayTasksView(
-        vault: vault, bridge: bridge, presentation: presentation, onEditingChanged: onEditingChanged
+        vault: vault, bridge: bridge, presentation: presentation,
+        onEditingChanged: onEditingChanged,
+        onHeight: onTodayHeight
       )
       .id(vault)
     } else {
       LocalTasksView(
         controller: localTasks, presentation: localPresentation,
-        onEditingChanged: onEditingChanged, onManageTags: onManageTags)
+        onEditingChanged: onEditingChanged, onManageTags: onManageTags
+      )
+      .onAppear { onTodayHeight(nil) }
     }
   }
 }
@@ -133,6 +138,13 @@ private struct TodayTasksView: View {
   @ObservedObject var bridge: TodayTaskBridge
   @ObservedObject var presentation: TodayTaskPresentation
   let onEditingChanged: (Bool) -> Void
+  let onHeight: (CGFloat?) -> Void
+  private static let headingLabelHeight: CGFloat = 28
+  private static let headingInset: CGFloat = 6
+  private static let dividerHeight: CGFloat = 1
+  private static var headingHeight: CGFloat {
+    headingLabelHeight + 2 * headingInset + dividerHeight
+  }
 
   private var isEditing: Bool { presentation.isEditing(in: vault) }
   private var canQueue: Bool {
@@ -143,50 +155,32 @@ private struct TodayTasksView: View {
     VStack(spacing: 0) {
       Text("Today Tasks")
         .font(.system(size: PulseDesignTokens.footnote, weight: .semibold))
-        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: Self.headingLabelHeight, alignment: .leading)
         .padding(.horizontal, PulseDesignTokens.contentInset)
-        .padding(.vertical, 6)
+        .padding(.vertical, Self.headingInset)
         .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("todayTasksHeading")
-      Divider().padding(.horizontal, PulseDesignTokens.contentInset)
+      Divider().frame(height: Self.dividerHeight).padding(
+        .horizontal, PulseDesignTokens.contentInset)
       ScrollViewReader { proxy in
         ScrollView {
-          LazyVStack(alignment: .leading, spacing: 3) {
-            syncStatus
-            if let message = presentation.actionErrors[vault] {
-              PulseErrorBanner(message: message, accessibilityIdentifier: "todayTasksActionError") {
-                Button("Dismiss") { presentation.clearError(in: vault) }
-              }
-            }
-            ForEach(bridge.failures) { failure in
-              PulseErrorBanner(
-                message: PulseLocalization.format(
-                  "%@ — %@", failure.title, failure.todayTaskMessage)
-              ) {
-                if failure.canRetry {
-                  Button("Retry") { perform { try await bridge.retry(failure.id) } }
+          if bridge.tasks.count + bridge.failures.count >= 12 {
+            LazyVStack(alignment: .leading, spacing: 3) { rows }
+              .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .onAppear { onHeight(nil) }
+          } else {
+            VStack(alignment: .leading, spacing: 3) { rows }
+              .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .background {
+                GeometryReader { geometry in
+                  Color.clear
+                    .onAppear { onHeight(Self.headingHeight + geometry.size.height) }
+                    .onChange(of: geometry.size.height) { onHeight(Self.headingHeight + $0) }
                 }
-                Button("Dismiss") { perform { try await bridge.dismissFailure(failure.id) } }
               }
-              .accessibilityIdentifier("todayTaskFailure.\(failure.id)")
-            }
-            if bridge.connection == .connected && bridge.tasks.isEmpty {
-              Text("No tasks yet").font(.system(size: PulseDesignTokens.footnote))
-                .foregroundStyle(.secondary).padding(.vertical, 12)
-            }
-            ForEach(bridge.tasks) { task in
-              TodayTaskRow(
-                task: task, canQueue: canQueue,
-                onToggle: {
-                  perform { try await bridge.setCompleted(!task.completed, taskID: task.id) }
-                },
-                onDelete: { perform { try await bridge.delete(taskID: task.id) } })
-            }
-            composer
-              .id("todayComposer")
           }
-          .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
-          .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: presentation.drafts[vault]?.focusRequest) {
           guard let request = presentation.drafts[vault]?.focusRequest else { return }
@@ -206,6 +200,41 @@ private struct TodayTasksView: View {
       presentation.setFocus(false, in: vault)
       onEditingChanged(false)
     }
+  }
+
+  @ViewBuilder private var rows: some View {
+    syncStatus
+    if let message = presentation.actionErrors[vault] {
+      PulseErrorBanner(message: message, accessibilityIdentifier: "todayTasksActionError") {
+        Button("Dismiss") { presentation.clearError(in: vault) }
+      }
+    }
+    ForEach(bridge.failures) { failure in
+      PulseErrorBanner(
+        message: PulseLocalization.format(
+          "%@ — %@", failure.title, failure.todayTaskMessage)
+      ) {
+        if failure.canRetry {
+          Button("Retry") { perform { try await bridge.retry(failure.id) } }
+        }
+        Button("Dismiss") { perform { try await bridge.dismissFailure(failure.id) } }
+      }
+      .accessibilityIdentifier("todayTaskFailure.\(failure.id)")
+    }
+    if bridge.connection == .connected && bridge.tasks.isEmpty {
+      Text("No tasks yet").font(.system(size: PulseDesignTokens.footnote))
+        .foregroundStyle(.secondary).padding(.vertical, 12)
+    }
+    ForEach(bridge.tasks) { task in
+      TodayTaskRow(
+        task: task, canQueue: canQueue,
+        onToggle: {
+          perform { try await bridge.setCompleted(!task.completed, taskID: task.id) }
+        },
+        onDelete: { perform { try await bridge.delete(taskID: task.id) } })
+    }
+    composer
+      .id("todayComposer")
   }
 
   @ViewBuilder private var syncStatus: some View {
