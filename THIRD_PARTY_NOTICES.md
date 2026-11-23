@@ -34,3 +34,8 @@ under the following MIT license. Pulse's own source remains under [LICENSE](LICE
 geometry from the header SVG on [DeepSeek's official website](https://www.deepseek.com/),
 retrieved on 2026-10-18, as a native vector for provider identification.
 The DeepSeek name and mark belong to their respective rights holders.
+
+## Antigravity mark
+
+The full-color mark comes from [Google Antigravity Press Assets](https://antigravity.google/press)
+and is used to identify Google Antigravity in Pulse.

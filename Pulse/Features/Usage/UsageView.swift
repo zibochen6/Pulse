@@ -36,7 +36,7 @@ struct UsageView: View {
     quotaContent(
       usage: antigravityUsage, provider: .antigravity, refreshTitle: "Refresh Gemini quotas",
       refreshingTitle: "Refreshing Gemini quotas", identifier: "refreshAntigravityUsageButton"
-    ) { GeminiProviderIcon(size: 16) }
+    ) { AntigravityProviderIcon(size: 16) }
   }
 
   private func quotaContent<Icon: View>(

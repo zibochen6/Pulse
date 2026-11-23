@@ -25,9 +25,8 @@ Dock icon.
 The opaque root uses adaptive neutral colors with a restrained violet accent.
 Readable task text, 16-point horizontal insets, soft tag colors and clear action
 hierarchy replace dense uniform gray controls. Real provider icons retain their
-identity colors. Typical readouts use three balanced columns, or two columns
-when Gemini is enabled. Controls wrap as whole units so long amounts keep every
-decimal. Only a readout wider than the entire row needs horizontal scrolling.
+identity colors. The Home strip shows icons and values in one compact row.
+Long amounts keep every decimal and the strip scrolls when needed.
 
 Codex remains a quota and other providers remain native-currency balances. No
 currency conversion, fabricated percentage or stale successful value is shown

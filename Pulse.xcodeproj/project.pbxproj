@@ -46,6 +46,7 @@
 		731B58F8BFBE13BBE5ED2288 /* TodayTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD078A2F6E9761F45134DBF8 /* TodayTasksView.swift */; };
 		740B0BDB4D56172573B7C6D6 /* UsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC42DE6ECC84C14DD23F94F2 /* UsageSnapshot.swift */; };
 		74D38B8BC428EB224CDC7599 /* UpdateRelease.swift in Sources */ = {isa = PBXBuildFile; fileRef = B562D19ED31C1D1181B8544E /* UpdateRelease.swift */; };
+		76F2E73551FC2B3041779BD3 /* AntigravityColorIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 18134815330C3CD636D2A892 /* AntigravityColorIcon.png */; };
 		77505DE63A22592DA6B881BC /* PulseMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CBA39302CF835124B8AEF19 /* PulseMain.swift */; };
 		780A50D97F7C17764B8A85BB /* DeepSeekConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2379293C4F1BE631DDFEB05 /* DeepSeekConfiguration.swift */; };
 		78C6122344747E555A5DF17A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AE5E25194558D68B33915D /* SettingsView.swift */; };
@@ -129,6 +130,7 @@
 		116943C50D7C3B25DB42B845 /* UpdateFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateFeed.swift; sourceTree = "<group>"; };
 		13FEF2D2118D74C3572DF349 /* Pulse.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pulse.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		153DC5FDEEF24F1F8E9BB5AA /* PulseLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PulseLocalizationTests.swift; sourceTree = "<group>"; };
+		18134815330C3CD636D2A892 /* AntigravityColorIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AntigravityColorIcon.png; sourceTree = "<group>"; };
 		187D556CDC1B8381E012BB29 /* UpdateSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateSignature.swift; sourceTree = "<group>"; };
 		1A96382B34E302A7A4571435 /* LocalTaskController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTaskController.swift; sourceTree = "<group>"; };
 		1DE6098E5849B352D6A230BC /* UpdateChecksum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecksum.swift; sourceTree = "<group>"; };
@@ -394,6 +396,7 @@
 		F7EE12501EB7201D317BF279 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				18134815330C3CD636D2A892 /* AntigravityColorIcon.png */,
 				F2A0A8DFBF3B7B1C314D8AEB /* CodexColorIcon.png */,
 				30537DAF9D368A9F86E8519D /* CodexMenuIcon.png */,
 				CCBB61532DD26923ED79657C /* Localizable.strings */,
@@ -547,6 +550,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				76F2E73551FC2B3041779BD3 /* AntigravityColorIcon.png in Resources */,
 				9D9FE44395812CDEE6AFDBBA /* CodexColorIcon.png in Resources */,
 				A93E36A532A840A2C14E8460 /* CodexMenuIcon.png in Resources */,
 				7E34A08890FA1C69D98C08BA /* Localizable.strings in Resources */,

@@ -103,11 +103,9 @@ interaction-hold and update preflight contracts.
 
 ### 3. Contracts
 - Home has a stable brand toolbar, separate provider status band and task area.
-  Normal provider controls share three columns, or two columns when four
-  providers are visible. Long readouts wrap as complete cards without shrinking
-  typography or cutting money decimals. Oversized single readouts scroll
-  inside a bounded area. The menu bar remains Codex-only and follows
-  UsageMenuFormatter.
+  Providers share one 32-point row with icons and readouts. Preserve full
+  values with intrinsic widths and scroll the row horizontally when needed.
+  The menu bar remains Codex-only and follows UsageMenuFormatter.
 - Clicking a configured provider refreshes only it and opens its Usage detail.
   Missing optional credentials offer connection configuration; unavailable and
   failure remain distinct from a successful reading. Never invent values.

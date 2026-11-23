@@ -128,6 +128,7 @@ struct HomeView: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .accessibilityElement(children: .contain)
       .accessibilityIdentifier("tasksRegion")
+      .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) { ["tasksRegion": $0] }
     }
   }
 
@@ -215,39 +216,47 @@ private struct HomeProviderStrip: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      ProviderStatusLayout {
-        AIStatusSummary(state: usage.state) {
-          usage.requestRefresh()
-          onOpenUsage(.codex)
-        }
-        VIPStatusSummary(state: vipUsage.state, isConfigured: vipConfiguration.hasAPIKey) {
-          if vipConfiguration.hasAPIKey {
-            vipUsage.requestRefresh()
-            onOpenUsage(.vip)
-          } else {
-            onOpenSettings(.vip)
-          }
-        }
-        DeepSeekStatusSummary(
-          state: deepSeekUsage.state, isConfigured: deepSeekConfiguration.hasAPIKey
-        ) {
-          if deepSeekConfiguration.hasAPIKey {
-            deepSeekUsage.requestRefresh()
-            onOpenUsage(.deepSeek)
-          } else {
-            onOpenSettings(.deepSeek)
-          }
-        }
-        if config.antigravityEnabled {
-          AntigravityStatusSummary(state: antigravityUsage.state) {
-            onOpenUsage(.antigravity)
-          }
-        }
+      ViewThatFits(in: .horizontal) {
+        providerRow
+        ScrollView(.horizontal) { providerRow }
       }
-      .padding(.bottom, 12)
+      .frame(height: 32)
+      .padding(.bottom, 8)
       Rectangle().fill(PulseDesignTokens.border).frame(height: 1)
     }
     .padding(.horizontal, PulseDesignTokens.contentInset)
+  }
+
+  private var providerRow: some View {
+    ProviderStatusLayout {
+      AIStatusSummary(state: usage.state) {
+        usage.requestRefresh()
+        onOpenUsage(.codex)
+      }
+      VIPStatusSummary(state: vipUsage.state, isConfigured: vipConfiguration.hasAPIKey) {
+        if vipConfiguration.hasAPIKey {
+          vipUsage.requestRefresh()
+          onOpenUsage(.vip)
+        } else {
+          onOpenSettings(.vip)
+        }
+      }
+      DeepSeekStatusSummary(
+        state: deepSeekUsage.state, isConfigured: deepSeekConfiguration.hasAPIKey
+      ) {
+        if deepSeekConfiguration.hasAPIKey {
+          deepSeekUsage.requestRefresh()
+          onOpenUsage(.deepSeek)
+        } else {
+          onOpenSettings(.deepSeek)
+        }
+      }
+      if config.antigravityEnabled {
+        AntigravityStatusSummary(state: antigravityUsage.state) {
+          onOpenUsage(.antigravity)
+        }
+      }
+    }
   }
 }
 

@@ -55,12 +55,14 @@ final class DeepSeekRenderingTests: XCTestCase {
           "openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton", "openSettingsButton",
           "focusTimerButton",
         ]
-        XCTAssertEqual(Set(capture.frames.keys), Set(ids))
+        XCTAssertEqual(Set(capture.frames.keys), Set(ids + ["tasksRegion"]))
         for id in ids {
           let frame = try XCTUnwrap(capture.frames[id], id)
           XCTAssertGreaterThanOrEqual(frame.minX, PulseDesignTokens.contentInset - 0.5, id)
-          XCTAssertLessThanOrEqual(
-            frame.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset + 0.5, id)
+          if count <= 1 {
+            XCTAssertLessThanOrEqual(
+              frame.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset + 0.5, id)
+          }
           XCTAssertGreaterThan(frame.height, 20, id)
           for other in ids where other != id {
             let otherFrame = try XCTUnwrap(capture.frames[other])
@@ -89,9 +91,9 @@ final class DeepSeekRenderingTests: XCTestCase {
           (deepSeek, DeepSeekUsageFormatter.title(for: deepSeekUsage.state)),
         ] {
           let textWidth = (title as NSString).size(withAttributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
           ]).width
-          XCTAssertGreaterThanOrEqual(frame.width, textWidth + 40, "Every amount digit fits")
+          XCTAssertGreaterThanOrEqual(frame.width, textWidth + 36, "Every amount digit fits")
         }
         if count <= 1 {
           XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
@@ -99,15 +101,10 @@ final class DeepSeekRenderingTests: XCTestCase {
           // An even split of 368 pt minus two 8 pt gaps rounds to 117/118 pt.
           XCTAssertEqual(codex.width, vip.width, accuracy: 1)
           XCTAssertEqual(codex.width, deepSeek.width, accuracy: 1)
-        } else {
-          XCTAssertGreaterThan(
-            deepSeek.minY, codex.minY, "Wide indicators wrap as complete controls")
         }
-        if count == 20 {
-          XCTAssertLessThanOrEqual(
-            codex.width, HomeView.popoverSize.width - 2 * PulseDesignTokens.contentInset + 0.5,
-            "Oversized quota stays in a bounded scroll area")
-        }
+        XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
+        XCTAssertEqual(codex.minY, deepSeek.minY, accuracy: 0.5)
+        XCTAssertEqual(codex.height, 32, accuracy: 0.5)
         let name = "\(appearance.rawValue)-home-\(count)-windows"
         try save(bitmap, to: directory.appendingPathComponent("\(name).png"))
         let frames = capture.frames.mapValues { NSStringFromRect($0) }
@@ -199,15 +196,17 @@ final class DeepSeekRenderingTests: XCTestCase {
       let vip = try XCTUnwrap(capture.frames["openVIPUsageButton"])
       let deepSeek = try XCTUnwrap(capture.frames["openDeepSeekUsageButton"])
       XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
-      XCTAssertEqual(deepSeek.minY, card.minY, accuracy: 0.5)
-      XCTAssertEqual(codex.minX, deepSeek.minX, accuracy: 0.5)
-      XCTAssertEqual(vip.minX, card.minX, accuracy: 0.5)
+      XCTAssertEqual(codex.minY, deepSeek.minY, accuracy: 0.5)
+      XCTAssertEqual(codex.minY, card.minY, accuracy: 0.5)
       XCTAssertEqual(vip.width, codex.width, accuracy: 0.5)
-      XCTAssertGreaterThan(deepSeek.minY, codex.maxY)
+      let tasks = try XCTUnwrap(capture.frames["tasksRegion"])
+      XCTAssertGreaterThan(tasks.minY, card.maxY)
+      XCTAssertLessThanOrEqual(tasks.minY, 100)
       XCTAssertGreaterThanOrEqual(card.minX, PulseDesignTokens.contentInset - 0.5)
       XCTAssertLessThanOrEqual(
         card.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset)
-      XCTAssertGreaterThanOrEqual(card.height, 50)
+      XCTAssertEqual(card.height, 32, accuracy: 0.5)
+      XCTAssertNotNil(Bundle.main.url(forResource: "AntigravityColorIcon", withExtension: "png"))
       for id in ["openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton"] {
         let other = try XCTUnwrap(capture.frames[id])
         XCTAssertFalse(card.intersects(other), id)

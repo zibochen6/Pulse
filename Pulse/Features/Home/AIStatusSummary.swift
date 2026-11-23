@@ -7,10 +7,16 @@ struct AIStatusSummary: View {
 
   var body: some View {
     ProviderStatusButton(
-      title: UsageMenuFormatter.title(for: state), providerName: "Codex",
+      title: title, providerName: "Codex",
       identifier: "openUsageButton", onOpenUsage: onOpenUsage
     ) { CodexProviderIcon(size: 18) }
   }
+  private var title: String {
+    guard case .success(let snapshot) = state else { return UsageMenuFormatter.title(for: state) }
+    let values = snapshot.quotaWindows.map { $0.remainingPercent.map { "\($0)%" } ?? "--" }
+    return values.isEmpty ? "--" : values.joined(separator: " · ")
+  }
+
 }
 
 struct AntigravityStatusSummary: View {
@@ -21,7 +27,7 @@ struct AntigravityStatusSummary: View {
     ProviderStatusButton(
       title: Self.title(for: state), providerName: ProviderID.antigravity.name,
       identifier: "openAntigravityUsageButton", onOpenUsage: onOpenUsage
-    ) { GeminiProviderIcon(size: 18) }
+    ) { AntigravityProviderIcon(size: 18) }
   }
 
   static func title(for state: UsageRefreshState) -> String {
@@ -41,14 +47,16 @@ struct AntigravityStatusSummary: View {
   }
 }
 
-struct GeminiProviderIcon: View {
+struct AntigravityProviderIcon: View {
   let size: CGFloat
 
   var body: some View {
-    Image(systemName: "sparkle")
-      .font(.system(size: size, weight: .semibold))
-      .foregroundStyle(PulseDesignTokens.accent)
+    Image("AntigravityColorIcon")
+      .resizable()
+      .scaledToFit()
+      .padding(size * 0.12)
       .frame(width: size, height: size)
+      .background(.white, in: RoundedRectangle(cornerRadius: size * 0.24))
       .accessibilityHidden(true)
   }
 }

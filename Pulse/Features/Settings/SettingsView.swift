@@ -256,7 +256,7 @@ struct SettingsView: View {
       hasCredential: config.antigravityEnabled, state: antigravityUsage.state)
     return settingsCard {
       HStack(spacing: 12) {
-        GeminiProviderIcon(size: 26)
+        AntigravityProviderIcon(size: 26)
         VStack(alignment: .leading, spacing: 4) {
           Text("Gemini · Antigravity").font(.system(size: 15, weight: .semibold))
           Text(connection.title).font(.system(size: 12)).foregroundStyle(.secondary)

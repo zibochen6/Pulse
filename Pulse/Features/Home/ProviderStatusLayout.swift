@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Balances normal readouts across three columns (two when Gemini is enabled)
-/// and lets an unusually wide readout take extra space without losing digits.
+/// Distributes available width in one row while preserving intrinsic readout widths.
 struct ProviderStatusLayout: Layout {
   var spacing: CGFloat = PulseDesignTokens.gap
 
@@ -24,32 +23,22 @@ struct ProviderStatusLayout: Layout {
   private func arrangement(proposal: ProposedViewSize, subviews: Subviews) -> (
     size: CGSize, frames: [CGRect]
   ) {
-    let idealSizes = subviews.map { $0.sizeThatFits(.unspecified) }
-    let idealWidth =
-      idealSizes.reduce(0) { $0 + $1.width } + CGFloat(max(0, subviews.count - 1)) * spacing
-    let width = max(0, proposal.width ?? idealWidth)
-    let columns = subviews.count == 4 ? 2 : max(subviews.count, 1)
-    let columnWidth = max(0, (width - CGFloat(columns - 1) * spacing) / CGFloat(columns))
-    var frames: [CGRect] = []
+    guard !subviews.isEmpty else { return (.zero, []) }
+    let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+    let gaps = CGFloat(sizes.count - 1) * spacing
+    let minimum = sizes.reduce(gaps) { $0 + $1.width }
+    let width = max(minimum, proposal.width ?? minimum)
+    let count = CGFloat(sizes.count)
+    let equal = (width - gaps) / count
+    let equalFits = sizes.allSatisfy { $0.width <= equal }
     var x: CGFloat = 0
-    var y: CGFloat = 0
-    var rowHeight: CGFloat = 0
-    var itemsInRow = 0
-    for (index, ideal) in idealSizes.enumerated() {
-      let itemWidth = min(width, max(ideal.width, proposal.width == nil ? 0 : columnWidth))
-      let size = subviews[index].sizeThatFits(ProposedViewSize(width: itemWidth, height: nil))
-      if itemsInRow == columns || (itemsInRow > 0 && x + itemWidth > width + 0.01) {
-        x = 0
-        y += rowHeight + spacing
-        rowHeight = 0
-        itemsInRow = 0
-      }
-      frames.append(CGRect(x: x, y: y, width: itemWidth, height: size.height))
+    let frames = sizes.map { size in
+      let itemWidth = equalFits ? equal : size.width + (width - minimum) / count
+      let frame = CGRect(x: x, y: 0, width: itemWidth, height: size.height)
       x += itemWidth + spacing
-      rowHeight = max(rowHeight, size.height)
-      itemsInRow += 1
+      return frame
     }
-    return (CGSize(width: width, height: y + rowHeight), frames)
+    return (CGSize(width: width, height: sizes.map(\.height).max() ?? 0), frames)
   }
 }
 
