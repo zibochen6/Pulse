@@ -58,9 +58,9 @@ final class TodayTaskBridgeTests: XCTestCase {
     }
     let queued = try await fixture.storage().refresh(vault)
     XCTAssertEqual(queued.operations.map(\.id), [finish.id, remove.id, first.id, second.id])
-    XCTAssertEqual(queued.tasks.map(\.id), [fixture.quick.id, first.id, second.id])
+    XCTAssertEqual(queued.tasks.map(\.id), [first.id, second.id, fixture.quick.id])
     XCTAssertEqual(queued.tasks.map(\.isPending), [true, true, true])
-    XCTAssertTrue(try XCTUnwrap(queued.tasks.first).completed)
+    XCTAssertTrue(try XCTUnwrap(queued.tasks.last).completed)
 
     let receipts = [finish, remove, first, second].map {
       TodayBridgeReceipt(id: $0.id, code: .applied)
@@ -81,7 +81,7 @@ final class TodayTaskBridgeTests: XCTestCase {
     let synced = try await storage.refresh(vault)
     XCTAssertEqual(synced.connection, .connected)
     XCTAssertTrue(synced.operations.isEmpty)
-    XCTAssertEqual(synced.tasks.map(\.id), [done.id] + newRows.map(\.id))
+    XCTAssertEqual(synced.tasks.map(\.id), newRows.map(\.id) + [done.id])
     XCTAssertEqual(synced.tasks.filter(\.isPending).count, 0)
   }
 

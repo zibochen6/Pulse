@@ -217,7 +217,8 @@ struct TodayBridgeSessionState: Sendable {
           id: command.id, title: $0, completed: false, source: .quick, isPending: true)
       }
     }
-    tasks = projected + newTasks
+    let rows = projected + newTasks
+    tasks = rows.filter { !$0.completed } + rows.filter(\.completed)
     let retryable = Dictionary(
       recorded.filter { commands[$0.id] == nil }.map { ($0.id, $0.title) },
       uniquingKeysWith: { first, _ in first })
