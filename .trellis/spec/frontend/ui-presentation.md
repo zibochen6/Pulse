@@ -42,6 +42,10 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
   session. A staged automatic update waits for the session to finish or cancel.
 - Preserve native text responder-chain Undo/Redo, Cut/Copy/Paste/Select All.
   App commands add Settings, Close and Quit without hijacking text Undo.
+- A pointer-opened popover starts with no focused action highlight. Custom
+  buttons use a single inset indication during keyboard navigation on macOS
+  14+. Apply focusEffectDisabled only to those buttons; use native focus on
+  macOS 13 and keep native text-field focus in both cases.
 - Holds are source-scoped. An old lease cannot end a later session after reset.
   NSMenu tracking brackets menu holds; native NSDraggingSource end handles drop,
   outside release and Escape. `dropExited` must not terminate a drag hold.

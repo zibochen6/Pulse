@@ -50,8 +50,13 @@ enum PopoverPage: Equatable {
 @MainActor
 final class PopoverPageController: ObservableObject {
   @Published private(set) var page: PopoverPage = .home
-  func showUsage(_ provider: ProviderID = .codex) { page = .usage(provider) }
-  func showTagManagement() { page = .tagManagement }
-  func showHome() { page = .home }
-  func reset() { page = .home }
+  func showUsage(_ provider: ProviderID = .codex) { navigate(to: .usage(provider)) }
+  func showTagManagement() { navigate(to: .tagManagement) }
+  func showHome() { navigate(to: .home) }
+  func reset() { showHome() }
+
+  private func navigate(to destination: PopoverPage) {
+    guard page != destination else { return }
+    page = destination
+  }
 }

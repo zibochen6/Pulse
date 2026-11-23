@@ -184,16 +184,20 @@ final class UsageControllerTests: XCTestCase {
     let controller = UsageController(provider: provider)
 
     await controller.refresh()
+    XCTAssertNil(controller.refreshStartedAt)
+    let beforeSecondRefresh = ContinuousClock.now
     let secondRefresh = Task { await controller.refresh() }
     await provider.waitForSecondFetch()
 
     XCTAssertTrue(controller.isRefreshing)
+    XCTAssertTrue(controller.refreshStartedAt.map { $0 >= beforeSecondRefresh } ?? false)
     XCTAssertEqual(controller.state, .success(snapshot))
     XCTAssertEqual(UsageMenuFormatter.title(for: controller.state), "75%")
 
     await provider.completeSecondFetch()
     await secondRefresh.value
     XCTAssertFalse(controller.isRefreshing)
+    XCTAssertNil(controller.refreshStartedAt)
   }
 
   func testStaleRefreshSkipsRecentSnapshotAndRefreshesAnOldOne() async {

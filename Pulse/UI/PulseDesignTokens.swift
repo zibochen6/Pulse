@@ -1,6 +1,19 @@
 import AppKit
 import SwiftUI
 
+private struct PulseReduceMotionOverrideKey: EnvironmentKey {
+  static let defaultValue: Bool? = nil
+}
+
+extension EnvironmentValues {
+  var pulseReduceMotionOverride: Bool? {
+    get { self[PulseReduceMotionOverrideKey.self] }
+    set { self[PulseReduceMotionOverrideKey.self] = newValue }
+  }
+
+  var pulseReduceMotion: Bool { pulseReduceMotionOverride ?? accessibilityReduceMotion }
+}
+
 /// Shared visual and motion vocabulary for the menu-bar surface and Settings.
 /// Colors resolve against native appearance, keeping both surfaces opaque and
 /// legible without relying on the wallpaper behind a popover.
@@ -77,9 +90,6 @@ enum PulseDesignTokens {
   static var selectionAnimation: Animation { .spring(duration: 0.18, bounce: 0) }
   static var tabSwitchAnimation: Animation { .spring(duration: 0.18, bounce: 0) }
   static var composerAnimation: Animation { .spring(duration: 0.20, bounce: 0) }
-  static var pageTransitionAnimation: Animation { .spring(duration: 0.20, bounce: 0) }
   static var completionAnimation: Animation { .easeOut(duration: 0.18) }
   static var reorderAnimation: Animation { .spring(duration: 0.24, bounce: 0.08) }
-  static var insertionAnimation: Animation { .easeOut(duration: 0.18) }
-  static var reducedMotionAnimation: Animation { .easeOut(duration: 0.10) }
 }

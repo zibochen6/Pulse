@@ -11,11 +11,17 @@ final class FocusTimerControllerTests: XCTestCase {
     let timer = FocusTimerController(now: { now }, onCompletion: { chimes += 1 })
 
     timer.start()
+    XCTAssertEqual(timer.remainingSeconds, 1800)
+    now = start.advanced(by: .milliseconds(250))
+    XCTAssertEqual(timer.remainingSeconds, 1800)
+    now = start.advanced(by: .seconds(1))
+    XCTAssertEqual(timer.remainingSeconds, 1799)
     now = start.advanced(by: .seconds(1799))
     timer.start()
     timer.finishIfDue()
 
     XCTAssertTrue(timer.isRunning)
+    XCTAssertEqual(timer.remainingSeconds, 1)
     XCTAssertEqual(chimes, 0)
 
     now = start.advanced(by: .seconds(1800))
@@ -23,6 +29,7 @@ final class FocusTimerControllerTests: XCTestCase {
     timer.finishIfDue()
 
     XCTAssertFalse(timer.isRunning)
+    XCTAssertEqual(timer.remainingSeconds, 0)
     XCTAssertEqual(chimes, 1)
   }
 

@@ -2,7 +2,7 @@
 
 ## 1. Scope / Trigger
 
-Use when the user explicitly requests a Pulse build, local app replacement, source publication, or GitHub downloadable release, normally through `scripts/release.sh`. Ordinary implementation does not authorize replacing an installed app or publishing a release; use the actual user-authorized delivery scope.
+Use for Pulse builds, local app replacement, source publication, and GitHub releases. The project owner has authorized a release after each completed and verified change. Use the next patch version unless the user specifies a version. Follow the scope in AGENTS.md.
 
 ## 2. Signatures
 

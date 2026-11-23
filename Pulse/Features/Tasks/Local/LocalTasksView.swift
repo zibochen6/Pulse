@@ -458,23 +458,7 @@ struct LocalTasksView: View {
   @State private var tagContentWidth: CGFloat = 0
   @State private var tagContentMinX: CGFloat = 0
   @State private var dropCoordinator = TagBarDropCoordinator()
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  /// The tag bar's selection plate. With a namespace, the accent capsule is a
-  /// single view that slides between pills; without one the pill falls back to
-  /// a static fill, which is what Reduce Motion gets anyway.
-  @Namespace private var tagPlate
-
-  /// Rows arrive from the top and leave the same way, so switching lists reads
-  /// as content moving rather than as a list being torn down and rebuilt.
-  private var rowTransition: AnyTransition {
-    .opacity
-  }
-
-  /// `nil` under Reduce Motion: the plate then lands in place instead of
-  /// sliding, while every other part of selection feedback stays identical.
-  private var selectionPlateNamespace: Namespace.ID? {
-    reduceMotion ? nil : tagPlate
-  }
+  @Environment(\.pulseReduceMotion) private var reduceMotion
 
   var body: some View {
     VStack(spacing: 0) {
@@ -493,8 +477,10 @@ struct LocalTasksView: View {
       LocalDeletionUndoBar(controller: controller, presentation: presentation)
     }
     .onAppear {
-      presentation.reconcileTags(controller.document?.tags ?? [])
-      presentation.reconcileTagOrder(controller.document?.tags ?? [])
+      if let tags = controller.document?.tags {
+        presentation.reconcileTags(tags)
+        presentation.reconcileTagOrder(tags)
+      }
       onEditingChanged(presentation.isInteractionActive)
     }
     .task {
@@ -517,37 +503,40 @@ struct LocalTasksView: View {
 
   private var taskList: some View {
     VStack(spacing: 0) {
-      if let document = controller.document {
-        tagBar(document.tags)
-        Divider()
+      tagBar(controller.document?.tags ?? [])
+        .disabled(controller.document == nil)
+      Divider().padding(.horizontal, PulseDesignTokens.contentInset)
+      switch controller.initialLoadState {
+      case .loaded:
         if presentation.tagIntent != nil {
           LocalTagEntry(controller: controller, presentation: presentation)
-          Divider()
+          Divider().padding(.horizontal, PulseDesignTokens.contentInset)
         }
-      }
-      errorBanner
-        .animation(
-          reduceMotion ? nil : PulseDesignTokens.insertionAnimation,
-          value: controller.errorMessage != nil || !controller.completionFailures.isEmpty)
-      if controller.document != nil {
+        errorBanner
         taskScrollView
-      } else if controller.isLoading {
-        ProgressView("Loading tasks").font(.caption).frame(
-          maxWidth: .infinity, maxHeight: .infinity)
-      } else {
-        Text("Tasks could not be loaded. Your saved file has not been cleared.")
-          .font(.caption).foregroundStyle(.secondary)
-          .padding(14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      case .loading:
+        initialTaskContent {
+          Label("Loading tasks", systemImage: "list.bullet")
+            .font(.caption).foregroundStyle(.secondary)
+            .accessibilityIdentifier("loadingLocalTasks")
+        }
+      case .failed(let message):
+        initialTaskContent {
+          PulseErrorBanner(message: message, accessibilityIdentifier: "localTaskLoadError") {
+            Button("Reload") { Task { await controller.refresh() } }
+          }
+        }
       }
     }
   }
 
-  /// The ids in display order. Used as the animation key for the list surface:
-  /// a task that is added or deleted is inserted or removed with the list's
-  /// row transition, while a completion changes no id at all — the task stays
-  /// exactly where it was and only strikes through in place.
-  private var taskIDs: [UUID] {
-    controller.tasks(matching: presentation.selectedFilter).map(\.id)
+  private func initialTaskContent<Content: View>(@ViewBuilder _ content: () -> Content)
+    -> some View
+  {
+    content()
+      .padding(.horizontal, PulseDesignTokens.contentInset)
+      .padding(.vertical, 16)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
 
   private var taskScrollView: some View {
@@ -561,46 +550,13 @@ struct LocalTasksView: View {
               .font(.system(size: 13)).foregroundStyle(.secondary).padding(.vertical, 12)
           }
           ForEach(tasks) { task in
-            taskRow(task).id(task.id).transition(rowTransition)
+            taskRow(task).id(task.id)
           }
-          if presentation.isComposerExpanded {
-            LocalTaskQuickComposer(controller: controller, presentation: presentation)
-              .id(presentation.selectedFilter)
-              // Asymmetric on purpose. The insertion may glide in, but the
-              // removal must be immediate: the composer owns a shared AppKit
-              // field editor, and lingering in the tree through a removal
-              // transition is exactly how a saved draft gets typed back into a
-              // field that should already be gone.
-              .transition(
-                .asymmetric(
-                  insertion: reduceMotion
-                    ? .opacity : .opacity.combined(with: .move(edge: .bottom)),
-                  removal: .identity))
-          } else {
-            addTaskEntry
-          }
+          composerSlot.id(filter)
           Color.clear.frame(height: 1).id("taskComposerEnd")
         }
-        .padding(.horizontal, 14).padding(.vertical, 8)
+        .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Three values, three curves: rows change with the list, the composer
-        // grows from its entry point, and a finished task acknowledges in
-        // place. All are set before the view ever mounts in the rendering
-        // tests, so none can capture a mid-flight value in an off-window
-        // render.
-        .animation(
-          reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation,
-          value: presentation.selectedFilter
-        )
-        .animation(
-          reduceMotion ? nil : PulseDesignTokens.composerAnimation,
-          value: presentation.isComposerExpanded
-        )
-        // Membership of the list itself. A completion leaves every id in
-        // place, so finishing a task never animates the row anywhere — and a
-        // background refresh that only touches a timestamp animates nothing
-        // either.
-        .animation(reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: taskIDs)
       }
       .accessibilityIdentifier("localTaskList")
       .onAppear {
@@ -619,6 +575,22 @@ struct LocalTasksView: View {
       }
       .onChange(of: presentation.revealRequest) { _ in scrollToRevealedTask(using: proxy) }
     }
+  }
+
+  private var composerSlot: some View {
+    Group {
+      if presentation.isComposerExpanded {
+        LocalTaskQuickComposer(controller: controller, presentation: presentation)
+          // Dismantle the native field immediately on removal so a late callback
+          // cannot send its old text into the next editing session.
+          .transition(.asymmetric(insertion: .opacity, removal: .identity))
+      } else {
+        addTaskEntry.transition(.identity)
+      }
+    }
+    .animation(
+      reduceMotion ? nil : PulseDesignTokens.composerAnimation,
+      value: presentation.isComposerExpanded)
   }
 
   /// The list's closing entry point. Text-first and left-aligned so it reads as
@@ -642,7 +614,6 @@ struct LocalTasksView: View {
     .accessibilityIdentifier("addLocalTaskButton")
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.top, 4)
-    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
   }
 
   private func scrollToComposer(using proxy: ScrollViewProxy) {
@@ -685,8 +656,7 @@ struct LocalTasksView: View {
     return HStack(spacing: 4) {
       PulsePillTab(
         title: "Todo", isSelected: presentation.selectedFilter == .untagged,
-        action: { presentation.selectedFilter = .untagged },
-        plateNamespace: selectionPlateNamespace
+        action: { presentation.selectedFilter = .untagged }
       )
       .fixedSize(horizontal: true, vertical: false)
       .help("Default list · Tasks without a tag")
@@ -719,18 +689,12 @@ struct LocalTasksView: View {
             }
             .onDrop(of: [.text], delegate: dropCoordinator)
             .animation(
-              reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation,
-              value: presentation.selectedFilter
-            )
-            .animation(
               reduceMotion ? nil : PulseDesignTokens.reorderAnimation,
               value: displayed.map(\.id))
           }
           .onChange(of: presentation.selectedFilter) { selection in
             guard selection != .untagged else { return }
-            withAnimation(reduceMotion ? nil : PulseDesignTokens.tabSwitchAnimation) {
-              proxy.scrollTo(selection, anchor: .center)
-            }
+            proxy.scrollTo(selection)
           }
           .onAppear { proxy.scrollTo(presentation.selectedFilter, anchor: .center) }
           .onChange(of: tags.map(\.id)) { _ in
@@ -805,7 +769,6 @@ struct LocalTasksView: View {
       PulsePillTab(
         title: tag.name, isSelected: selected,
         action: { presentation.selectedFilter = .tag(tag.id) },
-        plateNamespace: selectionPlateNamespace,
         tint: PulseDesignTokens.tagColor(for: tag.id)
       )
       .background(tagMidpointReporter { TagBarGeometry(tagMidXByID: [tag.id: $0]) })
@@ -1444,7 +1407,7 @@ struct LocalTaskRow: View {
   @State private var isHovered = false
   private enum Control: Hashable { case complete, edit, delete }
   @FocusState private var focusedControl: Control?
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.pulseReduceMotion) private var reduceMotion
 
   var body: some View {
     HStack(alignment: .top, spacing: 2) {
@@ -1474,7 +1437,11 @@ struct LocalTaskRow: View {
           )
           .opacity(isPending ? 0 : 1)
           if isPending {
-            ProgressView().controlSize(.mini).transition(.opacity)
+            if reduceMotion {
+              Image(systemName: "clock").foregroundStyle(.secondary)
+            } else {
+              ProgressView().controlSize(.mini).transition(.opacity)
+            }
           }
         }
         .padding(.top, 2).frame(width: 28, height: 30, alignment: .top).contentShape(Rectangle())
@@ -1501,6 +1468,9 @@ struct LocalTaskRow: View {
               task.completed ? Color(nsColor: .secondaryLabelColor).opacity(0.7) : Color.primary
             )
             .strikethrough(task.completed, color: Color(nsColor: .tertiaryLabelColor))
+            .animation(
+              reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: task.completed
+            )
             .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
           if task.repeatsDaily {
             Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .semibold))

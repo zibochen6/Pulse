@@ -49,25 +49,10 @@ struct UsageView: View {
         Text(provider.name)
           .font(.subheadline.weight(.semibold))
         Spacer()
-        Button {
-          usage.requestRefresh()
-        } label: {
-          HStack(spacing: 6) {
-            if usage.isRefreshing {
-              ProgressView().controlSize(.mini)
-            } else {
-              Image(systemName: "arrow.clockwise")
-            }
-            Text("Refresh")
-          }.font(.system(size: 12, weight: .medium))
-        }
-        .buttonStyle(.borderless)
-        .disabled(usage.isRefreshing)
-        .help(
-          PulseLocalization.string(usage.isRefreshing ? refreshingTitle : refreshTitle)
-        )
-        .accessibilityLabel(PulseLocalization.string(refreshTitle))
-        .accessibilityIdentifier(identifier)
+        UsageRefreshButton(
+          refreshStartedAt: usage.refreshStartedAt, refreshTitle: refreshTitle,
+          refreshingTitle: refreshingTitle, identifier: identifier
+        ) { usage.requestRefresh() }
       }
 
       switch usage.state {
@@ -99,26 +84,10 @@ struct UsageView: View {
         Text("88VIP")
           .font(.subheadline.weight(.semibold))
         Spacer()
-        Button {
-          vipUsage.requestRefresh()
-        } label: {
-          HStack(spacing: 6) {
-            if vipUsage.isRefreshing {
-              ProgressView().controlSize(.mini)
-            } else {
-              Image(systemName: "arrow.clockwise")
-            }
-            Text("Refresh")
-          }.font(.system(size: 12, weight: .medium))
-        }
-        .buttonStyle(.borderless)
-        .disabled(vipUsage.isRefreshing)
-        .help(
-          PulseLocalization.string(
-            vipUsage.isRefreshing ? "Refreshing 88VIP balance" : "Refresh 88VIP balance")
-        )
-        .accessibilityLabel("Refresh 88VIP balance")
-        .accessibilityIdentifier("refreshVIPUsageButton")
+        UsageRefreshButton(
+          refreshStartedAt: vipUsage.refreshStartedAt, refreshTitle: "Refresh 88VIP balance",
+          refreshingTitle: "Refreshing 88VIP balance", identifier: "refreshVIPUsageButton"
+        ) { vipUsage.requestRefresh() }
       }
 
       switch vipUsage.state {
@@ -172,26 +141,11 @@ struct UsageView: View {
         DeepSeekProviderIcon(size: 16)
         Text("DeepSeek").font(.subheadline.weight(.semibold))
         Spacer()
-        Button {
-          deepSeekUsage.requestRefresh()
-        } label: {
-          HStack(spacing: 6) {
-            if deepSeekUsage.isRefreshing {
-              ProgressView().controlSize(.mini)
-            } else {
-              Image(systemName: "arrow.clockwise")
-            }
-            Text("Refresh")
-          }.font(.system(size: 12, weight: .medium))
-        }
-        .buttonStyle(.borderless)
-        .disabled(deepSeekUsage.isRefreshing)
-        .help(
-          PulseLocalization.string(
-            deepSeekUsage.isRefreshing ? "Refreshing DeepSeek balance" : "Refresh DeepSeek balance")
-        )
-        .accessibilityLabel("Refresh DeepSeek balance")
-        .accessibilityIdentifier("refreshDeepSeekUsageButton")
+        UsageRefreshButton(
+          refreshStartedAt: deepSeekUsage.refreshStartedAt,
+          refreshTitle: "Refresh DeepSeek balance",
+          refreshingTitle: "Refreshing DeepSeek balance", identifier: "refreshDeepSeekUsageButton"
+        ) { deepSeekUsage.requestRefresh() }
       }
       switch deepSeekUsage.state {
       case .loading:
@@ -303,6 +257,73 @@ struct UsageView: View {
     snapshot.metrics.compactMap {
       guard case .unavailable(let reason) = $0 else { return nil }
       return reason
+    }
+  }
+}
+
+/// The label keeps its geometry while refreshing. The busy glyph owns its
+/// delay, so completing or leaving this detail page cancels that delay.
+private struct UsageRefreshButton: View {
+  let refreshStartedAt: ContinuousClock.Instant?
+  let refreshTitle: String
+  let refreshingTitle: String
+  let identifier: String
+  let action: () -> Void
+
+  var body: some View {
+    let isRefreshing = refreshStartedAt != nil
+    let title = PulseLocalization.string(isRefreshing ? refreshingTitle : refreshTitle)
+    Button(action: action) {
+      HStack(spacing: 6) {
+        Group {
+          if let refreshStartedAt {
+            BusyGlyph(startedAt: refreshStartedAt).id(refreshStartedAt)
+          } else {
+            Image(systemName: "arrow.clockwise")
+          }
+        }
+        .frame(width: 16, height: 16)
+        .accessibilityHidden(true)
+        Text("Refresh")
+      }
+      .font(.system(size: 12, weight: .medium))
+    }
+    .buttonStyle(.borderless)
+    .disabled(isRefreshing)
+    .help(title)
+    .accessibilityLabel(title)
+    .accessibilityIdentifier(identifier)
+  }
+
+  private struct BusyGlyph: View {
+    @Environment(\.pulseReduceMotion) private var reduceMotion
+    @State private var showsBusyIndicator: Bool
+    private let deadline: ContinuousClock.Instant
+
+    init(startedAt: ContinuousClock.Instant) {
+      let deadline = startedAt.advanced(by: .milliseconds(150))
+      self.deadline = deadline
+      _showsBusyIndicator = State(initialValue: deadline <= .now)
+    }
+
+    var body: some View {
+      Group {
+        if !showsBusyIndicator {
+          Image(systemName: "arrow.clockwise")
+        } else if reduceMotion {
+          Image(systemName: "clock")
+        } else {
+          ProgressView().controlSize(.mini)
+        }
+      }
+      .task {
+        guard !showsBusyIndicator else { return }
+        do {
+          try await Task.sleep(until: deadline, clock: .continuous)
+          try Task.checkCancellation()
+          showsBusyIndicator = true
+        } catch { return }
+      }
     }
   }
 }

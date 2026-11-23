@@ -93,7 +93,13 @@ final class DeepSeekRenderingTests: XCTestCase {
           ]).width
           XCTAssertGreaterThanOrEqual(frame.width, textWidth + 40, "Every amount digit fits")
         }
-        if count > 1 {
+        if count <= 1 {
+          XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
+          XCTAssertEqual(codex.minY, deepSeek.minY, accuracy: 0.5)
+          // An even split of 368 pt minus two 8 pt gaps rounds to 117/118 pt.
+          XCTAssertEqual(codex.width, vip.width, accuracy: 1)
+          XCTAssertEqual(codex.width, deepSeek.width, accuracy: 1)
+        } else {
           XCTAssertGreaterThan(
             deepSeek.minY, codex.minY, "Wide indicators wrap as complete controls")
         }
@@ -111,6 +117,42 @@ final class DeepSeekRenderingTests: XCTestCase {
       }
     }
   }
+
+  #if DEBUG
+    func testFocusTimerKeepsItsFrameWhenRunningInBothLanguages() throws {
+      let suite = "PulseFocusTimerRender.\(UUID())"
+      let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+      defer { defaults.removePersistentDomain(forName: suite) }
+      let localTasks = LocalTaskController(
+        store: LocalTaskStore(
+          fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json")))
+      let usage = UsageController(provider: InactiveSettingsProvider())
+      let timer = FocusTimerController()
+      let root = home(
+        defaults: defaults, localTasks: localTasks, usage: usage, vipUsage: usage,
+        deepSeekUsage: usage, pages: PopoverPageController(), focusTimer: timer)
+      for language in ["en", "zh-Hans"] {
+        try PulseLocalization.$previewLanguage.withValue(language) {
+          let capture = HeaderFrameCapture()
+          let view = root.overlayPreferenceValue(ProviderHeaderBoundsKey.self) { anchors in
+            GeometryReader { proxy in
+              HeaderFrameCaptureView(frames: anchors.mapValues { proxy[$0] }, capture: capture)
+            }
+            .allowsHitTesting(false)
+          }
+          _ = try render(NSHostingView(rootView: view), appearance: .aqua)
+          let idle = try XCTUnwrap(capture.frames["focusTimerButton"])
+          timer.start()
+          defer { timer.cancel() }
+          _ = try render(NSHostingView(rootView: view), appearance: .aqua)
+          let running = try XCTUnwrap(capture.frames["focusTimerButton"])
+          XCTAssertEqual(idle.minX, running.minX, accuracy: 0.5, language)
+          XCTAssertEqual(idle.width, running.width, accuracy: 0.5, language)
+          XCTAssertEqual(idle.height, running.height, accuracy: 0.5, language)
+        }
+      }
+    }
+  #endif
 
   func testEnabledGeminiCardFitsAndItsDetailsRenderInBothAppearances() async throws {
     let suite = "PulseGeminiRender.\(UUID())"
@@ -153,6 +195,15 @@ final class DeepSeekRenderingTests: XCTestCase {
         })
       _ = try render(host, appearance: appearance)
       let card = try XCTUnwrap(capture.frames["openAntigravityUsageButton"])
+      let codex = try XCTUnwrap(capture.frames["openUsageButton"])
+      let vip = try XCTUnwrap(capture.frames["openVIPUsageButton"])
+      let deepSeek = try XCTUnwrap(capture.frames["openDeepSeekUsageButton"])
+      XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
+      XCTAssertEqual(deepSeek.minY, card.minY, accuracy: 0.5)
+      XCTAssertEqual(codex.minX, deepSeek.minX, accuracy: 0.5)
+      XCTAssertEqual(vip.minX, card.minX, accuracy: 0.5)
+      XCTAssertEqual(vip.width, codex.width, accuracy: 0.5)
+      XCTAssertGreaterThan(deepSeek.minY, codex.maxY)
       XCTAssertGreaterThanOrEqual(card.minX, PulseDesignTokens.contentInset - 0.5)
       XCTAssertLessThanOrEqual(
         card.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset)
@@ -262,7 +313,7 @@ final class DeepSeekRenderingTests: XCTestCase {
   private func home(
     defaults: UserDefaults, localTasks: LocalTaskController, usage: UsageController,
     vipUsage: UsageController, deepSeekUsage: UsageController, pages: PopoverPageController,
-    antigravityUsage: UsageController? = nil
+    antigravityUsage: UsageController? = nil, focusTimer: FocusTimerController? = nil
   ) -> HomeView {
     let deepSeekConfiguration = DeepSeekConfiguration(secretStore: RenderSecrets())
     let vipConfiguration = VIPConfiguration(secretStore: RenderSecrets())
@@ -279,6 +330,7 @@ final class DeepSeekRenderingTests: XCTestCase {
       updates: makeInactiveUpdateController(defaults: defaults),
       pages: pages, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
       onQuit: {},
+      focusTimer: focusTimer ?? FocusTimerController(),
       antigravityUsage: antigravityUsage ?? UsageController(provider: InactiveSettingsProvider()))
   }
 

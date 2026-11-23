@@ -10,26 +10,25 @@ no extra whole-panel animation or animated window resizing.
 | --- | --- | --- |
 | Hover | 120 ms | color/opacity ease-out |
 | Press | 90 ms | subtle immediate acknowledgement, no bounce |
-| Page body | about 200 ms / 8 pt | continuous incoming content and old snapshot fade |
-| Tag selection | 180 ms | selected plate follows the chosen tag |
-| Composer | 200 ms | expands from Add task, input immediately usable |
+| Page body | 140 ms | enter with a short fade, immediate input |
+| Tag selection | Immediate | selected pill changes in place |
+| Composer | 200 ms | new composer content fades in, input immediately usable |
 | Completion | 180 ms | check and strike-through in place |
 | Reorder | 240 ms | slight spring settle at drop location |
+| Usage refresh | 150 ms delay | fixed icon slot, show progress only while a request continues |
 
 All feedback uses shared tokens. A preset's extraBounce of zero is not proof
 of zero total bounce: snappy already has baseline bounce. Use explicit
 non-bouncy curves for acknowledgement and reserve a mild spring for spatial
 movement. Never animate all descendants on arbitrary view updates.
 
-The toolbar remains stable during navigation. The outgoing native field editor
-ends before page replacement; an in-memory noninteractive image may fade out,
-not the live field. Rapid navigation invalidates the old transition so a stale
-snapshot cannot obscure the newest page. Input and save never wait for animation.
+The toolbar remains stable during navigation. End the outgoing native field
+editor, replace the page immediately, and fade in the incoming body. Rapid
+navigation replaces any active fade. Input and save never wait for animation.
 
-Reduce Motion disables native panel motion and removes internal offsets,
-scaling and matched-geometry travel, including pressed button scale. A brief
-opacity change can still explain a state change. No system accessibility setting
-is modified by the app or by automated checks.
+Reduce Motion disables native panel motion and the page fade. It also removes
+internal offsets and pressed scaling. The refresh slot shows a static indicator.
+No system accessibility setting is modified by the app or by automated checks.
 
 ## Pointer lifecycle
 
@@ -56,7 +55,7 @@ Use an isolated development build and sample store:
 3. Drag beyond the panel and return; drag to an overflow edge; cancel with
    Escape and release outside. None may leave a dimmed tag or permanent hold.
 4. Rapidly switch Home, provider details and tag management. No blank flash,
-   stale snapshot, delayed input or accidental task submission is acceptable.
+   delayed input or accidental task submission is acceptable.
 5. Type Chinese with marked-text composition, confirm a candidate, submit,
    switch lists/windows, return and use native Undo/Redo. Verify both the
    displayed string and bound draft.

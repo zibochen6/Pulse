@@ -47,6 +47,14 @@ final class FocusTimerController: ObservableObject {
     isRunning = false
   }
 
+  var remainingSeconds: Int {
+    guard let deadline else { return 0 }
+    let remaining = now().duration(to: deadline)
+    guard remaining > .zero else { return 0 }
+    let parts = remaining.components
+    return Int(parts.seconds) + (parts.attoseconds > 0 ? 1 : 0)
+  }
+
   func finishIfDue() {
     guard let deadline, now() >= deadline else { return }
     cancel()

@@ -1,19 +1,11 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Square focus ring suppression
+// MARK: - Settings focus compatibility
 
-/// The system draws a square, non-rounded focus ring around rounded/capsule
-/// controls (pills, icon buttons, rows), which clashes with the shapes used in
-/// the popover. The reliable fix is to turn AppKit's ring off on the enclosing
-/// `NSButton` and draw our own shape-matched affordance instead.
-///
-/// `.focusEffectDisabled()` only exists on macOS 14+, and the deployment target
-/// is 13, so we walk the AppKit view hierarchy instead: SwiftUI backs
-/// `.buttonStyle`/`Button` with an `NSButton`, so the enclosing control is a
-/// short ancestor lookup. The lookup is retried on the next runloop turn
-/// because SwiftUI may not have inserted the representable into the button's
-/// hierarchy by the first `updateNSView`.
+/// Retains the independent Settings window's existing AppKit ring handling.
+/// When SwiftUI hosts the label inside an NSButton, disable that button's ring.
+/// Popover controls use the scoped SwiftUI focus effect below.
 struct PulseFocusRingSuppressor: NSViewRepresentable {
   func makeNSView(context: Context) -> FocusRingProbeView {
     let view = FocusRingProbeView(frame: .zero)
@@ -66,35 +58,92 @@ enum PulseFocusShape {
   case roundedRectangle(cornerRadius: CGFloat)
 
   @ViewBuilder
-  fileprivate func strokedView() -> some View {
+  fileprivate func strokedView(inset: CGFloat, lineWidth: CGFloat) -> some View {
     switch self {
     case .capsule:
       Capsule()
-        .inset(by: -1)
-        .strokeBorder(PulseDesignTokens.focusStroke, lineWidth: PulseDesignTokens.focusStrokeWidth)
+        .inset(by: inset)
+        .strokeBorder(PulseDesignTokens.focusStroke, lineWidth: lineWidth)
     case .roundedRectangle(let cornerRadius):
       RoundedRectangle(cornerRadius: cornerRadius)
-        .inset(by: -1)
-        .strokeBorder(PulseDesignTokens.focusStroke, lineWidth: PulseDesignTokens.focusStrokeWidth)
+        .inset(by: inset)
+        .strokeBorder(PulseDesignTokens.focusStroke, lineWidth: lineWidth)
     }
   }
 }
 
+@MainActor
+final class PulsePopoverFocus: ObservableObject {
+  @Published private(set) var showsKeyboardFocus = false
+
+  func setKeyboardNavigation(_ active: Bool) {
+    if showsKeyboardFocus != active { showsKeyboardFocus = active }
+  }
+}
+
+private struct PulsePopoverFocusKey: EnvironmentKey {
+  static let defaultValue: PulsePopoverFocus? = nil
+}
+
+extension EnvironmentValues {
+  var pulsePopoverFocus: PulsePopoverFocus? {
+    get { self[PulsePopoverFocusKey.self] }
+    set { self[PulsePopoverFocusKey.self] = newValue }
+  }
+}
+
 extension View {
-  /// Replaces the system square focus ring with no ring at all (the shared
-  /// styles then draw their own shape-matched affordance).
   func pulseDisableSystemFocusRing() -> some View {
-    background(PulseFocusRingSuppressor())
+    modifier(PulseSystemFocusEffect())
   }
 
-  /// Draws the shared focus affordance: a 1.5pt stroke at ~0.5 opacity following
-  /// the control's own shape. Never a rectangle around a capsule.
   func pulseFocusAffordance(_ isFocused: Bool, shape: PulseFocusShape) -> some View {
-    overlay {
-      if isFocused {
-        shape
-          .strokedView()
+    overlay { PulseFocusOutline(isFocused: isFocused, shape: shape) }
+  }
+}
+
+private struct PulseSystemFocusEffect: ViewModifier {
+  @Environment(\.pulsePopoverFocus) private var popoverFocus
+
+  func body(content: Content) -> some View {
+    if popoverFocus == nil {
+      content.background(PulseFocusRingSuppressor())
+    } else if #available(macOS 14, *) {
+      content.focusEffectDisabled()
+    } else {
+      content
+    }
+  }
+}
+
+private struct PulseFocusOutline: View {
+  let isFocused: Bool
+  let shape: PulseFocusShape
+  @Environment(\.pulsePopoverFocus) private var popoverFocus
+
+  var body: some View {
+    if isFocused {
+      if let popoverFocus {
+        if #available(macOS 14, *) {
+          KeyboardOutline(focus: popoverFocus, shape: shape)
+        }
+      } else {
+        shape.strokedView(inset: -1, lineWidth: PulseDesignTokens.focusStrokeWidth)
           .allowsHitTesting(false)
+          .accessibilityHidden(true)
+      }
+    }
+  }
+
+  private struct KeyboardOutline: View {
+    @ObservedObject var focus: PulsePopoverFocus
+    let shape: PulseFocusShape
+
+    var body: some View {
+      if focus.showsKeyboardFocus {
+        shape.strokedView(inset: 0, lineWidth: 1)
+          .allowsHitTesting(false)
+          .accessibilityHidden(true)
       }
     }
   }

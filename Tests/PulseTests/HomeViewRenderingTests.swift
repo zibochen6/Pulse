@@ -25,6 +25,31 @@ final class HomeViewRenderingTests: XCTestCase {
     XCTAssertEqual(HomeView.popoverSize, NSSize(width: 400, height: 520))
   }
 
+  func testPopoverBodySwapsInPlaceAndSkipsFadeWithReduceMotion() throws {
+    let content = PopoverContentTransition<Text>.Container(
+      rootView: AnyView(Text("Home")), page: .home)
+    let window = NSWindow(
+      contentRect: NSRect(origin: .zero, size: HomeView.popoverSize),
+      styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.ignoresMouseEvents = true
+    window.contentView = content
+    window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
+    window.orderFront(nil)
+    defer { window.close() }
+
+    let host = try XCTUnwrap(content.subviews.first)
+    let layer = try XCTUnwrap(host.layer)
+    content.update(rootView: AnyView(Text("Usage")), page: .usage(.codex), reduceMotion: false)
+    XCTAssertEqual(content.subviews, [host], "Do not capture or retain an outgoing page")
+    XCTAssertEqual(layer.animation(forKey: "pageOpacity")?.duration, 0.14)
+
+    content.update(rootView: AnyView(Text("Tags")), page: .tagManagement, reduceMotion: true)
+    XCTAssertEqual(content.subviews, [host])
+    XCTAssertNil(layer.animation(forKey: "pageOpacity"))
+    XCTAssertEqual(layer.opacity, 1)
+  }
+
   func testCodexMenuIconIsBundled() {
     XCTAssertNotNil(Bundle.main.url(forResource: "CodexMenuIcon", withExtension: "png"))
   }

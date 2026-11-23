@@ -1293,8 +1293,8 @@ final class LocalTasksRenderingTests: XCTestCase {
     XCTAssertEqual(idle.height, saving.height, accuracy: 0.5, "Row height is unchanged")
   }
 
-  /// The tag bar's selection plate has to be visible in an off-window render:
-  /// a matched-geometry plate that silently fails to draw would leave the
+  /// The tag bar's selected fill has to be visible in an off-window render:
+  /// a fill that silently fails to draw would leave the
   /// selected tab looking unselected in every snapshot.
   func testSelectedTagPlateRendersInBothAppearances() throws {
     let directory = URL(fileURLWithPath: "/tmp/PulseMinimalTodoRender", isDirectory: true)
@@ -1407,15 +1407,12 @@ final class LocalTasksRenderingTests: XCTestCase {
   }
 }
 
-/// Renders one selected and one idle pill side by side in the same namespace,
-/// exactly as the tag bar does.
+/// Renders one selected and one idle pill side by side, as in the tag bar.
 private struct TagPlatePreview: View {
-  @Namespace private var plate
-
   var body: some View {
     HStack(spacing: 4) {
-      PulsePillTab(title: "Todo", isSelected: true, action: {}, plateNamespace: plate)
-      PulsePillTab(title: "Project", isSelected: false, action: {}, plateNamespace: plate)
+      PulsePillTab(title: "Todo", isSelected: true, action: {})
+      PulsePillTab(title: "Project", isSelected: false, action: {})
     }
     .padding(20)
   }

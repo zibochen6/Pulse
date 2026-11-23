@@ -302,6 +302,6 @@
 "Restore the last deleted list and its tasks (%lld available)" = "Restore the last deleted list and its tasks (%lld available)";
 "This list changed since it was deleted. Resolve the conflict before trying Undo again." = "This list changed since it was deleted. Resolve the conflict before trying Undo again.";
 "Continue current edit" = "Continue current edit";
-"Start 30 min focus" = "Start 30 min focus";
-"Focusing · Cancel" = "Focusing · Cancel";
+"Focus 30 min" = "Focus 30 min";
+"%@ · Cancel" = "%@ · Cancel";
 "You are editing another task. Save or cancel that edit first; this list’s draft will be kept." = "You are editing another task. Save or cancel that edit first; this list’s draft will be kept.";

@@ -19,6 +19,22 @@ final class PopoverPageControllerTests: XCTestCase {
     XCTAssertEqual(pages.page, .home)
   }
 
+  func testSelectingTheCurrentPageDoesNotPublishAnotherTransition() {
+    let pages = PopoverPageController()
+    var changes: [PopoverPage] = []
+    let subscription = pages.$page.dropFirst().sink { changes.append($0) }
+
+    pages.reset()
+    pages.showUsage(.codex)
+    pages.showUsage(.codex)
+    pages.showHome()
+    pages.reset()
+
+    withExtendedLifetime(subscription) {
+      XCTAssertEqual(changes, [.usage(.codex), .home])
+    }
+  }
+
   func testSettingsNavigationDoesNotResetWithPopover() {
     let pages = PopoverPageController()
     let settings = SettingsPresentation()

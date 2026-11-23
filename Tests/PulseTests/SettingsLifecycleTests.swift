@@ -39,6 +39,21 @@ final class SettingsLifecycleTests: XCTestCase {
         is DetachedScriptInstaller)
   }
 
+  func testPendingCredentialReadCannotOverrideNewSave() async {
+    let began = expectation(description: "Background credential read started")
+    let store = PausedCredentialRead(began: began)
+    let configuration = DeepSeekConfiguration(secretStore: store)
+    let read = Task { await configuration.refreshInBackground() }
+    await fulfillment(of: [began], timeout: 2)
+
+    XCTAssertTrue(configuration.save(apiKey: "synthetic-new-key"))
+    store.resume.signal()
+    await read.value
+
+    XCTAssertTrue(configuration.hasAPIKey)
+    XCTAssertNil(configuration.errorMessage)
+  }
+
   func testStoredInvalidCredentialIsNotConnected() {
     XCTAssertEqual(
       ProviderConnectionState.resolve(hasCredential: false, state: .loading), .notConnected)
@@ -158,4 +173,19 @@ final class SettingsLifecycleTests: XCTestCase {
     await coordinator.request(.restart)
     XCTAssertEqual(events, ["write finished", "confirm", "discard", "install"])
   }
+}
+
+private struct PausedCredentialRead: SecretStoring {
+  let began: XCTestExpectation
+  let resume = DispatchSemaphore(value: 0)
+
+  func read(account: String) throws -> String? {
+    XCTAssertFalse(Thread.isMainThread)
+    began.fulfill()
+    _ = resume.wait(timeout: .now() + 5)
+    return nil
+  }
+
+  func save(_ secret: String, account: String) throws {}
+  func delete(account: String) throws {}
 }

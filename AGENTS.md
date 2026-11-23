@@ -19,3 +19,7 @@ If you're using Codex or another agent-capable tool, additional project-scoped h
 Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
 
 <!-- TRELLIS:END -->
+
+## 发布约定
+
+每轮 Pulse 改动完成并通过验收后，发布下一个补丁版本。用户指定版本时使用指定版本。通过 `scripts/release.sh` 构建、签名、安装并发布 GitHub Release，完成后核验最新版本及下载资产。仅发布本轮已验收的改动，保留工作区里其他任务的改动。

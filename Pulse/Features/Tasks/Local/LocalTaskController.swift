@@ -14,6 +14,12 @@ struct LocalTaskCompletionFailure: Equatable, Sendable {
 
 @MainActor
 final class LocalTaskController: ObservableObject {
+  enum InitialLoadState: Equatable {
+    case loading
+    case failed(String)
+    case loaded
+  }
+
   @Published private(set) var document: LocalTaskDocument?
   @Published private(set) var isLoading = false
   @Published private(set) var isSaving = false
@@ -31,6 +37,13 @@ final class LocalTaskController: ObservableObject {
   private var activeSaves = 0
   private var issuedOperation = 0
   private var errorOperation = 0
+  private var initialLoadError: String?
+
+  var initialLoadState: InitialLoadState {
+    if document != nil { return .loaded }
+    if !isLoading, let initialLoadError { return .failed(initialLoadError) }
+    return .loading
+  }
 
   init(store: any LocalTaskStoring = LocalTaskStore()) { self.store = store }
 
@@ -42,7 +55,11 @@ final class LocalTaskController: ObservableObject {
     do {
       apply(try await store.load())
       if !isSaving { updateError(nil, operation: operation) }
-    } catch { updateError(message(for: error), operation: operation) }
+    } catch {
+      let message = message(for: error)
+      if document == nil { initialLoadError = message }
+      updateError(message, operation: operation)
+    }
   }
 
   func tasks(matching filter: LocalTaskFilter) -> [LocalTask] {

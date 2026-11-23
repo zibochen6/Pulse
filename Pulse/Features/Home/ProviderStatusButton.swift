@@ -24,6 +24,7 @@ struct ProviderStatusButton<Icon: View>: View {
       }
       .padding(.horizontal, 10)
       .frame(height: 52)
+      .frame(maxWidth: .infinity, alignment: .leading)
       .contentShape(RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge))
     }
     .buttonStyle(PulseProviderStatusStyle())

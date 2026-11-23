@@ -5,8 +5,9 @@ list deletion and Undo updated in 0.1.9.
 
 ## Surfaces and navigation
 
-The menu-bar panel has a fixed 400 × 520 content surface. A stable brand toolbar
-sits above AI status controls, a tag strip and the scrolling task list. Settings
+The menu-bar panel has a fixed 400 × 520 content surface. A stable toolbar with
+the focus timer and settings entry sits above AI status controls, a tag strip
+and the scrolling task list. Settings
 opens in one independent 720 × 560 native window, with General, AI services,
 Lists & tags, Updates and About categories. Reopening Settings restores the
 last category; contextual configuration actions open the relevant provider.
@@ -24,8 +25,9 @@ Dock icon.
 The opaque root uses adaptive neutral colors with a restrained violet accent.
 Readable task text, 16-point horizontal insets, soft tag colors and clear action
 hierarchy replace dense uniform gray controls. Real provider icons retain their
-identity colors. Controls wrap as whole units so long amounts keep every decimal;
-only a readout wider than the entire available row needs horizontal scrolling.
+identity colors. Typical readouts use three balanced columns, or two columns
+when Gemini is enabled. Controls wrap as whole units so long amounts keep every
+decimal. Only a readout wider than the entire row needs horizontal scrolling.
 
 Codex remains a quota and other providers remain native-currency balances. No
 currency conversion, fabricated percentage or stale successful value is shown

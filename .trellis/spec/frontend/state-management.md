@@ -28,7 +28,9 @@ The production initializer supplies `.standard` and `SystemLoginItemService()` b
 
 - UserDefaults keys `launchAtLoginRequested` and `showMenuBarLabel` store Booleans; absent keys mean `false`.
 - `launchAtLoginRequested` is user intent. `loginItemStatus` is the operating system's observed state and can independently be `notRegistered`, `enabled`, `requiresApproval`, or `notFound`.
-- Opening the popover calls `refreshLoginItemStatus()` before presentation. Enabling or disabling calls `SMAppService.mainApp` through `LoginItemManaging`, then refreshes status.
+- The Settings surface refreshes login item status on appearance. Enabling or
+  disabling calls `SMAppService.mainApp` through `LoginItemManaging`, then
+  refreshes status. Opening the menu-bar popover needs no login-item query.
 - The status item renders the bundled Codex icon plus the current `UsageRefreshState` title (`…`, percentage, `--`, or `!`). `showMenuBarLabel` only adds the word “Pulse”; it never hides the usage state.
 - `CodexMenuIcon.png` is the monochrome template artwork for the macOS status bar only. Popover views use `CodexProviderIcon`, backed by the alpha-enabled `CodexColorIcon.png`, so the Codex mark keeps its supplied blue-violet color in both Aqua and Dark Aqua. Do not set the popover image to template rendering or reuse it for the status item.
 - `DeepSeekProviderIcon` must preserve the actual DeepSeek whale geometry, including the belly, eye and tail negative spaces. The initial generic whale silhouette was rejected by the user. Reuse the shared native vector component on Home, Usage and Settings; preserve aspect ratio inside its existing frame and use the reference blue `#4D6BFE`. Obtain original vector geometry from the official source rather than approximating the mark. Keep attribution in `THIRD_PARTY_NOTICES.md` and inspect an enlarged render as well as the 14–18-point icons in both appearances.
@@ -101,9 +103,11 @@ interaction-hold and update preflight contracts.
 
 ### 3. Contracts
 - Home has a stable brand toolbar, separate provider status band and task area.
-  Real provider controls wrap as complete units without shrinking typography or
-  cutting money decimals. Oversized single readouts scroll inside a bounded
-  area. The menu bar remains Codex-only and follows UsageMenuFormatter.
+  Normal provider controls share three columns, or two columns when four
+  providers are visible. Long readouts wrap as complete cards without shrinking
+  typography or cutting money decimals. Oversized single readouts scroll
+  inside a bounded area. The menu bar remains Codex-only and follows
+  UsageMenuFormatter.
 - Clicking a configured provider refreshes only it and opens its Usage detail.
   Missing optional credentials offer connection configuration; unavailable and
   failure remain distinct from a successful reading. Never invent values.
@@ -122,11 +126,15 @@ interaction-hold and update preflight contracts.
   toggle still use native transient dismissal.
 - willClose stops hover work; didClose resets quick navigation to Home after
   native animation finishes. Settings state and all retained drafts survive.
-- Page transition snapshots are in-memory, noninteractive and short-lived;
-  never retain an outgoing live native field editor to animate its removal.
-  Rapid transitions invalidate old callbacks/snapshots.
+- Call window.endEditing(for:) before replacing a page. Replace the old
+  content immediately and fade in the new body for 140 ms, without capturing a
+  bitmap or retaining an outgoing field editor. Same-page updates do not start
+  a new animation. A new transition replaces the previous layer animation.
 - Reduce Motion disables native panel motion and geometry changes internally,
-  including pressed scales and selection travel; short fades remain allowed.
+  including pressed scales. Skip the page fade under Reduce Motion.
+- Begin opening before refreshing credentials or task data. Read credential
+  presence off the main thread and reject results superseded by a later read,
+  save or removal. Keep ready task content visible across background loads.
 
 ### 4. Validation & Error Matrix
 

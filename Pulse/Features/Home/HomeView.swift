@@ -4,30 +4,35 @@ import SwiftUI
 struct HomeView: View {
   static let popoverSize = NSSize(width: 400, height: 520)
 
-  @ObservedObject var config: AppConfig
-  @ObservedObject var usage: UsageController
-  @ObservedObject var vipUsage: UsageController
-  @ObservedObject var deepSeekUsage: UsageController
-  @ObservedObject var deepSeekConfiguration: DeepSeekConfiguration
-  @ObservedObject var vipConfiguration: VIPConfiguration
-  @ObservedObject var localTasks: LocalTaskController
-  @ObservedObject var updates: UpdateController
+  let config: AppConfig
+  let usage: UsageController
+  let vipUsage: UsageController
+  let deepSeekUsage: UsageController
+  let deepSeekConfiguration: DeepSeekConfiguration
+  let vipConfiguration: VIPConfiguration
+  let localTasks: LocalTaskController
+  let updates: UpdateController
   @ObservedObject var pages: PopoverPageController
   let onDeepSeekCredentialsChanged: () -> Void
   let onVIPCredentialsChanged: () -> Void
   let onQuit: () -> Void
   var onTaskEditingChanged: (Bool) -> Void = { _ in }
-  @ObservedObject var localPresentation = LocalTaskPresentation()
+  var localPresentation = LocalTaskPresentation()
   var onOpenSettings: (SettingsDestination?, ProviderID?) -> Void = { _, _ in }
   var onRestartRequested: () -> Void = {}
-  @ObservedObject var focusTimer = FocusTimerController()
-  @ObservedObject var antigravityUsage = UsageController(provider: InactiveSettingsProvider())
+  var focusTimer = FocusTimerController()
+  var antigravityUsage = UsageController(provider: InactiveSettingsProvider())
   @State private var hidesUpdateBanner = false
 
   var body: some View {
     VStack(spacing: 0) {
       toolbar
-      statusStrip
+      HomeProviderStrip(
+        config: config, usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
+        antigravityUsage: antigravityUsage, deepSeekConfiguration: deepSeekConfiguration,
+        vipConfiguration: vipConfiguration, onOpenUsage: { pages.showUsage($0) },
+        onOpenSettings: { onOpenSettings(.providers, $0) }
+      )
       PopoverContentTransition(page: pages.page) {
         Group {
           switch pages.page {
@@ -54,10 +59,11 @@ struct HomeView: View {
           Image(systemName: "waveform.path")
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(PulseDesignTokens.accent)
-            .frame(width: 28, height: 28)
+            .frame(width: PulseDesignTokens.brandMarkSize, height: PulseDesignTokens.brandMarkSize)
             .background(
-              PulseDesignTokens.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-          Text("Pulse").font(.system(size: 17, weight: .semibold))
+              PulseDesignTokens.selectedFill,
+              in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
+          Text("Pulse").font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
         }
       } else {
         Button {
@@ -68,11 +74,11 @@ struct HomeView: View {
         }
         .buttonStyle(PulseIconButtonStyle()).help("Back to Home")
         .accessibilityLabel("Back to Home").accessibilityIdentifier("backToHomeButton")
-        Text(pageTitle).font(.system(size: 16, weight: .semibold))
+        Text(pageTitle).font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
       }
       Spacer(minLength: 0)
       if pages.page == .home {
-        focusTimerButton
+        HomeFocusButton(timer: focusTimer)
       }
       Button {
         onOpenSettings(nil, nil)
@@ -86,28 +92,8 @@ struct HomeView: View {
         ["openSettingsButton": $0]
       }
     }
-    .padding(.horizontal, 16).padding(.vertical, 10)
-  }
-
-  private var focusTimerButton: some View {
-    let isRunning = focusTimer.isRunning
-    let title = PulseLocalization.string(
-      isRunning ? "Focusing · Cancel" : "Start 30 min focus")
-    return Button {
-      if isRunning {
-        focusTimer.cancel()
-      } else {
-        focusTimer.start()
-      }
-    } label: {
-      Label(title, systemImage: isRunning ? "stop.circle" : "timer")
-    }
-    .buttonStyle(PulseActionButtonStyle())
-    .accessibilityLabel(title)
-    .accessibilityIdentifier("focusTimerButton")
-    .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
-      ["focusTimerButton": $0]
-    }
+    .padding(.horizontal, PulseDesignTokens.contentInset)
+    .padding(.vertical, 12)
   }
 
   private var pageTitle: String {
@@ -118,47 +104,11 @@ struct HomeView: View {
     }
   }
 
-  private var statusStrip: some View {
-    VStack(spacing: 0) {
-      ProviderStatusLayout {
-        AIStatusSummary(state: usage.state) {
-          usage.requestRefresh()
-          pages.showUsage(.codex)
-        }
-        VIPStatusSummary(state: vipUsage.state, isConfigured: vipConfiguration.hasAPIKey) {
-          if vipConfiguration.hasAPIKey {
-            vipUsage.requestRefresh()
-            pages.showUsage(.vip)
-          } else {
-            onOpenSettings(.providers, .vip)
-          }
-        }
-        DeepSeekStatusSummary(
-          state: deepSeekUsage.state, isConfigured: deepSeekConfiguration.hasAPIKey
-        ) {
-          if deepSeekConfiguration.hasAPIKey {
-            deepSeekUsage.requestRefresh()
-            pages.showUsage(.deepSeek)
-          } else {
-            onOpenSettings(.providers, .deepSeek)
-          }
-        }
-        if config.antigravityEnabled {
-          AntigravityStatusSummary(state: antigravityUsage.state) {
-            pages.showUsage(.antigravity)
-          }
-        }
-      }
-      .padding(.horizontal, 16).padding(.bottom, 12)
-      Rectangle().fill(PulseDesignTokens.border).frame(height: 1).padding(.horizontal, 16)
-    }
-  }
-
   private var homeContent: some View {
     VStack(spacing: 0) {
-      if let release = updates.stagedRelease, !hidesUpdateBanner {
-        PulseUpdateBanner(
-          version: release.version.description, onRestart: onRestartRequested,
+      if !hidesUpdateBanner {
+        HomeUpdateBanner(
+          updates: updates, onRestart: onRestartRequested,
           onDismiss: { hidesUpdateBanner = true })
       }
       LocalTasksView(
@@ -194,6 +144,113 @@ struct HomeView: View {
         }
       )
       .padding(16)
+    }
+  }
+}
+
+private struct HomeFocusButton: View {
+  @ObservedObject var timer: FocusTimerController
+
+  var body: some View {
+    let idleTitle = PulseLocalization.string("Focus 30 min")
+    Button {
+      if timer.isRunning {
+        timer.cancel()
+      } else {
+        timer.start()
+      }
+    } label: {
+      HStack(spacing: 6) {
+        Image(systemName: timer.isRunning ? "stop.circle.fill" : "timer")
+          .frame(width: 14)
+          .foregroundStyle(timer.isRunning ? PulseDesignTokens.accent : Color.secondary)
+          .accessibilityHidden(true)
+        ZStack(alignment: .leading) {
+          // Both localized labels reserve space, including the cancel action.
+          Text(idleTitle).hidden().accessibilityHidden(true)
+          Text(PulseLocalization.format("%@ · Cancel", "00:00"))
+            .hidden().accessibilityHidden(true)
+          if timer.isRunning {
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+              let seconds = timer.remainingSeconds
+              let countdown = String(format: "%02d:%02d", seconds / 60, seconds % 60)
+              Text(PulseLocalization.format("%@ · Cancel", countdown))
+            }
+          } else {
+            Text(idleTitle)
+          }
+        }
+        .monospacedDigit()
+        .fixedSize(horizontal: true, vertical: false)
+      }
+    }
+    .buttonStyle(PulseActionButtonStyle(emphasis: .focusTimer(isRunning: timer.isRunning)))
+    .accessibilityIdentifier("focusTimerButton")
+    .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
+      ["focusTimerButton": $0]
+    }
+  }
+}
+
+private struct HomeProviderStrip: View {
+  @ObservedObject var config: AppConfig
+  @ObservedObject var usage: UsageController
+  @ObservedObject var vipUsage: UsageController
+  @ObservedObject var deepSeekUsage: UsageController
+  @ObservedObject var antigravityUsage: UsageController
+  @ObservedObject var deepSeekConfiguration: DeepSeekConfiguration
+  @ObservedObject var vipConfiguration: VIPConfiguration
+  let onOpenUsage: (ProviderID) -> Void
+  let onOpenSettings: (ProviderID) -> Void
+
+  var body: some View {
+    VStack(spacing: 0) {
+      ProviderStatusLayout {
+        AIStatusSummary(state: usage.state) {
+          usage.requestRefresh()
+          onOpenUsage(.codex)
+        }
+        VIPStatusSummary(state: vipUsage.state, isConfigured: vipConfiguration.hasAPIKey) {
+          if vipConfiguration.hasAPIKey {
+            vipUsage.requestRefresh()
+            onOpenUsage(.vip)
+          } else {
+            onOpenSettings(.vip)
+          }
+        }
+        DeepSeekStatusSummary(
+          state: deepSeekUsage.state, isConfigured: deepSeekConfiguration.hasAPIKey
+        ) {
+          if deepSeekConfiguration.hasAPIKey {
+            deepSeekUsage.requestRefresh()
+            onOpenUsage(.deepSeek)
+          } else {
+            onOpenSettings(.deepSeek)
+          }
+        }
+        if config.antigravityEnabled {
+          AntigravityStatusSummary(state: antigravityUsage.state) {
+            onOpenUsage(.antigravity)
+          }
+        }
+      }
+      .padding(.bottom, 12)
+      Rectangle().fill(PulseDesignTokens.border).frame(height: 1)
+    }
+    .padding(.horizontal, PulseDesignTokens.contentInset)
+  }
+}
+
+private struct HomeUpdateBanner: View {
+  @ObservedObject var updates: UpdateController
+  let onRestart: () -> Void
+  let onDismiss: () -> Void
+
+  var body: some View {
+    if let release = updates.stagedRelease {
+      PulseUpdateBanner(
+        version: release.version.description, onRestart: onRestart, onDismiss: onDismiss
+      )
     }
   }
 }

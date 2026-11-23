@@ -8,7 +8,7 @@ struct PulseErrorBanner<Actions: View>: View {
   let message: String
   var accessibilityIdentifier: String? = nil
   @ViewBuilder let actions: Actions
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.pulseReduceMotion) private var reduceMotion
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
@@ -47,7 +47,7 @@ struct PulseIconButtonStyle: ButtonStyle {
   private struct IconButtonBody: View {
     let configuration: ButtonStyleConfiguration
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pulseReduceMotion) private var reduceMotion
     @State private var isHovered = false
     @FocusState private var focused: Bool
 
@@ -83,20 +83,11 @@ struct PulseIconButtonStyle: ButtonStyle {
   }
 }
 
-/// Unified capsule "tab" for the local task tag bar. Selection reads as a
-/// filled capsule (never a focus ring), press gives a short scale-down so the
-/// tab feels physical, and the keyboard focus affordance follows the capsule
-/// shape so it cannot look like a square box around a rounded control.
-///
-/// `plateNamespace` upgrades the selection fill into one plate that travels
-/// between tabs instead of a fill appearing in two places in sequence. Passing
-/// no namespace (the default) keeps the static fill, so other call sites and
-/// Reduce Motion need no special casing.
+/// Local tags use a static selection fill and a separate keyboard focus cue.
 struct PulsePillTab: View {
   let title: String
   let isSelected: Bool
   let action: () -> Void
-  var plateNamespace: Namespace.ID? = nil
   var tint: Color = PulseDesignTokens.accent
 
   var body: some View {
@@ -110,9 +101,7 @@ struct PulsePillTab: View {
         .padding(.horizontal, 10)
         .frame(height: 28)
     }
-    .buttonStyle(
-      PulsePillTabStyle(isSelected: isSelected, plateNamespace: plateNamespace, tint: tint)
-    )
+    .buttonStyle(PulsePillTabStyle(isSelected: isSelected, tint: tint))
     .help(title)
     .accessibilityValue(PulseLocalization.string(isSelected ? "Selected" : "Not selected"))
   }
@@ -120,29 +109,25 @@ struct PulsePillTab: View {
 
 /// The pill's feedback lives in a ButtonStyle so it can read `isPressed`,
 /// which a plain-styled Button never exposes to the view around it.
-struct PulsePillTabStyle: ButtonStyle {
+private struct PulsePillTabStyle: ButtonStyle {
   let isSelected: Bool
-  var plateNamespace: Namespace.ID? = nil
-  var tint: Color = PulseDesignTokens.accent
+  let tint: Color
 
   func makeBody(configuration: Configuration) -> some View {
-    PillBody(
-      isSelected: isSelected, plateNamespace: plateNamespace, tint: tint,
-      configuration: configuration)
+    PillBody(isSelected: isSelected, tint: tint, configuration: configuration)
   }
 
   private struct PillBody: View {
     let isSelected: Bool
-    let plateNamespace: Namespace.ID?
     let tint: Color
     let configuration: ButtonStyleConfiguration
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pulseReduceMotion) private var reduceMotion
     @State private var isHovered = false
     @FocusState private var focused: Bool
 
     var body: some View {
       configuration.label
-        .background { plate }
+        .background(fill, in: Capsule())
         .contentShape(Capsule())
         .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
         .pulseFocusAffordance(focused, shape: .capsule)
@@ -159,34 +144,9 @@ struct PulsePillTabStyle: ButtonStyle {
         .animation(reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: focused)
     }
 
-    /// Selected: a filled capsule, so selection is the affordance itself.
-    /// Unselected: hover/press fill only. The selection fill is deliberately
-    /// *not* faded: selection is a discrete state change, and fading it in from
-    /// `.clear` leaves the tab blank in off-window renders. With a namespace the
-    /// plate is one view that moves, which is continuous without ever being
-    /// absent at its destination.
-    @ViewBuilder private var plate: some View {
-      ZStack {
-        if isSelected {
-          selectionPlate
-        } else {
-          Capsule().fill(unselectedFill)
-        }
-      }
-    }
-
-    @ViewBuilder private var selectionPlate: some View {
-      if let plateNamespace, !reduceMotion {
-        Capsule()
-          .fill(tint.opacity(0.15))
-          .matchedGeometryEffect(id: "selectedTagPlate", in: plateNamespace)
-      } else {
-        Capsule().fill(tint.opacity(0.15))
-      }
-    }
-
-    private var unselectedFill: Color {
+    private var fill: Color {
       if configuration.isPressed { return PulseDesignTokens.pressedFill }
+      if isSelected { return tint.opacity(0.15) }
       return isHovered ? PulseDesignTokens.hoverFill : .clear
     }
   }
@@ -206,7 +166,8 @@ struct PulseRowButtonStyle: ButtonStyle {
   private struct RowBody: View {
     let isHovered: Bool
     let configuration: ButtonStyleConfiguration
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pulseReduceMotion) private var reduceMotion
+    @Environment(\.pulsePopoverFocus) private var popoverFocus
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -218,6 +179,10 @@ struct PulseRowButtonStyle: ButtonStyle {
           in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
         )
         .opacity(configuration.isPressed ? 0.72 : 1)
+        .pulseFocusAffordance(
+          popoverFocus != nil && focused,
+          shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
+        )
         .focusable(true)
         .focused($focused)
         .pulseDisableSystemFocusRing()
@@ -228,7 +193,7 @@ struct PulseRowButtonStyle: ButtonStyle {
     private func fill(_ pressed: Bool) -> Color {
       if pressed { return PulseDesignTokens.pressedFill }
       if isHovered { return PulseDesignTokens.hoverFill }
-      if focused { return PulseDesignTokens.focusFill }
+      if focused && popoverFocus == nil { return PulseDesignTokens.focusFill }
       return .clear
     }
   }
@@ -246,7 +211,7 @@ struct PulseProviderStatusStyle: ButtonStyle {
   private struct StatusBody: View {
     let configuration: ButtonStyleConfiguration
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pulseReduceMotion) private var reduceMotion
     @State private var isHovered = false
     @FocusState private var focused: Bool
 
@@ -297,7 +262,8 @@ struct PulseFooterActionStyle: ButtonStyle {
   private struct FooterBody: View {
     let configuration: ButtonStyleConfiguration
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pulseReduceMotion) private var reduceMotion
+    @Environment(\.pulsePopoverFocus) private var popoverFocus
     @State private var isHovered = false
     @FocusState private var focused: Bool
 
@@ -329,7 +295,7 @@ struct PulseFooterActionStyle: ButtonStyle {
     private func fill(_ pressed: Bool) -> Color {
       guard isEnabled else { return .clear }
       if pressed { return PulseDesignTokens.pressedFill }
-      if focused { return PulseDesignTokens.focusFill }
+      if focused && popoverFocus == nil { return PulseDesignTokens.focusFill }
       return isHovered ? PulseDesignTokens.hoverFill : .clear
     }
   }
@@ -353,7 +319,7 @@ struct PulseUpdateBanner: View {
   let version: String
   let onRestart: () -> Void
   let onDismiss: () -> Void
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.pulseReduceMotion) private var reduceMotion
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {

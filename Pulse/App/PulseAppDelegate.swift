@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import SwiftUI
 
@@ -96,6 +97,9 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     }
   )
   private let popover = NSPopover()
+  private let popoverFocus = PulsePopoverFocus()
+  private var popoverInputMonitor: Any?
+  private var credentialRefresh: Task<Void, Never>?
   private var preferencesSubscription: AnyCancellable?
   private var antigravitySubscription: AnyCancellable?
   private var usageSubscription: AnyCancellable?
@@ -187,6 +191,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   func applicationWillTerminate(_ notification: Notification) {
     hoverController.reset()
+    stopTrackingPopoverInput()
+    credentialRefresh?.cancel()
     focusTimerSubscription?.cancel()
     focusTimer.cancel()
     // A staged update is applied here when the user quits before restarting;
@@ -257,7 +263,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         onRestartRequested: { [weak self] in self?.requestExit(restarting: true) },
         focusTimer: focusTimer,
         antigravityUsage: antigravityUsage
-      )
+      ).environment(\.pulsePopoverFocus, popoverFocus)
     )
     popover.contentViewController = hostingController
     installTrackingArea(on: hostingController.view, owner: contentTrackingOwner)
@@ -415,9 +421,41 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   private func showPopover() {
     guard let button = statusItem.button, hoverController.state != .closing else { return }
-    config.refreshLoginItemStatus()
-    vipConfiguration.refresh()
-    deepSeekConfiguration.refresh()
+    let viaKeyboard = NSApp.currentEvent?.type == .keyDown || NSApp.currentEvent?.type == .keyUp
+    popoverFocus.setKeyboardNavigation(viaKeyboard)
+    pages.reset()
+    hoverController.beginOpening()
+    interactionHolds.set(.taskEditor, active: localPresentation.isInteractionActive)
+    hoverController.setDismissalSuspended(interactionHolds.isActive)
+    updatePopoverMotion()
+    popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    guard popover.isShown else {
+      hoverController.reset()
+      return
+    }
+    if !viaKeyboard, let window = popover.contentViewController?.view.window,
+      !(window.firstResponder is NSTextView)
+    {
+      window.makeFirstResponder(nil)
+    }
+    trackPopoverInput()
+    let presence = pointerPresence()
+    hoverController.synchronize(
+      statusButton: presence.statusButton, content: presence.content,
+      popoverWindow: presence.popoverWindow)
+    refreshPopoverData()
+  }
+
+  private func refreshPopoverData() {
+    if credentialRefresh == nil {
+      credentialRefresh = Task { [weak self] in
+        guard let self else { return }
+        async let vip: Void = self.vipConfiguration.refreshInBackground()
+        async let deepSeek: Void = self.deepSeekConfiguration.refreshInBackground()
+        _ = await (vip, deepSeek)
+        self.credentialRefresh = nil
+      }
+    }
     vipUsage.refreshIfStale(maxAge: 60)
     deepSeekUsage.refreshIfStale(maxAge: 60)
     if config.antigravityEnabled, case .success = antigravityUsage.state {
@@ -429,20 +467,32 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       // opened, so the list never waits for a render to catch up with the date.
       await self?.localTasks.resetRepeatingTasks()
     }
-    pages.reset()
-    hoverController.beginOpening()
-    interactionHolds.set(.taskEditor, active: localPresentation.isInteractionActive)
-    hoverController.setDismissalSuspended(interactionHolds.isActive)
-    updatePopoverMotion()
-    popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-    guard popover.isShown else {
-      hoverController.reset()
-      return
+  }
+
+  private func trackPopoverInput() {
+    stopTrackingPopoverInput()
+    popoverInputMonitor = NSEvent.addLocalMonitorForEvents(
+      matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+    ) { [weak self] event in
+      MainActor.assumeIsolated {
+        guard let self, let window = self.popover.contentViewController?.view.window,
+          event.window === window
+        else { return }
+        if event.type == .keyDown {
+          if event.keyCode == UInt16(kVK_Tab) { self.popoverFocus.setKeyboardNavigation(true) }
+        } else {
+          self.popoverFocus.setKeyboardNavigation(false)
+        }
+      }
+      return event
     }
-    let presence = pointerPresence()
-    hoverController.synchronize(
-      statusButton: presence.statusButton, content: presence.content,
-      popoverWindow: presence.popoverWindow)
+  }
+
+  private func stopTrackingPopoverInput() {
+    if let popoverInputMonitor {
+      NSEvent.removeMonitor(popoverInputMonitor)
+      self.popoverInputMonitor = nil
+    }
   }
 
   private func updatePopoverMotion() {
@@ -463,6 +513,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   func popoverDidClose(_ notification: Notification) {
+    stopTrackingPopoverInput()
     menuLeases.removeAll()
     interactionHolds.reset()
     hoverController.reset()

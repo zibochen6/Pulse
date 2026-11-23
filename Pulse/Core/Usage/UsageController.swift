@@ -5,6 +5,8 @@ import Foundation
 final class UsageController: ObservableObject {
   @Published private(set) var state: UsageRefreshState = .loading
   @Published private(set) var isRefreshing = false
+  /// Updated before isRefreshing publishes so observers see the current request.
+  private(set) var refreshStartedAt: ContinuousClock.Instant?
 
   private let provider: any UsageProviding
   private let refreshInterval: Duration
@@ -40,6 +42,7 @@ final class UsageController: ObservableObject {
     generation &+= 1
     activeRefresh?.cancel()
     activeRefresh = nil
+    refreshStartedAt = nil
     isRefreshing = false
     if reset { state = .loading }
   }
@@ -76,6 +79,7 @@ final class UsageController: ObservableObject {
     generation &+= 1
     activeRefresh?.cancel()
     activeRefresh = nil
+    refreshStartedAt = nil
     isRefreshing = false
     state = .loading
     return requestRefresh()
@@ -83,6 +87,7 @@ final class UsageController: ObservableObject {
 
   func refresh() async {
     guard !Task.isCancelled, activeRefresh == nil else { return }
+    refreshStartedAt = .now
     isRefreshing = true
     let currentGeneration = generation
     let task = Task { await performRefresh(generation: currentGeneration) }
@@ -98,6 +103,7 @@ final class UsageController: ObservableObject {
     defer {
       if currentGeneration == generation {
         activeRefresh = nil
+        refreshStartedAt = nil
         isRefreshing = false
       }
     }

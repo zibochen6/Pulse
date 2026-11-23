@@ -21,6 +21,27 @@ final class LocalTaskControllerTests: XCTestCase {
     XCTFail("Timed out waiting for controlled operation")
   }
 
+  func testInitialLoadShowsLoadingUntilTheStoreReturnsAndCanRetryAFailure() async throws {
+    let store = ControlledLocalTaskStore()
+    let controller = LocalTaskController(store: store)
+    XCTAssertEqual(controller.initialLoadState, .loading)
+
+    let initial = Task { await controller.refresh() }
+    try await waitUntil { await store.loadCount == 1 }
+    XCTAssertEqual(controller.initialLoadState, .loading)
+    await store.finishLoad(0, result: .failure(LocalTaskStoreError.corruptDocument))
+    await initial.value
+    let error = try XCTUnwrap(controller.errorMessage)
+    XCTAssertEqual(controller.initialLoadState, .failed(error))
+
+    let retry = Task { await controller.refresh() }
+    try await waitUntil { await store.loadCount == 2 }
+    XCTAssertEqual(controller.initialLoadState, .loading)
+    await store.finishLoad(1, result: .success(LocalTaskSnapshot(document: LocalTaskDocument())))
+    await retry.value
+    XCTAssertEqual(controller.initialLoadState, .loaded)
+  }
+
   func testCreateEditCompleteDeleteAndFilteringConfirmFromStorage() async throws {
     let store = try store()
     let controller = LocalTaskController(store: store)

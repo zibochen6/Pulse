@@ -2,12 +2,11 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
-/// Changes only the panel body. The outgoing view is a bitmap, never a live
-/// NSTextField that can send a late callback into a saved or different draft.
+/// Ends native editing before swapping pages, then fades in the live body.
 struct PopoverContentTransition<Content: View>: NSViewRepresentable {
   let page: PopoverPage
   let content: Content
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.pulseReduceMotion) private var reduceMotion
 
   init(page: PopoverPage, @ViewBuilder content: () -> Content) {
     self.page = page
@@ -25,14 +24,15 @@ struct PopoverContentTransition<Content: View>: NSViewRepresentable {
       content
         .environment(\.locale, context.environment.locale)
         .environment(\.colorScheme, context.environment.colorScheme)
+        .environment(\.pulseReduceMotionOverride, context.environment.pulseReduceMotion)
+        .environment(\.pulsePopoverFocus, context.environment.pulsePopoverFocus)
         .tint(PulseDesignTokens.accent))
   }
 
   final class Container: NSView {
     private let host: NSHostingView<AnyView>
     private var page: PopoverPage
-    private var outgoing: NSImageView?
-    private var revision = 0
+    private static var fadeKey: String { "pageOpacity" }
 
     init(rootView: AnyView, page: PopoverPage) {
       host = NSHostingView(rootView: rootView)
@@ -46,64 +46,25 @@ struct PopoverContentTransition<Content: View>: NSViewRepresentable {
     override func layout() {
       super.layout()
       host.frame = bounds
-      outgoing?.frame = bounds
     }
 
     func update(rootView: AnyView, page: PopoverPage, reduceMotion: Bool) {
-      guard self.page != page else {
-        host.rootView = rootView
-        return
+      let pageChanged = self.page != page
+      if pageChanged || reduceMotion {
+        host.layer?.removeAnimation(forKey: Self.fadeKey)
       }
-      revision += 1
-      let currentRevision = revision
-      outgoing?.removeFromSuperview()
-      outgoing = nil
-      host.layer?.removeAllAnimations()
-      host.alphaValue = 1
-      window?.endEditing(for: nil)
-      host.layoutSubtreeIfNeeded()
-      if window != nil, !bounds.isEmpty,
-        let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds)
-      {
-        host.cacheDisplay(in: host.bounds, to: bitmap)
-        let image = NSImage(size: host.bounds.size)
-        image.addRepresentation(bitmap)
-        let snapshot = NoninteractiveSnapshot(frame: bounds)
-        snapshot.image = image
-        snapshot.imageScaling = .scaleAxesIndependently
-        snapshot.setAccessibilityElement(false)
-        addSubview(snapshot, positioned: .above, relativeTo: host)
-        outgoing = snapshot
+      if pageChanged {
+        window?.endEditing(for: nil)
+        self.page = page
       }
-      self.page = page
       host.rootView = rootView
-      host.layoutSubtreeIfNeeded()
-      guard let snapshot = outgoing else { return }
-      host.alphaValue = 0
-      if !reduceMotion {
-        let movement = CABasicAnimation(keyPath: "transform.translation.x")
-        movement.fromValue = page == .home ? -8 : 8
-        movement.toValue = 0
-        movement.duration = 0.2
-        movement.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        host.layer?.add(movement, forKey: "pagePosition")
-      }
-      NSAnimationContext.runAnimationGroup { context in
-        context.duration = reduceMotion ? 0.1 : 0.2
-        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        host.animator().alphaValue = 1
-        snapshot.animator().alphaValue = 0
-      } completionHandler: { [weak self, weak snapshot] in
-        MainActor.assumeIsolated {
-          snapshot?.removeFromSuperview()
-          guard let self, self.revision == currentRevision else { return }
-          self.outgoing = nil
-        }
-      }
+      guard pageChanged, !reduceMotion, window?.isVisible == true, !bounds.isEmpty else { return }
+      let fade = CABasicAnimation(keyPath: "opacity")
+      fade.fromValue = 0.84
+      fade.toValue = 1
+      fade.duration = 0.14
+      fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+      host.layer?.add(fade, forKey: Self.fadeKey)
     }
   }
-}
-
-private final class NoninteractiveSnapshot: NSImageView {
-  override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
