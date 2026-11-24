@@ -141,9 +141,9 @@ private struct TodayTasksView: View {
   let onHeight: (CGFloat?) -> Void
   private static let headingLabelHeight: CGFloat = 28
   private static let headingInset: CGFloat = 6
-  private static let dividerHeight: CGFloat = 1
+  private static let bottomInset: CGFloat = 8
   private static var headingHeight: CGFloat {
-    headingLabelHeight + 2 * headingInset + dividerHeight
+    headingLabelHeight + 2 * headingInset
   }
 
   private var isEditing: Bool { presentation.isEditing(in: vault) }
@@ -153,31 +153,23 @@ private struct TodayTasksView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      Text("Today Tasks")
-        .font(.system(size: PulseDesignTokens.footnote, weight: .semibold))
-        .frame(maxWidth: .infinity, minHeight: Self.headingLabelHeight, alignment: .leading)
-        .padding(.horizontal, PulseDesignTokens.contentInset)
-        .padding(.vertical, Self.headingInset)
-        .accessibilityAddTraits(.isHeader)
-        .accessibilityIdentifier("todayTasksHeading")
-      Divider().frame(height: Self.dividerHeight).padding(
-        .horizontal, PulseDesignTokens.contentInset)
+      heading
       ScrollViewReader { proxy in
         ScrollView {
           if bridge.tasks.count + bridge.failures.count >= 12 {
             LazyVStack(alignment: .leading, spacing: 3) { rows }
-              .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
+              .padding(TaskPaper.contentInset)
               .frame(maxWidth: .infinity, alignment: .leading)
               .onAppear { onHeight(nil) }
           } else {
             VStack(alignment: .leading, spacing: 3) { rows }
-              .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
+              .padding(TaskPaper.contentInset)
               .frame(maxWidth: .infinity, alignment: .leading)
               .background {
                 GeometryReader { geometry in
                   Color.clear
-                    .onAppear { onHeight(Self.headingHeight + geometry.size.height) }
-                    .onChange(of: geometry.size.height) { onHeight(Self.headingHeight + $0) }
+                    .onAppear { reportContentHeight(geometry.size.height) }
+                    .onChange(of: geometry.size.height, perform: reportContentHeight)
                 }
               }
           }
@@ -192,6 +184,9 @@ private struct TodayTasksView: View {
         }
       }
       .accessibilityIdentifier("obsidianTodayTaskList")
+      .modifier(TaskPaper(folded: true))
+      .padding(.horizontal, PulseDesignTokens.contentInset)
+      .padding(.bottom, Self.bottomInset)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .onAppear { onEditingChanged(isEditing) }
@@ -200,6 +195,32 @@ private struct TodayTasksView: View {
       presentation.setFocus(false, in: vault)
       onEditingChanged(false)
     }
+  }
+
+  private var heading: some View {
+    let completed = bridge.tasks.count(where: \.completed)
+    return HStack(spacing: 8) {
+      Text("Today Tasks")
+        .font(.system(size: 18, weight: .bold))
+        .foregroundStyle(PulseDesignTokens.ink)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("todayTasksHeading")
+      Spacer(minLength: 4)
+      HStack(spacing: 4) {
+        Text("Completed")
+        Text(verbatim: "\(completed)/\(bridge.tasks.count)").monospacedDigit()
+      }
+      .font(.system(size: PulseDesignTokens.caption, weight: .medium))
+      .foregroundStyle(PulseDesignTokens.muted)
+      .accessibilityElement(children: .combine)
+    }
+    .frame(height: Self.headingLabelHeight)
+    .padding(.horizontal, PulseDesignTokens.contentInset)
+    .padding(.vertical, Self.headingInset)
+  }
+
+  private func reportContentHeight(_ height: CGFloat) {
+    onHeight(Self.headingHeight + height + Self.bottomInset)
   }
 
   @ViewBuilder private var rows: some View {
@@ -223,7 +244,7 @@ private struct TodayTasksView: View {
     }
     if bridge.connection == .connected && bridge.tasks.isEmpty {
       Text("No tasks yet").font(.system(size: PulseDesignTokens.footnote))
-        .foregroundStyle(.secondary).padding(.vertical, 12)
+        .foregroundStyle(PulseDesignTokens.muted).padding(.vertical, 12)
     }
     ForEach(bridge.tasks) { task in
       TodayTaskRow(
@@ -248,7 +269,7 @@ private struct TodayTasksView: View {
         }
       }
       .font(.system(size: PulseDesignTokens.caption))
-      .foregroundStyle(.secondary)
+      .foregroundStyle(PulseDesignTokens.muted)
       .padding(.vertical, 5)
       .accessibilityIdentifier("todayTasksSyncStatus")
     }
@@ -295,17 +316,10 @@ private struct TodayTasksView: View {
       .padding(.vertical, 6)
       .onExitCommand { presentation.collapseDraft(in: vault) }
     } else {
-      Button {
+      TaskPaperAddButton(identifier: "addTodayTaskButton") {
         presentation.beginDraft(in: vault)
-      } label: {
-        Label("Add task", systemImage: "plus")
-          .font(.system(size: PulseDesignTokens.footnote, weight: .medium))
-          .foregroundStyle(.secondary)
       }
-      .buttonStyle(PulseFooterActionStyle()).disabled(!canQueue)
-      .accessibilityIdentifier("addTodayTaskButton")
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.top, 4)
+      .disabled(!canQueue)
     }
   }
 
@@ -334,9 +348,7 @@ private struct TodayTaskRow: View {
   var body: some View {
     HStack(alignment: .top, spacing: 6) {
       Button(action: onToggle) {
-        Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
-          .font(.system(size: 15, weight: .medium))
-          .foregroundStyle(task.completed ? PulseDesignTokens.accent : Color.secondary)
+        TaskCheckboxGlyph(completed: task.completed)
       }
       .buttonStyle(PulseIconButtonStyle()).disabled(!isEditable)
       .help(PulseLocalization.string(task.completed ? "Mark incomplete" : "Mark complete"))
@@ -350,8 +362,8 @@ private struct TodayTaskRow: View {
       )
       .accessibilityIdentifier("todayTaskCheckbox.\(task.id)")
       Text(task.title).font(.system(size: 15))
-        .foregroundStyle(task.completed ? Color.secondary : Color.primary)
-        .strikethrough(task.completed, color: Color(nsColor: .tertiaryLabelColor))
+        .foregroundStyle(task.completed ? PulseDesignTokens.muted : PulseDesignTokens.ink)
+        .strikethrough(task.completed, color: PulseDesignTokens.muted)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .animation(
@@ -385,6 +397,115 @@ private struct TodayTaskRow: View {
       )
       .disabled(!isEditable)
     }
+  }
+}
+
+struct TaskPaper: ViewModifier {
+  static let contentInset: CGFloat = 10
+  var folded = false
+
+  func body(content: Content) -> some View {
+    let outline = TaskPaperOutline(folded: folded)
+    content
+      .background(PulseDesignTokens.taskPaper, in: outline)
+      .clipShape(outline)
+      .overlay(alignment: .topTrailing) {
+        if folded {
+          TaskPaperCorner()
+            .fill(PulseDesignTokens.taskFold)
+            .frame(width: TaskPaperOutline.foldSize, height: TaskPaperOutline.foldSize)
+            .accessibilityHidden(true)
+            .allowsHitTesting(false)
+        }
+      }
+      .overlay {
+        outline.stroke(PulseDesignTokens.border, lineWidth: 1)
+          .allowsHitTesting(false)
+      }
+  }
+}
+
+private struct TaskPaperOutline: Shape {
+  static let foldSize: CGFloat = 14
+  let folded: Bool
+
+  func path(in rect: CGRect) -> Path {
+    let radius = PulseDesignTokens.cornerLarge
+    guard folded else { return RoundedRectangle(cornerRadius: radius).path(in: rect) }
+    let fold = min(Self.foldSize, rect.width, rect.height)
+    let small = min(4, rect.width / 2, rect.height / 2)
+    let bottom = min(radius, rect.width / 2, max(0, rect.height - fold))
+    return Path { path in
+      path.move(to: CGPoint(x: rect.minX + small, y: rect.minY))
+      path.addLine(to: CGPoint(x: rect.maxX - fold, y: rect.minY))
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + fold))
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottom))
+      path.addQuadCurve(
+        to: CGPoint(x: rect.maxX - bottom, y: rect.maxY),
+        control: CGPoint(x: rect.maxX, y: rect.maxY))
+      path.addLine(to: CGPoint(x: rect.minX + small, y: rect.maxY))
+      path.addQuadCurve(
+        to: CGPoint(x: rect.minX, y: rect.maxY - small),
+        control: CGPoint(x: rect.minX, y: rect.maxY))
+      path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + small))
+      path.addQuadCurve(
+        to: CGPoint(x: rect.minX + small, y: rect.minY),
+        control: CGPoint(x: rect.minX, y: rect.minY))
+      path.closeSubpath()
+    }
+  }
+}
+
+private struct TaskPaperCorner: Shape {
+  func path(in rect: CGRect) -> Path {
+    Path { path in
+      path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+      path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+      path.closeSubpath()
+    }
+  }
+}
+
+struct TaskPaperAddButton: View {
+  let identifier: String
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: "plus")
+        .font(.system(size: 14, weight: .medium))
+        .foregroundStyle(PulseDesignTokens.ink)
+    }
+    .buttonStyle(PulseIconButtonStyle(circular: true))
+    .help("Add task")
+    .accessibilityLabel("Add task")
+    .accessibilityIdentifier(identifier)
+    .frame(maxWidth: .infinity)
+    .padding(.top, 4)
+  }
+}
+
+struct TaskCheckboxGlyph: View {
+  let completed: Bool
+  @Environment(\.pulseReduceMotion) private var reduceMotion
+
+  var body: some View {
+    let square = RoundedRectangle(cornerRadius: 3)
+    ZStack {
+      square.strokeBorder(PulseDesignTokens.ink, lineWidth: 1.25).opacity(completed ? 0 : 1)
+      square.fill(PulseDesignTokens.success)
+        .overlay {
+          Image(systemName: "checkmark")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(PulseDesignTokens.background)
+        }
+        .scaleEffect(reduceMotion || completed ? 1 : 0.9)
+        .opacity(completed ? 1 : 0)
+    }
+    .frame(width: 16, height: 16)
+    .animation(reduceMotion ? nil : PulseDesignTokens.selectionAnimation, value: completed)
+    .accessibilityHidden(true)
   }
 }
 

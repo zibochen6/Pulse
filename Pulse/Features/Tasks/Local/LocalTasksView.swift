@@ -505,14 +505,12 @@ struct LocalTasksView: View {
     VStack(spacing: 0) {
       tagBar(controller.document?.tags ?? [])
         .disabled(controller.document == nil)
-      Divider().padding(.horizontal, PulseDesignTokens.contentInset)
       switch controller.initialLoadState {
       case .loaded:
         if presentation.tagIntent != nil {
           LocalTagEntry(controller: controller, presentation: presentation)
-          Divider().padding(.horizontal, PulseDesignTokens.contentInset)
         }
-        errorBanner
+        errorBanner.padding(.horizontal, PulseDesignTokens.contentInset)
         taskScrollView
       case .loading:
         initialTaskContent {
@@ -534,8 +532,11 @@ struct LocalTasksView: View {
     -> some View
   {
     content()
+      .padding(TaskPaper.contentInset)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .modifier(TaskPaper())
       .padding(.horizontal, PulseDesignTokens.contentInset)
-      .padding(.vertical, 16)
+      .padding(.vertical, 8)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
 
@@ -547,7 +548,8 @@ struct LocalTasksView: View {
           let tasks = controller.tasks(matching: filter)
           if tasks.isEmpty {
             Text(LocalizedStringKey(filter == .untagged ? "No tasks yet" : "No tasks in this tag"))
-              .font(.system(size: 13)).foregroundStyle(.secondary).padding(.vertical, 12)
+              .font(.system(size: PulseDesignTokens.footnote))
+              .foregroundStyle(PulseDesignTokens.muted).padding(.vertical, 12)
           }
           ForEach(tasks) { task in
             taskRow(task).id(task.id)
@@ -555,8 +557,11 @@ struct LocalTasksView: View {
           composerSlot.id(filter)
           Color.clear.frame(height: 1).id("taskComposerEnd")
         }
-        .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
+        .padding(TaskPaper.contentInset)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(TaskPaper())
+        .padding(.horizontal, PulseDesignTokens.contentInset)
+        .padding(.vertical, 8)
       }
       .accessibilityIdentifier("localTaskList")
       .onAppear {
@@ -585,35 +590,15 @@ struct LocalTasksView: View {
           // cannot send its old text into the next editing session.
           .transition(.asymmetric(insertion: .opacity, removal: .identity))
       } else {
-        addTaskEntry.transition(.identity)
+        TaskPaperAddButton(identifier: "addLocalTaskButton") {
+          presentation.beginAddingTask()
+        }
+        .transition(.identity)
       }
     }
     .animation(
       reduceMotion ? nil : PulseDesignTokens.composerAnimation,
       value: presentation.isComposerExpanded)
-  }
-
-  /// The list's closing entry point. Text-first and left-aligned so it reads as
-  /// an invitation in the list rather than as a floating icon parked in the
-  /// middle of an otherwise empty column.
-  private var addTaskEntry: some View {
-    Button {
-      presentation.beginAddingTask()
-    } label: {
-      HStack(spacing: 6) {
-        Image(systemName: "plus")
-          .font(.system(size: PulseDesignTokens.caption, weight: .semibold))
-        Text("Add task")
-          .font(.system(size: PulseDesignTokens.footnote, weight: .medium))
-      }
-      .foregroundStyle(.secondary)
-    }
-    .buttonStyle(PulseFooterActionStyle())
-    .help("Add task")
-    .accessibilityLabel("Add task")
-    .accessibilityIdentifier("addLocalTaskButton")
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.top, 4)
   }
 
   private func scrollToComposer(using proxy: ScrollViewProxy) {
@@ -768,8 +753,7 @@ struct LocalTasksView: View {
     return HStack(spacing: 0) {
       PulsePillTab(
         title: tag.name, isSelected: selected,
-        action: { presentation.selectedFilter = .tag(tag.id) },
-        tint: PulseDesignTokens.tagColor(for: tag.id)
+        action: { presentation.selectedFilter = .tag(tag.id) }
       )
       .background(tagMidpointReporter { TagBarGeometry(tagMidXByID: [tag.id: $0]) })
       .overlay {
@@ -1333,7 +1317,8 @@ private struct LocalTaskEditor: View {
           .keyboardShortcut(.cancelAction).accessibilityIdentifier("cancelLocalTaskEditButton")
           .frame(width: 60, alignment: .leading)
         Spacer(minLength: 0)
-        Text("Edit task").font(.system(size: 14, weight: .semibold))
+        Text("Edit task").font(.system(size: 18, weight: .bold))
+          .foregroundStyle(PulseDesignTokens.ink)
         Spacer(minLength: 0)
         HStack(spacing: 4) {
           if isSubmitting { ProgressView().controlSize(.mini) }
@@ -1346,14 +1331,15 @@ private struct LocalTaskEditor: View {
       }
       .buttonStyle(.borderless).font(.system(size: 13))
       .padding(.horizontal, 16).padding(.vertical, 12)
-      Divider()
+      Rectangle().fill(PulseDesignTokens.border).frame(height: 1)
+        .padding(.horizontal, PulseDesignTokens.contentInset)
       ScrollView {
         VStack(alignment: .leading, spacing: 20) {
           TextEditor(text: $draft.text).font(.system(size: 15))
             .scrollContentBackground(.hidden)
-            .frame(height: 148).padding(10)
-            .background(Color.primary.opacity(0.035))
-            .clipShape(RoundedRectangle(cornerRadius: 9))
+            .foregroundStyle(PulseDesignTokens.ink)
+            .frame(height: 148).padding(TaskPaper.contentInset)
+            .modifier(TaskPaper())
             .focused($textFocused).accessibilityLabel("Task text")
             .accessibilityIdentifier("localTaskTextField")
           LocalTaskOptions(controller: controller, draft: $draft)
@@ -1412,30 +1398,10 @@ struct LocalTaskRow: View {
   var body: some View {
     HStack(alignment: .top, spacing: 2) {
       Button(action: onToggle) {
-        // One structure, never a swap. The pending spinner used to *replace*
-        // the check control, which rebuilt the button mid-save and dropped the
-        // completion animation that was about to run. Now the circle and check
-        // stay mounted, the spinner only covers them while the write is in
-        // flight, and nothing about the button's identity changes.
+        // Keep the check mounted under the pending overlay so the completed
+        // state animates on the same control when the write finishes.
         ZStack {
-          ZStack {
-            Image(systemName: "circle")
-              .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
-              .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-            // The check pops in instead of swapping glyphs, which is what
-            // makes a completion feel acknowledged rather than merely
-            // updated. Both symbols stay mounted so the static appearance is
-            // unchanged; only the transition differs.
-            Image(systemName: "checkmark.circle.fill")
-              .font(.system(size: 15, weight: .medium)).symbolRenderingMode(.hierarchical)
-              .foregroundStyle(PulseDesignTokens.accent)
-              .scaleEffect(reduceMotion ? 1 : (task.completed ? 1 : 0.9))
-              .opacity(task.completed ? 1 : 0)
-          }
-          .animation(
-            reduceMotion ? nil : PulseDesignTokens.selectionAnimation, value: task.completed
-          )
-          .opacity(isPending ? 0 : 1)
+          TaskCheckboxGlyph(completed: task.completed).opacity(isPending ? 0 : 1)
           if isPending {
             if reduceMotion {
               Image(systemName: "clock").foregroundStyle(.secondary)
@@ -1464,10 +1430,8 @@ struct LocalTaskRow: View {
       Button(action: onEdit) {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
           Text(task.text).font(.system(size: 15))
-            .foregroundStyle(
-              task.completed ? Color(nsColor: .secondaryLabelColor).opacity(0.7) : Color.primary
-            )
-            .strikethrough(task.completed, color: Color(nsColor: .tertiaryLabelColor))
+            .foregroundStyle(task.completed ? PulseDesignTokens.muted : PulseDesignTokens.ink)
+            .strikethrough(task.completed, color: PulseDesignTokens.muted)
             .animation(
               reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: task.completed
             )

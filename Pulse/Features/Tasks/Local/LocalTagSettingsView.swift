@@ -29,7 +29,7 @@ struct LocalTagSettingsView: View {
             .textFieldStyle(.plain).accessibilityIdentifier("searchLocalTagsField")
         }
         .padding(10)
-        .background(PulseDesignTokens.secondarySurface, in: RoundedRectangle(cornerRadius: 10))
+        .pulsePaper(PulseDesignTokens.secondarySurface)
         Button {
           controller.dismissError()
           presentation.beginCreatingTag()
@@ -62,6 +62,7 @@ struct LocalTagSettingsView: View {
               }
             }
             .padding(12)
+            .pulsePaper(PulseDesignTokens.taskPaper)
           }
           if controller.isLoading {
             ProgressView("Loading tags").font(.system(size: 12)).padding()
@@ -78,7 +79,7 @@ struct LocalTagSettingsView: View {
       .accessibilityIdentifier("localTagManagerList")
       if let message = controller.errorMessage {
         HStack {
-          Text(message).font(.system(size: 12)).foregroundStyle(.red)
+          Text(message).font(.system(size: 12)).foregroundStyle(PulseDesignTokens.destructive)
             .fixedSize(horizontal: false, vertical: true)
           Spacer(minLength: 0)
           Button("Dismiss") { controller.dismissError() }
@@ -104,10 +105,12 @@ struct LocalTagSettingsView: View {
     let index = tags.firstIndex(where: { $0.id == tag.id }) ?? 0
     let count = controller.document?.tasks.filter { $0.tagIDs.contains(tag.id) }.count ?? 0
     return HStack(alignment: .center, spacing: 10) {
-      Image(systemName: "tag.fill")
+      Image(systemName: "tag")
         .font(.system(size: 13))
         .foregroundStyle(PulseDesignTokens.tagColor(for: tag.id))
-        .frame(width: 24, height: 28)
+        .frame(width: 28, height: 28)
+        .background(PulseDesignTokens.secondarySurface, in: Circle())
+        .accessibilityHidden(true)
       VStack(alignment: .leading, spacing: 4) {
         if let onSelectTag {
           Button {
@@ -147,10 +150,7 @@ struct LocalTagSettingsView: View {
       .accessibilityLabel("Actions for \(tag.name)")
     }
     .padding(12)
-    .background(PulseDesignTokens.surface, in: RoundedRectangle(cornerRadius: 12))
-    .overlay {
-      RoundedRectangle(cornerRadius: 12).stroke(PulseDesignTokens.border, lineWidth: 0.5)
-    }
+    .pulsePaper()
     .disabled(controller.isSaving || presentation.tagIntent != nil)
     .accessibilityIdentifier("managedLocalTag.\(tag.id.uuidString)")
   }

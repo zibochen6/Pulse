@@ -40,29 +40,32 @@ struct PulseErrorBanner<Actions: View>: View {
 /// text buttons. State lives in a nested View so `@State`/`@Environment` are
 /// resolved correctly (same pattern as PulseActionButtonStyle.ActionBody).
 struct PulseIconButtonStyle: ButtonStyle {
+  var circular = false
+
   func makeBody(configuration: Configuration) -> some View {
-    IconButtonBody(configuration: configuration)
+    IconButtonBody(configuration: configuration, circular: circular)
   }
 
   private struct IconButtonBody: View {
     let configuration: ButtonStyleConfiguration
+    let circular: Bool
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.pulseReduceMotion) private var reduceMotion
     @State private var isHovered = false
     @FocusState private var focused: Bool
 
+    private var radius: CGFloat { circular ? 14 : PulseDesignTokens.cornerSmall }
+
     var body: some View {
       configuration.label
         .frame(width: 28, height: 28)
-        .contentShape(RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
+        .contentShape(RoundedRectangle(cornerRadius: radius))
         .background(
           fill(configuration.isPressed, hovered: isHovered),
-          in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
+          in: RoundedRectangle(cornerRadius: radius)
         )
         .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
-        .pulseFocusAffordance(
-          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
-        )
+        .pulseFocusAffordance(focused, shape: .roundedRectangle(cornerRadius: radius))
         // Own the keyboard focus so hover/press fills can react to it, and
         // suppress AppKit's square ring in favour of the rounded affordance.
         .focusable(true)
@@ -75,10 +78,43 @@ struct PulseIconButtonStyle: ButtonStyle {
     }
 
     private func fill(_ pressed: Bool, hovered: Bool) -> Color {
-      guard isEnabled else { return .clear }
-      if pressed { return PulseDesignTokens.pressedFill }
-      if hovered { return PulseDesignTokens.hoverFill }
-      return .clear
+      if isEnabled && pressed { return PulseDesignTokens.pressedFill }
+      if isEnabled && hovered {
+        return circular ? PulseDesignTokens.pressedFill : PulseDesignTokens.hoverFill
+      }
+      return circular ? PulseDesignTokens.hoverFill : .clear
+    }
+  }
+}
+
+struct PulseSidebarButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    SidebarButton(configuration: configuration)
+  }
+
+  private struct SidebarButton: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.pulseReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+    @FocusState private var isFocused: Bool
+
+    private let radius = PulseDesignTokens.cornerMedium
+
+    var body: some View {
+      configuration.label
+        .padding(.vertical, 3)
+        .background(
+          configuration.isPressed
+            ? PulseDesignTokens.pressedFill : (isHovered ? PulseDesignTokens.hoverFill : .clear),
+          in: RoundedRectangle(cornerRadius: radius)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: radius))
+        .pulseFocusAffordance(isFocused, shape: .roundedRectangle(cornerRadius: radius))
+        .focusable(true)
+        .focused($isFocused)
+        .pulseDisableSystemFocusRing()
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
     }
   }
 }
@@ -88,20 +124,19 @@ struct PulsePillTab: View {
   let title: String
   let isSelected: Bool
   let action: () -> Void
-  var tint: Color = PulseDesignTokens.accent
 
   var body: some View {
     Button(action: action) {
       Text(title)
         .font(.system(size: PulseDesignTokens.footnote, weight: isSelected ? .semibold : .regular))
-        .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+        .foregroundStyle(isSelected ? PulseDesignTokens.ink : PulseDesignTokens.muted)
         .lineLimit(1)
         .truncationMode(.tail)
         .frame(maxWidth: 140)
         .padding(.horizontal, 10)
         .frame(height: 28)
     }
-    .buttonStyle(PulsePillTabStyle(isSelected: isSelected, tint: tint))
+    .buttonStyle(PulsePillTabStyle(isSelected: isSelected))
     .help(title)
     .accessibilityValue(PulseLocalization.string(isSelected ? "Selected" : "Not selected"))
   }
@@ -111,15 +146,13 @@ struct PulsePillTab: View {
 /// which a plain-styled Button never exposes to the view around it.
 private struct PulsePillTabStyle: ButtonStyle {
   let isSelected: Bool
-  let tint: Color
 
   func makeBody(configuration: Configuration) -> some View {
-    PillBody(isSelected: isSelected, tint: tint, configuration: configuration)
+    PillBody(isSelected: isSelected, configuration: configuration)
   }
 
   private struct PillBody: View {
     let isSelected: Bool
-    let tint: Color
     let configuration: ButtonStyleConfiguration
     @Environment(\.pulseReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -145,8 +178,10 @@ private struct PulsePillTabStyle: ButtonStyle {
     }
 
     private var fill: Color {
-      if configuration.isPressed { return PulseDesignTokens.pressedFill }
-      if isSelected { return tint.opacity(0.15) }
+      if configuration.isPressed {
+        return isSelected ? PulseDesignTokens.primaryActionPressed : PulseDesignTokens.pressedFill
+      }
+      if isSelected { return PulseDesignTokens.selectedFill }
       return isHovered ? PulseDesignTokens.hoverFill : .clear
     }
   }
@@ -204,34 +239,32 @@ struct PulseRowButtonStyle: ButtonStyle {
 /// popover with no acknowledgement at all; it now reacts exactly like the icon
 /// buttons next to it (short, no bounce, shape-matched focus ring).
 struct PulseProviderStatusStyle: ButtonStyle {
+  let paper: Color
+
   func makeBody(configuration: Configuration) -> some View {
-    StatusBody(configuration: configuration)
+    StatusBody(configuration: configuration, paper: paper)
   }
 
   private struct StatusBody: View {
     let configuration: ButtonStyleConfiguration
+    let paper: Color
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.pulseReduceMotion) private var reduceMotion
     @State private var isHovered = false
     @FocusState private var focused: Bool
 
+    private let radius = PulseDesignTokens.cornerMedium
+
     var body: some View {
       configuration.label
-        .background(
-          fill(configuration.isPressed),
-          in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge)
-        )
         .overlay {
-          RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge)
-            .strokeBorder(
-              isHovered
-                ? PulseDesignTokens.accent.opacity(0.25)
-                : PulseDesignTokens.border.opacity(0.55), lineWidth: 0.7)
+          RoundedRectangle(cornerRadius: radius)
+            .fill(feedback)
+            .allowsHitTesting(false)
         }
+        .pulsePaper(paper, radius: radius)
         .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
-        .pulseFocusAffordance(
-          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge)
-        )
+        .pulseFocusAffordance(focused, shape: .roundedRectangle(cornerRadius: radius))
         .focusable(true)
         .focused($focused)
         .pulseDisableSystemFocusRing()
@@ -243,59 +276,9 @@ struct PulseProviderStatusStyle: ButtonStyle {
         .animation(reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: focused)
     }
 
-    private func fill(_ pressed: Bool) -> Color {
+    private var feedback: Color {
       guard isEnabled else { return .clear }
-      if pressed { return PulseDesignTokens.pressedFill }
-      return isHovered ? PulseDesignTokens.secondarySurface : PulseDesignTokens.surface
-    }
-  }
-}
-
-/// The list footer entry ("＋ Add task"). Text-first and left-aligned so it
-/// reads as part of the list instead of a floating icon, with the same
-/// hover/press/focus language as every other surface.
-struct PulseFooterActionStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    FooterBody(configuration: configuration)
-  }
-
-  private struct FooterBody: View {
-    let configuration: ButtonStyleConfiguration
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.pulseReduceMotion) private var reduceMotion
-    @Environment(\.pulsePopoverFocus) private var popoverFocus
-    @State private var isHovered = false
-    @FocusState private var focused: Bool
-
-    var body: some View {
-      configuration.label
-        .padding(.horizontal, 6)
-        .frame(height: PulseDesignTokens.taskRowHeight)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .background(
-          fill(configuration.isPressed),
-          in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerMedium)
-        )
-        .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
-        .pulseFocusAffordance(
-          focused, shape: .roundedRectangle(cornerRadius: PulseDesignTokens.cornerMedium)
-        )
-        .focusable(true)
-        .focused($focused)
-        .pulseDisableSystemFocusRing()
-        .onHover { isHovered = $0 }
-        .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
-        .animation(
-          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed
-        )
-        .animation(reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: focused)
-    }
-
-    private func fill(_ pressed: Bool) -> Color {
-      guard isEnabled else { return .clear }
-      if pressed { return PulseDesignTokens.pressedFill }
-      if focused && popoverFocus == nil { return PulseDesignTokens.focusFill }
+      if configuration.isPressed { return PulseDesignTokens.pressedFill }
       return isHovered ? PulseDesignTokens.hoverFill : .clear
     }
   }

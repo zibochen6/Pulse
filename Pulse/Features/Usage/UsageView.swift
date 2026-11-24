@@ -9,11 +9,9 @@ struct UsageView: View {
   var provider: ProviderID? = nil
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 20) {
+    VStack(alignment: .leading, spacing: 12) {
       if provider == nil || provider == .codex { codexContent }
-      if provider == nil { Divider() }
       if provider == nil || provider == .vip { vipContent }
-      if provider == nil { Divider() }
       if provider == nil || provider == .deepSeek { deepSeekContent }
       if provider == .antigravity { antigravityContent }
       Divider()
@@ -47,7 +45,7 @@ struct UsageView: View {
       HStack(spacing: 8) {
         icon()
         Text(provider.name)
-          .font(.subheadline.weight(.semibold))
+          .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
         Spacer()
         UsageRefreshButton(
           refreshStartedAt: usage.refreshStartedAt, refreshTitle: refreshTitle,
@@ -65,7 +63,7 @@ struct UsageView: View {
           .fixedSize(horizontal: false, vertical: true)
       case .failure(let message):
         Label(message, systemImage: "exclamationmark.triangle")
-          .foregroundStyle(.red)
+          .foregroundStyle(PulseDesignTokens.destructive)
           .fixedSize(horizontal: false, vertical: true)
       case .success(let snapshot):
         ForEach(Array(snapshot.quotaWindows.enumerated()), id: \.offset) { index, window in
@@ -75,6 +73,8 @@ struct UsageView: View {
         updated(at: snapshot.fetchedAt)
       }
     }
+    .padding(14)
+    .pulsePaper(provider.dashboardPaper)
   }
 
   private var vipContent: some View {
@@ -82,7 +82,7 @@ struct UsageView: View {
       HStack(spacing: 8) {
         VIPProviderIcon(size: 16)
         Text("88VIP")
-          .font(.subheadline.weight(.semibold))
+          .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
         Spacer()
         UsageRefreshButton(
           refreshStartedAt: vipUsage.refreshStartedAt, refreshTitle: "Refresh 88VIP balance",
@@ -100,7 +100,7 @@ struct UsageView: View {
           .fixedSize(horizontal: false, vertical: true)
       case .failure(let message):
         Label(message, systemImage: "exclamationmark.triangle")
-          .foregroundStyle(.red)
+          .foregroundStyle(PulseDesignTokens.destructive)
           .fixedSize(horizontal: false, vertical: true)
       case .success(let snapshot):
         if snapshot.metrics.contains(.unlimited) {
@@ -133,13 +133,15 @@ struct UsageView: View {
         updated(at: snapshot.fetchedAt)
       }
     }
+    .padding(14)
+    .pulsePaper(ProviderID.vip.dashboardPaper)
   }
 
   private var deepSeekContent: some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 8) {
         DeepSeekProviderIcon(size: 16)
-        Text("DeepSeek").font(.subheadline.weight(.semibold))
+        Text("DeepSeek").font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
         Spacer()
         UsageRefreshButton(
           refreshStartedAt: deepSeekUsage.refreshStartedAt,
@@ -160,7 +162,7 @@ struct UsageView: View {
           .accessibilityIdentifier("configureDeepSeekButton")
       case .failure(let message):
         Label(message, systemImage: "exclamationmark.triangle")
-          .foregroundStyle(.red)
+          .foregroundStyle(PulseDesignTokens.destructive)
           .fixedSize(horizontal: false, vertical: true)
       case .success(let snapshot):
         ForEach(snapshot.balances, id: \.currency) { balance in
@@ -171,6 +173,8 @@ struct UsageView: View {
         updated(at: snapshot.fetchedAt)
       }
     }
+    .padding(14)
+    .pulsePaper(ProviderID.deepSeek.dashboardPaper)
   }
 
   private func quotaRow(_ window: QuotaWindow) -> some View {
@@ -182,7 +186,7 @@ struct UsageView: View {
           .fixedSize(horizontal: false, vertical: true)
         Spacer(minLength: 8)
         Text(window.remainingPercent.map { "\($0)%" } ?? "--")
-          .font(.system(size: 17, weight: .semibold, design: .rounded))
+          .font(.system(size: 17, weight: .semibold))
           .monospacedDigit()
           .layoutPriority(1)
       }
@@ -220,7 +224,7 @@ struct UsageView: View {
   private func updated(at date: Date) -> some View {
     Text("Updated \(date.formatted(date: .omitted, time: .shortened))")
       .font(.system(size: 12))
-      .foregroundStyle(.tertiary)
+      .foregroundStyle(PulseDesignTokens.muted)
   }
 
   private enum VIPAmountKind {

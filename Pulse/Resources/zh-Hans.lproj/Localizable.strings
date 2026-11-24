@@ -303,6 +303,7 @@
 "Restore the last deleted list and its tasks (%lld available)" = "恢复最近删除的列表及其任务（还可撤销 %lld 项）";
 "This list changed since it was deleted. Resolve the conflict before trying Undo again." = "此列表自删除后已发生变化。请先解决冲突，再重试撤销。";
 "Continue current edit" = "继续当前编辑";
+"Focus" = "专注";
 "Focus 30 min" = "专注 30 分钟";
 "%@ · Cancel" = "%@ · 取消";
 "You are editing another task. Save or cancel that edit first; this list’s draft will be kept." = "你正在编辑另一项任务。请先保存或取消当前编辑；此列表的草稿会保留。";

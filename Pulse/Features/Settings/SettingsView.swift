@@ -67,9 +67,14 @@ struct SettingsView: View {
       Rectangle().fill(PulseDesignTokens.border).frame(width: 1)
       VStack(alignment: .leading, spacing: 0) {
         VStack(alignment: .leading, spacing: 6) {
-          Text(presentation.destination.title).font(.system(size: 24, weight: .semibold))
-          Text(subtitle).font(.system(size: 13)).foregroundStyle(.secondary)
+          Text(presentation.destination.title)
+            .font(.system(size: PulseDesignTokens.displayTitle, weight: .bold))
+            .tracking(-0.6)
+            .accessibilityAddTraits(.isHeader)
+          Text(subtitle).font(.system(size: 13)).foregroundStyle(PulseDesignTokens.muted)
             .fixedSize(horizontal: false, vertical: true)
+          Rectangle().fill(PulseDesignTokens.border).frame(height: 1)
+            .padding(.top, 6)
         }
         .padding(24)
         if presentation.destination == .tasks {
@@ -108,6 +113,7 @@ struct SettingsView: View {
       height: SettingsWindowController.contentSize.height
     )
     .background(PulseDesignTokens.background)
+    .foregroundStyle(PulseDesignTokens.ink)
     .tint(PulseDesignTokens.accent)
     .onAppear {
       config.refreshLoginItemStatus()
@@ -123,49 +129,41 @@ struct SettingsView: View {
   }
 
   private var sidebar: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      HStack(spacing: 10) {
-        Image(systemName: "waveform.path").font(.system(size: 20, weight: .semibold))
-          .foregroundStyle(PulseDesignTokens.accent)
-          .frame(width: 36, height: 36)
-          .background(
-            PulseDesignTokens.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-        Text("Pulse").font(.system(size: 20, weight: .semibold))
-      }.padding(.bottom, 24)
+    VStack(spacing: 7) {
+      PulseBrandMark(size: 42).padding(.bottom, 9)
       ForEach(SettingsDestination.allCases) { destination in
+        let selected = presentation.destination == destination
         Button {
           presentation.destination = destination
         } label: {
-          HStack(spacing: 10) {
-            Image(systemName: destination.symbol).frame(width: 18)
+          VStack(spacing: 3) {
+            Image(systemName: destination.symbol)
+              .font(.system(size: 16, weight: .medium))
+              .foregroundStyle(PulseDesignTokens.ink)
+              .frame(width: 36, height: 36)
+              .background(
+                selected ? PulseDesignTokens.selectedFill : PulseDesignTokens.secondarySurface,
+                in: Circle()
+              )
+              .accessibilityHidden(true)
             Text(destination.title)
-            Spacer(minLength: 0)
+              .font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(selected ? PulseDesignTokens.ink : PulseDesignTokens.muted)
+              .multilineTextAlignment(.center)
           }
-          .font(
-            .system(size: 13, weight: presentation.destination == destination ? .semibold : .medium)
-          )
-          .padding(.horizontal, 12).frame(height: 40)
-          .foregroundStyle(
-            presentation.destination == destination ? PulseDesignTokens.accent : Color.primary
-          )
-          .background(
-            presentation.destination == destination
-              ? PulseDesignTokens.accent.opacity(0.12) : .clear,
-            in: RoundedRectangle(cornerRadius: 8))
+          .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(presentation.destination == destination ? .isSelected : [])
+        .buttonStyle(PulseSidebarButtonStyle())
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("settingsCategory.\(destination.rawValue)")
       }
       Spacer()
-      Text("A little more clarity.")
-        .font(.system(size: 12)).foregroundStyle(.secondary).padding(.horizontal, 12)
       Button("Quit Pulse", action: onQuit)
         .buttonStyle(.borderless).font(.system(size: 12))
-        .padding(12).accessibilityIdentifier("quitPulseButton")
+        .padding(.vertical, 8).accessibilityIdentifier("quitPulseButton")
     }
-    .padding(16).frame(width: 168)
-    .background(PulseDesignTokens.secondarySurface)
+    .padding(.horizontal, 8).padding(.vertical, 18).frame(width: 108)
+    .background(PulseDesignTokens.background)
   }
 
   private var subtitle: String {
@@ -416,11 +414,11 @@ struct SettingsView: View {
   }
 }
 
+@MainActor
 private func settingsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
   VStack(alignment: .leading, spacing: 12, content: content)
     .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-    .background(PulseDesignTokens.surface, in: RoundedRectangle(cornerRadius: 12))
-    .overlay(RoundedRectangle(cornerRadius: 12).stroke(PulseDesignTokens.border, lineWidth: 1))
+    .pulsePaper()
 }
 
 @MainActor

@@ -41,10 +41,12 @@ struct PulseActionButtonStyle: ButtonStyle {
     var body: some View {
       configuration.label
         .font(.system(size: PulseDesignTokens.footnote, weight: .medium))
-        .padding(.horizontal, 12)
+        .padding(.horizontal, timerIsRunning == nil ? 12 : 8)
         .padding(.vertical, 7)
         .frame(minHeight: 32)
-        .foregroundStyle(isPrimary ? Color.white : (isDestructive ? tint : Color.primary))
+        .foregroundStyle(
+          isPrimary ? PulseDesignTokens.actionInk : (isDestructive ? tint : PulseDesignTokens.ink)
+        )
         .background(background, in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
         .overlay {
           RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)

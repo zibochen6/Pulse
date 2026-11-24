@@ -8,7 +8,7 @@ struct AIStatusSummary: View {
 
   var body: some View {
     ProviderStatusButton(
-      title: title, providerName: "Codex",
+      title: title, provider: .codex,
       identifier: "openUsageButton", onOpenUsage: onOpenUsage
     ) { CodexProviderIcon(size: 16) }
   }
@@ -26,7 +26,7 @@ struct AntigravityStatusSummary: View {
 
   var body: some View {
     ProviderStatusButton(
-      title: Self.title(for: state), providerName: ProviderID.antigravity.name,
+      title: Self.title(for: state), provider: .antigravity,
       identifier: "openAntigravityUsageButton", onOpenUsage: onOpenUsage
     ) { AntigravityProviderIcon(size: 16) }
   }

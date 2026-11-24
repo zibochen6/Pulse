@@ -33,14 +33,14 @@ there is no account, import, source selector, database or network sync.
 
 ## Fast entry and editing
 
-- A left-aligned **+ Add task** row follows all task rows inside the scrolling
-  list. It expands inline entry in place and focuses the
+- A round **+** button sits at the center of the checklist footer, below all
+  task rows. It expands inline entry in place and focuses the
   destination-labelled input. Enter saves; confirmed success clears and collapses
-  back to the **+ Add task** row.
+  back to the **+** button.
   Failure preserves input for retry. Chinese IME candidate confirmation must
   not submit, and empty/whitespace-only titles cannot be submitted.
 - Esc or the collapse control hides entry without discarding the draft. Click
-  **+ Add task** again to continue. New empty tags select their list and open entry.
+  **+** again to continue. New empty tags select their list and open entry.
 - Creation options are disclosed on demand. The list menu offers **New tag…**;
   only choosing it reveals name entry. Both creation and editing can create and
   select one new tag, and support **Repeat daily**.

@@ -1,4 +1,5 @@
-import Foundation
+import AppKit
+import SwiftUI
 import XCTest
 
 @testable import Pulse
@@ -228,6 +229,126 @@ final class TodayTaskBridgeTests: XCTestCase {
     let realVault = TodayBridgeVault(canonicalURL: try XCTUnwrap(bridge.vaultURL))
     XCTAssertFalse(try fixture.client(realVault).enabled)
     XCTAssertEqual(try fixture.client(realVault).operations.count, 1)
+  }
+
+  func testTodayTaskPaperMeasuresShortListsAndKeepsLongListComposerReachable() async throws {
+    let fixture = try fixture()
+    let name = "PulseTodayRendering.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    let bridge = TodayTaskBridge(defaults: defaults, bridgeRoot: fixture.root, now: { fixture.now })
+    try await bridge.connect(to: fixture.makeVault("Today UI"))
+    let vault = TodayBridgeVault(canonicalURL: try XCTUnwrap(bridge.vaultURL))
+    let completed = TodayBridgeRecordedTask(
+      id: fixture.project.id, title: "检查参考看板", completed: true, source: .project)
+    try fixture.publish(vault, tasks: [fixture.quick, completed])
+    await bridge.refresh()
+    XCTAssertEqual(bridge.tasks.map(\.completed), [false, true])
+
+    let presentation = TodayTaskPresentation()
+    let localTasks = LocalTaskController(
+      store: LocalTaskStore(fileURL: fixture.directory.appendingPathComponent("tasks.json")))
+    let localPresentation = LocalTaskPresentation()
+    var measurements: [CGFloat?] = []
+    let tasks = HomeTaskLists(
+      bridge: bridge, presentation: presentation, localTasks: localTasks,
+      localPresentation: localPresentation, onEditingChanged: { _ in }, onManageTags: {},
+      onTodayHeight: { measurements.append($0) }
+    ).background(PulseDesignTokens.background)
+    let size = NSSize(width: HomeView.popoverSize.width, height: 360)
+    let host = NSHostingView(rootView: tasks.environment(\.locale, Locale(identifier: "en")))
+    let window = NSWindow(
+      contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
+      backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.ignoresMouseEvents = true
+    window.contentView = host
+    window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
+    window.orderFront(nil)
+    defer { window.close() }
+    host.layoutSubtreeIfNeeded()
+    try await Task.sleep(for: .milliseconds(30))
+    let shortHeight = try XCTUnwrap(measurements.last?.flatMap { $0 })
+    XCTAssertGreaterThan(shortHeight, 130)
+    XCTAssertLessThan(shortHeight, size.height)
+    window.setContentSize(NSSize(width: size.width, height: shortHeight))
+
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "PulseTodayDashboardRender")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+      window.appearance = try XCTUnwrap(NSAppearance(named: appearance))
+      for language in ["en", "zh-Hans"] {
+        host.rootView = tasks.environment(\.locale, Locale(identifier: language))
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        XCTAssertEqual(
+          try XCTUnwrap(bitmap.colorAt(x: 2, y: 2)).alphaComponent, 1, accuracy: 0.01)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(
+          to: directory.appendingPathComponent("today-\(language)-\(appearance.rawValue).png"))
+      }
+    }
+
+    let longList = (0..<16).map { index in
+      TodayBridgeRecordedTask(
+        id: String(format: "%064x", index), title: "Task \(index + 1)",
+        completed: index.isMultiple(of: 2), source: .quick)
+    }
+    measurements.removeAll()
+    try fixture.publish(vault, tasks: longList)
+    await bridge.refresh()
+    window.setContentSize(size)
+    presentation.beginDraft(in: vault.url)
+    func descendant<T: NSView>(_ type: T.Type, in root: NSView, matching: (T) -> Bool) -> T? {
+      if let root = root as? T, matching(root) { return root }
+      for child in root.subviews {
+        if let result = descendant(type, in: child, matching: matching) { return result }
+      }
+      return nil
+    }
+    func focusedComposer() async throws -> NSTextField {
+      for _ in 0..<50 {
+        host.layoutSubtreeIfNeeded()
+        if let field = descendant(
+          NSTextField.self, in: host,
+          matching: {
+            $0.accessibilityIdentifier() == "todayTaskTextField"
+          }), field.currentEditor() != nil
+        {
+          return field
+        }
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      return try XCTUnwrap(nil as NSTextField?, "The native Today task field must receive focus.")
+    }
+    let field = try await focusedComposer()
+    XCTAssertTrue(measurements.contains { $0 == nil }, "Long lists request the full viewport")
+    let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+    let scroll = try XCTUnwrap(
+      descendant(NSScrollView.self, in: host) { ($0.documentView?.frame.height ?? 0) > size.height }
+    )
+    XCTAssertTrue(
+      scroll.documentVisibleRect.intersects(field.convert(field.bounds, to: scroll.documentView)))
+    editor.insertText("临时任务", replacementRange: NSRange(location: 0, length: 0))
+    XCTAssertEqual(presentation.drafts[vault.url]?.title, "临时任务")
+    presentation.collapseDraft(in: vault.url)
+    host.layoutSubtreeIfNeeded()
+    XCTAssertEqual(presentation.drafts[vault.url]?.title, "临时任务")
+    XCTAssertNil(presentation.drafts[vault.url]?.focusRequest)
+
+    presentation.beginDraft(in: vault.url)
+    let reopened = try await focusedComposer()
+    let reopenedEditor = try XCTUnwrap(reopened.currentEditor() as? NSTextView)
+    XCTAssertEqual(reopenedEditor.string, "临时任务")
+    reopenedEditor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+    for _ in 0..<50 {
+      if !presentation.hasPendingSubmission { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(bridge.pendingCount, 1)
+    XCTAssertTrue(bridge.tasks.contains { $0.title == "临时任务" && $0.isPending })
+    XCTAssertNil(presentation.drafts[vault.url])
   }
 
   private func fixture() throws -> BridgeFixture {

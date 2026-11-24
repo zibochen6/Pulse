@@ -102,7 +102,10 @@ window/session. See [UI presentation](ui-presentation.md) for window, connection
 interaction-hold and update preflight contracts.
 
 ### 3. Contracts
-- Home has a stable brand toolbar, separate provider status band and task area.
+- Home has a localized date and marked title, with recording, focus and
+  Settings controls beside it. The timer reserves a stable frame between its
+  idle label and countdown. The full recording label fits in the toolbar.
+  The provider band and task area remain separate.
   Providers share one 32-point row with icons and readouts. Preserve full
   values with intrinsic widths and scroll the row horizontally when needed.
   The menu bar remains Codex-only and follows UsageMenuFormatter.
@@ -224,8 +227,9 @@ Tests use isolated defaults and temporary stores.
   explain that the current editor must be resolved first and offer Continue
   current edit. Do not promise to reveal a hidden quick draft while another
   editor still occupies the surface, or silently discard either draft.
-- A left-aligned "+ Add task" row follows all task rows inside the
-  task ScrollView. Presentation owns expansion per list alongside retained
+- A centered circular Add task button follows all task rows inside the
+  task ScrollView. It keeps a text accessibility label and help. Presentation
+  owns expansion per list alongside retained
   drafts. Explicit expansion scrolls entry into view after mount and requests
   focus; ordinary list appearance never focuses hidden entry. Esc/collapse
   hides without discarding. Confirmed matching save clears and collapses the
@@ -293,7 +297,7 @@ Tests use isolated defaults and temporary stores.
 
 ### 5. Good / Base / Bad Cases
 
-- Good: create an empty tag, add with Enter and return to the + Add task row,
+- Good: create an empty tag, add with Enter and return to the round Add task button,
   reopen a retained draft, move a task, delete another and Undo without reflow.
 - Base: Todo always holds untagged tasks; empty custom tabs allow immediate entry.
 - Bad: a late save returns after tab/draft changes. Preserve current input and

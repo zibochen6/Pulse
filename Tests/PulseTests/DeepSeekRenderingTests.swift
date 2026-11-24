@@ -94,7 +94,13 @@ final class DeepSeekRenderingTests: XCTestCase {
         let focusTimer = try XCTUnwrap(capture.frames["focusTimerButton"])
         let clip = try XCTUnwrap(capture.frames["editRecordingButton"])
         XCTAssertLessThanOrEqual(clip.maxX, focusTimer.minX)
-        XCTAssertGreaterThan(clip.width, 32)
+        let clipLabelWidth = (PulseLocalization.string("Edit recording") as NSString)
+          .size(withAttributes: [
+            .font: NSFont.systemFont(ofSize: PulseDesignTokens.footnote, weight: .medium)
+          ]).width
+        XCTAssertGreaterThanOrEqual(
+          clip.width + 1, clipLabelWidth + 14 + 5 + 16,
+          "The complete recording action label fits alongside the title and timer")
         XCTAssertLessThanOrEqual(focusTimer.maxX, settings.minX)
         XCTAssertEqual(focusTimer.midY, settings.midY, accuracy: 0.5)
         // The gear shares the toolbar with the brand and the quota strip is its

@@ -19,8 +19,10 @@ final class UIDemoExportTests: XCTestCase {
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     let fixture = try await DemoFixture(language: language)
     defer { fixture.cleanUp() }
+    let dashboardStillsOnly = environment["PULSE_UI_DASHBOARD_STILLS_ONLY"] == "1"
 
     for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+      fixture.pages.showHome()
       try await exportStill(
         fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
         destination: output.appendingPathComponent("home-\(language)-\(name).png"))
@@ -28,7 +30,33 @@ final class UIDemoExportTests: XCTestCase {
         fixture.settings, size: SettingsWindowController.contentSize, fixture: fixture,
         appearance: appearance,
         destination: output.appendingPathComponent("settings-\(language)-\(name).png"))
+      if dashboardStillsOnly {
+        for page in ProviderID.allCases {
+          fixture.pages.showUsage(page)
+          try await exportStill(
+            fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
+            destination: output.appendingPathComponent(
+              "usage-\(page.rawValue)-\(language)-\(name).png"))
+        }
+        fixture.pages.showTagManagement()
+        try await exportStill(
+          fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
+          destination: output.appendingPathComponent("tags-\(language)-\(name).png"))
+        fixture.pages.showClipTask()
+        try await exportStill(
+          fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
+          destination: output.appendingPathComponent("clips-\(language)-\(name).png"))
+        for phase in [ClipPhase.completed, .failed] {
+          let preview = try fixture.recordingResult(phase)
+          try await exportStill(
+            fixture.home(recording: preview), size: HomeView.popoverSize, fixture: fixture,
+            appearance: appearance,
+            destination: output.appendingPathComponent(
+              "clips-\(phase.rawValue)-\(language)-\(name).png"))
+        }
+      }
     }
+    if dashboardStillsOnly { return }
 
     let frames = output.appendingPathComponent("frames-\(language)", isDirectory: true)
     try FileManager.default.createDirectory(at: frames, withIntermediateDirectories: true)
@@ -169,11 +197,14 @@ private final class DemoFixture: ObservableObject {
   let usage: UsageController
   let vipUsage: UsageController
   let deepSeekUsage: UsageController
+  let antigravityUsage: UsageController
   let vipConfiguration: VIPConfiguration
   let deepSeekConfiguration: DeepSeekConfiguration
   let tasks: LocalTaskController
   let updates: UpdateController
+  let clips: ClipController
   let pages = PopoverPageController()
+  let popoverFocus = PulsePopoverFocus()
   let taskPresentation = LocalTaskPresentation()
   let settingsPresentation = SettingsPresentation(destination: .providers)
   let work = demoTagID(1)
@@ -199,16 +230,21 @@ private final class DemoFixture: ObservableObject {
     usage = UsageController(provider: DemoProvider(id: "codex"))
     vipUsage = UsageController(provider: DemoProvider(id: VIPProvider.providerID))
     deepSeekUsage = UsageController(provider: DemoProvider(id: DeepSeekProvider.providerID))
+    antigravityUsage = UsageController(provider: DemoProvider(id: "antigravity"))
     vipConfiguration = VIPConfiguration(secretStore: DemoSecrets())
     deepSeekConfiguration = DeepSeekConfiguration(secretStore: DemoSecrets())
     tasks = LocalTaskController(
       store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
     updates = makeInactiveUpdateController(defaults: defaults, currentVersion: .current())
+    clips = ClipController(
+      defaults: defaults, support: directory.appendingPathComponent("Clips"),
+      downloads: directory.appendingPathComponent("Downloads"), live: false)
     vipConfiguration.refresh()
     deepSeekConfiguration.refresh()
     await usage.refresh()
     await vipUsage.refresh()
     await deepSeekUsage.refresh()
+    await antigravityUsage.refresh()
     await tasks.refresh()
     let chinese = language == "zh-Hans"
     for (id, name) in [
@@ -244,7 +280,9 @@ private final class DemoFixture: ObservableObject {
     caption = chinese ? "AI 状态与日常待办，轻松在一起。" : "AI status and everyday tasks, quietly together."
   }
 
-  var home: some View {
+  var home: some View { home(recording: clips) }
+
+  func home(recording: ClipController) -> some View {
     HomeView(
       config: config, usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
       deepSeekConfiguration: deepSeekConfiguration, vipConfiguration: vipConfiguration,
@@ -257,7 +295,37 @@ private final class DemoFixture: ObservableObject {
         self.settingsPresentation.open(destination, provider: provider)
         self.showsSettings = true
         self.interactiveSettings?.open()
-      })
+      }, clips: recording, antigravityUsage: antigravityUsage
+    )
+    .environment(\.pulsePopoverFocus, popoverFocus)
+  }
+
+  func recordingResult(_ phase: ClipPhase) throws -> ClipController {
+    let support = directory.appendingPathComponent("ClipPreview")
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+    var result = ClipSnapshot(
+      phase: phase, source: "rec_1042.MP4", model: "gpt-6.2-sol", effort: "low")
+    if phase == .completed {
+      let review = support.appendingPathComponent("review.html")
+      try Data("<title>Demo review</title>".utf8).write(to: review)
+      result.folder = support.path
+      result.review = review.path
+      result.platforms = ["Douyin", "Xiaohongshu", "Kuaishou", "Bilibili"].map {
+        ClipDraft(platform: $0, status: "saved_verified", detail: "")
+      }
+    } else {
+      result.detail = "The editing worker stopped. Open its files before retrying."
+    }
+    try JSONEncoder().encode(result).write(to: support.appendingPathComponent("latest.json"))
+    let controller = ClipController(
+      defaults: defaults, support: support, downloads: directory, live: true,
+      tools: { throw CocoaError(.featureUnsupported) })
+    // Restore a terminal fixture. The offscreen still never launches a worker,
+    // opens a file, requests notifications or connects to a live service.
+    controller.restore()
+    XCTAssertEqual(controller.snapshot.phase, phase)
+    return controller
   }
 
   var settings: some View {
@@ -267,12 +335,13 @@ private final class DemoFixture: ObservableObject {
       onDeepSeekCredentialsChanged: { [weak self] in self?.deepSeekUsage.credentialsDidChange() },
       onVIPCredentialsChanged: { [weak self] in self?.vipUsage.credentialsDidChange() }, onQuit: {},
       usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
+      antigravityUsage: antigravityUsage,
       presentation: settingsPresentation, localPresentation: taskPresentation,
       onReturnToDraft: { [weak self] in
         self?.pages.showHome()
         self?.interactiveSettings?.close()
         self?.interactiveHome?.makeKeyAndOrderFront(nil)
-      })
+      }, clips: clips)
   }
 
   func perform(frame: Int) async throws {
@@ -351,7 +420,7 @@ private struct DemoProvider: UsageProviding {
   func fetch() async throws -> UsageSnapshot {
     let metrics: [UsageMetric]
     switch id {
-    case "codex":
+    case "codex", "antigravity":
       metrics = [
         .quota(
           QuotaWindow(

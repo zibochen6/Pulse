@@ -8,7 +8,7 @@ struct VIPStatusSummary: View {
 
   var body: some View {
     ProviderStatusButton(
-      title: VIPUsageFormatter.title(for: state), providerName: "88VIP",
+      title: VIPUsageFormatter.title(for: state), provider: .vip,
       identifier: "openVIPUsageButton", isConfigured: isConfigured, onOpenUsage: onOpenUsage
     ) { VIPProviderIcon(size: 16) }
   }

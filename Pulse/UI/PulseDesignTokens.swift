@@ -21,39 +21,47 @@ enum PulseDesignTokens {
   static let label: CGFloat = 14
   static let footnote: CGFloat = 13
   static let caption: CGFloat = 12
-  static let toolbarTitle: CGFloat = 16
+  static let toolbarTitle: CGFloat = 18
+  static let displayTitle: CGFloat = 30
 
   static let cornerSmall: CGFloat = 8
   static let cornerMedium: CGFloat = 10
-  static let cornerLarge: CGFloat = 12
+  static let cornerLarge: CGFloat = 15
   static let gap: CGFloat = 8
   static let contentInset: CGFloat = 16
   static let brandMarkSize: CGFloat = 28
   static let taskRowHeight: CGFloat = 36
 
-  static let background = adaptive(light: 0xF7F7FB, dark: 0x18191F)
-  static let surface = adaptive(light: 0xFFFFFF, dark: 0x24262F)
-  static let secondarySurface = adaptive(light: 0xEEEFF6, dark: 0x2C2E39)
-  static let accent = adaptive(light: 0x6D5CE8, dark: 0xAC9EFF)
-  static let border = adaptive(light: 0xDADBE8, dark: 0x40434F)
-  static let success = adaptive(light: 0x167A59, dark: 0x7EDCBA)
+  static let background = adaptive(light: 0xFFFFFF, dark: 0x232427)
+  static let surface = adaptive(light: 0xFFFFFF, dark: 0x292A26)
+  static let secondarySurface = adaptive(light: 0xF2F2EF, dark: 0x30312E)
+  static let ink = adaptive(light: 0x242421, dark: 0xF1F2E9)
+  static let muted = adaptive(light: 0x62645B, dark: 0xC2C4B8)
+  static let border = adaptive(light: 0xE4E5DC, dark: 0x45473F)
+  static let accent = adaptive(light: 0x496D26, dark: 0xC6E69B)
+  static let success = adaptive(light: 0x347128, dark: 0xA8D782)
   static let warning = adaptive(light: 0x96600B, dark: 0xF2C57E)
   static let destructive = adaptive(light: 0xB92E40, dark: 0xFF8C9B)
 
-  // Filled actions keep darker violet in both appearances so their white labels
-  // retain contrast; the lighter accent is for text on dark surfaces.
-  static let primaryActionFill = Color(red: 0.40, green: 0.33, blue: 0.86)
-  static let primaryActionHover = Color(red: 0.36, green: 0.29, blue: 0.81)
-  static let primaryActionPressed = Color(red: 0.32, green: 0.25, blue: 0.75)
+  static let taskPaper = adaptive(light: 0xE5E7FA, dark: 0x363447)
+  static let taskFold = adaptive(light: 0xA3A7C2, dark: 0x68617F)
+  static let rosePaper = adaptive(light: 0xF9DCE6, dark: 0x48333B)
+  static let skyPaper = adaptive(light: 0xD9EFF9, dark: 0x293E49)
+  static let mintPaper = adaptive(light: 0xE0EFCF, dark: 0x343F30)
+  static let butterPaper = adaptive(light: 0xFFF3CB, dark: 0x443D2B)
+  static let marker = adaptive(light: 0xFFDA65, dark: 0x997921)
 
-  static let hoverFill = accent.opacity(0.07)
-  static let pressedFill = accent.opacity(0.13)
-  static let selectedFill = accent.opacity(0.12)
-  static let accentSelectionFill = accent.opacity(0.14)
-  static let accentSelectionText = Color(nsColor: .labelColor)
-  static let focusStroke = accent
+  static let primaryActionFill = adaptive(light: 0xCCEAA0, dark: 0xC6E69B)
+  static let primaryActionHover = adaptive(light: 0xC2E490, dark: 0xD1EEAD)
+  static let primaryActionPressed = adaptive(light: 0xB3D982, dark: 0xB7D68B)
+  static let actionInk = adaptive(light: 0x25281E, dark: 0x25281E)
+
+  static let hoverFill = ink.opacity(0.07)
+  static let pressedFill = ink.opacity(0.14)
+  static let selectedFill = adaptive(light: 0xCCEAA0, dark: 0x405332)
+  static let focusStroke = adaptive(light: 0x665098, dark: 0xD2C5F4)
   static let focusStrokeWidth: CGFloat = 1.5
-  static let focusFill = accent.opacity(0.09)
+  static let focusFill = focusStroke.opacity(0.10)
 
   /// Stable between processes and renames. Swift's randomized hashValue must
   /// not be used for a tag's visual identity. No persistent field is needed.

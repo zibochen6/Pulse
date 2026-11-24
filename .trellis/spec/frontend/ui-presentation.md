@@ -52,6 +52,12 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
 - Shared adaptive tokens own color, spacing and motion. Root backgrounds remain
   opaque. Use actual zero-bounce curves where required; snappy extraBounce zero
   retains its preset bounce. Reduce Motion removes all geometry feedback.
+- The dashboard palette uses opaque paper and ink, pastel paper for provider
+  cards, green selection, and separate semantic and keyboard focus colors.
+  Apply the common paper perimeter through `pulsePaper`. Task lists share the
+  square completion glyph and circular Add task button. Paired Today adds a
+  corner fold and completion count, and includes the perimeter's insets in
+  the short-list height reported to the popover.
 - English/zh-Hans resources follow system language. Localize computed strings
   as well as SwiftUI literal labels. Keep user data, provider IDs, currency codes,
   storage keys and accessibility identifiers invariant. Todo is a reserved name.
@@ -101,6 +107,12 @@ virtual SwiftUI accessibility nodes even when the visible app exposes them.
 Do not treat an absent in-process AX node as proof a control was not rendered,
 or assume a SwiftUI identifier is copied onto a bridged NSTextField. Keep
 geometry assertions independent from native input/focus assertions.
+
+The opt-in `UIDemoExportTests` export accepts
+`TEST_RUNNER_PULSE_UI_DASHBOARD_STILLS_ONLY=1` to render Home, Settings, all
+provider details, tags and recording edits in both appearances without
+recording motion frames. Pass `-testLanguage` and `-testRegion` alongside the
+fixture language to localize system-formatted dates and static SwiftUI text.
 
 ## 7. Wrong vs Correct
 ```swift

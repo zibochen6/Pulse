@@ -8,6 +8,8 @@ struct ClipHomeButton: View {
   @Environment(\.pulseReduceMotion) private var reduceMotion
 
   var body: some View {
+    let phase = clips.snapshot.phase
+    let title = phase.isActive ? phase.title : PulseLocalization.string("Edit recording")
     Button {
       if clips.snapshot.phase.isActive {
         open()
@@ -24,17 +26,16 @@ struct ClipHomeButton: View {
           Image(systemName: clips.snapshot.phase == .running ? "waveform" : "scissors")
             .frame(width: 14)
         }
-        Text(
-          clips.snapshot.phase.isActive
-            ? clips.snapshot.phase.title : PulseLocalization.string("Edit recording")
-        )
-        .lineLimit(1)
+        Text(phase == .checking ? PulseLocalization.string("Checking…") : title)
+          .lineLimit(1)
+          .fixedSize(horizontal: true, vertical: false)
       }
     }
     .buttonStyle(
       PulseActionButtonStyle(emphasis: .focusTimer(isRunning: clips.snapshot.phase.isActive))
     )
     .help("Edit the latest recording in Downloads")
+    .accessibilityLabel(title)
     .accessibilityIdentifier("editRecordingButton")
     .contextMenu { Button("Last editing task", action: open) }
     .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
@@ -50,8 +51,10 @@ struct ClipResultLink: View {
   var body: some View {
     let state = clips.snapshot
     if state.phase == .noClip && state.folderURL == nil {
-      Text(state.phase.title).font(.caption).foregroundStyle(.secondary)
+      Text(state.phase.title).font(.caption).foregroundStyle(PulseDesignTokens.muted)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .pulsePaper(PulseDesignTokens.butterPaper)
         .padding(.horizontal, PulseDesignTokens.contentInset).padding(.bottom, 8)
     } else if state.phase != .idle && (state.phase != .starting || !state.source.isEmpty) {
       Button(action: open) {
@@ -63,7 +66,10 @@ struct ClipResultLink: View {
           Spacer()
           Text(verbatim: state.source).lineLimit(1).truncationMode(.middle)
           Image(systemName: "chevron.right")
-        }.font(.caption)
+        }
+        .font(.caption)
+        .padding(8)
+        .pulsePaper(PulseDesignTokens.butterPaper)
       }
       .buttonStyle(.plain)
       .padding(.horizontal, PulseDesignTokens.contentInset).padding(.bottom, 8)
@@ -79,31 +85,34 @@ struct ClipDetailView: View {
     let state = clips.snapshot
     ScrollView {
       VStack(alignment: .leading, spacing: 12) {
-        Text(state.phase.title).font(.headline)
-        if !state.source.isEmpty {
-          Text(state.source).font(.body.weight(.medium)).textSelection(.enabled)
-        }
-        if let model = state.model, let effort = state.effort {
-          Text(verbatim: "\(model) · \(effort)").font(.caption).foregroundStyle(.secondary)
-        }
-        if state.phase.isActive {
-          TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            let elapsed = max(0, Int(timeline.date.timeIntervalSince1970 - state.started))
-            let silent = max(0, Int(timeline.date.timeIntervalSince1970 - state.updated))
-            VStack(alignment: .leading, spacing: 5) {
-              Text(activityTitle(state.activity)).font(.subheadline)
-              Text(
-                PulseLocalization.format(
-                  "Elapsed %@",
-                  String(format: "%d:%02d", elapsed / 60, elapsed % 60)))
-              if silent >= 60 {
-                Text(PulseLocalization.format("Last activity %lld min ago", Int64(silent / 60)))
-              }
-            }.font(.caption).foregroundStyle(.secondary).monospacedDigit()
+        PulseSection(
+          title: state.phase.title, symbol: "scissors", paper: PulseDesignTokens.butterPaper
+        ) {
+          if !state.source.isEmpty {
+            Text(state.source).font(.body.weight(.medium)).textSelection(.enabled)
           }
-        }
-        if let detail = state.detail, !detail.isEmpty {
-          Text(PulseLocalization.string(detail)).font(.callout).textSelection(.enabled)
+          if let model = state.model, let effort = state.effort {
+            Text(verbatim: "\(model) · \(effort)").font(.caption).foregroundStyle(.secondary)
+          }
+          if state.phase.isActive {
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+              let elapsed = max(0, Int(timeline.date.timeIntervalSince1970 - state.started))
+              let silent = max(0, Int(timeline.date.timeIntervalSince1970 - state.updated))
+              VStack(alignment: .leading, spacing: 5) {
+                Text(activityTitle(state.activity)).font(.subheadline)
+                Text(
+                  PulseLocalization.format(
+                    "Elapsed %@",
+                    String(format: "%d:%02d", elapsed / 60, elapsed % 60)))
+                if silent >= 60 {
+                  Text(PulseLocalization.format("Last activity %lld min ago", Int64(silent / 60)))
+                }
+              }.font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            }
+          }
+          if let detail = state.detail, !detail.isEmpty {
+            Text(PulseLocalization.string(detail)).font(.callout).textSelection(.enabled)
+          }
         }
         ForEach(state.platforms, id: \.platform) { draft in
           VStack(alignment: .leading, spacing: 3) {
@@ -112,13 +121,16 @@ struct ClipDetailView: View {
               Spacer()
               Text(PulseLocalization.string("clip." + draft.status))
                 .foregroundStyle(
-                  draft.status == "saved_verified" ? PulseDesignTokens.accent : Color.secondary)
+                  draft.status == "saved_verified"
+                    ? PulseDesignTokens.success : PulseDesignTokens.muted)
             }
             if !draft.detail.isEmpty {
               Text(PulseLocalization.string(draft.detail)).font(.caption).foregroundStyle(
                 .secondary)
             }
           }
+          .padding(12)
+          .pulsePaper()
         }
         let result = state.folderURL != nil ? state : clips.previousResult
         if let result {
@@ -128,14 +140,17 @@ struct ClipDetailView: View {
           HStack {
             if let folder = result.folderURL {
               Button("Open work folder") { NSWorkspace.shared.open(folder) }
+                .buttonStyle(PulseActionButtonStyle())
             }
             if let review = result.reviewURL {
               Button("View review page") { NSWorkspace.shared.open(review) }
+                .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
             }
           }
         }
         if state.phase == .failed || !clips.hasWorkspace {
           Button("Editing settings", action: openSettings)
+            .buttonStyle(PulseActionButtonStyle())
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading).padding(PulseDesignTokens.contentInset)
@@ -170,6 +185,7 @@ struct ClipSettingsView: View {
           if !clips.workspace.isEmpty { panel.directoryURL = URL(fileURLWithPath: clips.workspace) }
           if panel.runModal() == .OK, let url = panel.url { clips.workspace = url.path }
         }
+        .buttonStyle(PulseActionButtonStyle())
       }
       if !clips.workspace.isEmpty {
         Text(verbatim: clips.workspace).font(.callout).textSelection(.enabled)

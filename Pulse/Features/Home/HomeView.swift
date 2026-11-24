@@ -73,6 +73,7 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(PulseDesignTokens.background)
+        .foregroundStyle(PulseDesignTokens.ink)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -80,23 +81,15 @@ struct HomeView: View {
     .onAppear { onPopoverSizeChanged?(panelSize) }
     .onChange(of: panelSize) { onPopoverSizeChanged?($0) }
     .background(PulseDesignTokens.background)
+    .foregroundStyle(PulseDesignTokens.ink)
     .tint(PulseDesignTokens.accent)
     .clipped()
   }
 
   private var toolbar: some View {
-    HStack(spacing: 8) {
+    HStack(alignment: .center, spacing: 6) {
       if pages.page == .home {
-        HStack(spacing: 8) {
-          Image(systemName: "waveform.path")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(PulseDesignTokens.accent)
-            .frame(width: PulseDesignTokens.brandMarkSize, height: PulseDesignTokens.brandMarkSize)
-            .background(
-              PulseDesignTokens.selectedFill,
-              in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
-          Text("Pulse").font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
-        }
+        homeTitle
       } else {
         Button {
           pages.showHome()
@@ -104,14 +97,17 @@ struct HomeView: View {
           Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
             .frame(width: 28, height: 28)
         }
-        .buttonStyle(PulseIconButtonStyle()).help("Back to Home")
+        .buttonStyle(PulseIconButtonStyle(circular: true)).help("Back to Home")
         .accessibilityLabel("Back to Home").accessibilityIdentifier("backToHomeButton")
-        Text(pageTitle).font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
+        Text(pageTitle)
+          .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .bold))
+          .accessibilityAddTraits(.isHeader)
       }
       Spacer(minLength: 0)
       if pages.page == .home {
         if let clips {
-          ClipHomeButton(clips: clips, open: { pages.showClipTask() },
+          ClipHomeButton(
+            clips: clips, open: { pages.showClipTask() },
             configure: { onOpenSettings(.clips, nil) })
         }
         HomeFocusButton(timer: focusTimer)
@@ -122,14 +118,31 @@ struct HomeView: View {
         Image(systemName: "gearshape").font(.system(size: 15, weight: .medium))
           .frame(width: 32, height: 32)
       }
-      .buttonStyle(PulseIconButtonStyle()).help("Settings")
+      .buttonStyle(PulseIconButtonStyle(circular: true)).help("Settings")
       .accessibilityLabel("Open Settings").accessibilityIdentifier("openSettingsButton")
       .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
         ["openSettingsButton": $0]
       }
     }
+    .frame(minHeight: 48)
     .padding(.horizontal, PulseDesignTokens.contentInset)
-    .padding(.vertical, 12)
+    .padding(.vertical, 4)
+  }
+
+  private var homeTitle: some View {
+    VStack(alignment: .leading, spacing: 1) {
+      TimelineView(.everyMinute) { timeline in
+        Text(timeline.date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
+          .font(.system(size: 11, weight: .medium))
+          .foregroundStyle(PulseDesignTokens.muted)
+          .lineLimit(1)
+      }
+      HStack(spacing: 6) {
+        PulseBrandMark(size: 24)
+        PulseMarkedTitle(title: "Pulse")
+      }
+      .fixedSize()
+    }
   }
 
   private var pageTitle: String {
@@ -198,7 +211,8 @@ private struct HomeFocusButton: View {
   @ObservedObject var timer: FocusTimerController
 
   var body: some View {
-    let idleTitle = PulseLocalization.string("Focus 30 min")
+    let idleTitle = PulseLocalization.string("Focus")
+    let startTitle = PulseLocalization.string("Focus 30 min")
     Button {
       if timer.isRunning {
         timer.cancel()
@@ -212,18 +226,18 @@ private struct HomeFocusButton: View {
           .foregroundStyle(timer.isRunning ? PulseDesignTokens.accent : Color.secondary)
           .accessibilityHidden(true)
         ZStack(alignment: .leading) {
-          // Both localized labels reserve space, including the cancel action.
+          // Keep the toolbar stable when the label becomes a countdown.
           Text(idleTitle).hidden().accessibilityHidden(true)
-          Text(PulseLocalization.format("%@ · Cancel", "00:00"))
-            .hidden().accessibilityHidden(true)
+          Text("00:00").hidden().accessibilityHidden(true)
           if timer.isRunning {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
               let seconds = timer.remainingSeconds
               let countdown = String(format: "%02d:%02d", seconds / 60, seconds % 60)
-              Text(PulseLocalization.format("%@ · Cancel", countdown))
+              Text(countdown)
+                .accessibilityLabel(PulseLocalization.format("%@ · Cancel", countdown))
             }
           } else {
-            Text(idleTitle)
+            Text(idleTitle).accessibilityLabel(startTitle)
           }
         }
         .monospacedDigit()
@@ -231,6 +245,7 @@ private struct HomeFocusButton: View {
       }
     }
     .buttonStyle(PulseActionButtonStyle(emphasis: .focusTimer(isRunning: timer.isRunning)))
+    .help(timer.isRunning ? PulseLocalization.string("Cancel") : startTitle)
     .accessibilityIdentifier("focusTimerButton")
     .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
       ["focusTimerButton": $0]
