@@ -8,9 +8,10 @@ struct PulseExitPolicy {
   var hasUnsavedEdits: Bool
   var hasPendingWrites: Bool
   var focusSessionActive = false
+  var clipJobActive = false
 
   var canInstallAutomatically: Bool {
-    !popoverOpen && !settingsOpen && !hasUnsavedEdits && !hasPendingWrites && !focusSessionActive
+    !popoverOpen && !settingsOpen && !hasUnsavedEdits && !hasPendingWrites && !focusSessionActive && !clipJobActive
   }
   var requiresDiscardConfirmation: Bool { hasUnsavedEdits }
   var mustWaitForWrites: Bool { hasPendingWrites }

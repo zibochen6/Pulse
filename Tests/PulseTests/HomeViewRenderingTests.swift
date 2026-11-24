@@ -91,12 +91,13 @@ final class HomeViewRenderingTests: XCTestCase {
         return XCTFail("Could not create \(appearanceName) appearance")
       }
       for page in [
-        PopoverPage.home, .usage(.codex), .usage(.vip), .usage(.deepSeek), .tagManagement,
+        PopoverPage.home, .usage(.codex), .usage(.vip), .usage(.deepSeek), .tagManagement, .clipTask,
       ] {
         let pages = PopoverPageController()
         switch page {
         case .home: break
         case .usage(let provider): pages.showUsage(provider)
+        case .clipTask: pages.showClipTask()
         case .tagManagement: pages.showTagManagement()
         }
         let host = NSHostingView(
@@ -111,7 +112,7 @@ final class HomeViewRenderingTests: XCTestCase {
             updates: makeInactiveUpdateController(defaults: defaults),
             pages: pages,
             onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
-            onQuit: {}
+            onQuit: {}, clips: ClipController.production(defaults: defaults, live: false)
           )
         )
         host.appearance = appearance

@@ -72,7 +72,7 @@ final class DeepSeekRenderingTests: XCTestCase {
         let bitmap = try render(host, appearance: appearance)
         let ids = [
           "openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton", "openSettingsButton",
-          "focusTimerButton",
+          "focusTimerButton", "editRecordingButton",
         ]
         XCTAssertEqual(Set(capture.frames.keys), Set(ids + ["providerDivider"]))
         for id in ids {
@@ -92,6 +92,9 @@ final class DeepSeekRenderingTests: XCTestCase {
         let codex = try XCTUnwrap(capture.frames["openUsageButton"])
         let settings = try XCTUnwrap(capture.frames["openSettingsButton"])
         let focusTimer = try XCTUnwrap(capture.frames["focusTimerButton"])
+        let clip = try XCTUnwrap(capture.frames["editRecordingButton"])
+        XCTAssertLessThanOrEqual(clip.maxX, focusTimer.minX)
+        XCTAssertGreaterThan(clip.width, 32)
         XCTAssertLessThanOrEqual(focusTimer.maxX, settings.minX)
         XCTAssertEqual(focusTimer.midY, settings.midY, accuracy: 0.5)
         // The gear shares the toolbar with the brand and the quota strip is its
@@ -283,6 +286,7 @@ final class DeepSeekRenderingTests: XCTestCase {
           switch page {
           case .home: break
           case .usage(let provider): pages.showUsage(provider)
+          case .clipTask: pages.showClipTask()
           case .tagManagement: pages.showTagManagement()
           }
           let host = NSHostingView(
@@ -348,6 +352,7 @@ final class DeepSeekRenderingTests: XCTestCase {
       updates: makeInactiveUpdateController(defaults: defaults),
       pages: pages, onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {},
       onQuit: {},
+      clips: ClipController.production(defaults: defaults, live: false),
       focusTimer: focusTimer ?? FocusTimerController(),
       antigravityUsage: antigravityUsage ?? UsageController(provider: InactiveSettingsProvider()))
   }
@@ -372,6 +377,7 @@ final class DeepSeekRenderingTests: XCTestCase {
     switch page {
     case .home: "home"
     case .usage: "usage"
+    case .clipTask: "clip"
     case .tagManagement: "tags"
     }
   }

@@ -18,10 +18,11 @@ enum ProviderID: String, CaseIterable, Identifiable {
 }
 
 enum SettingsDestination: String, CaseIterable, Hashable, Identifiable {
-  case general, providers, tasks, updates, about
+  case general, providers, tasks, clips, updates, about
   var id: String { rawValue }
   var title: String {
     switch self {
+    case .clips: PulseLocalization.string("Recording edits")
     case .general: PulseLocalization.string("General")
     case .providers: PulseLocalization.string("AI services")
     case .tasks: PulseLocalization.string("Tasks")
@@ -31,6 +32,7 @@ enum SettingsDestination: String, CaseIterable, Hashable, Identifiable {
   }
   var symbol: String {
     switch self {
+    case .clips: "scissors"
     case .general: "slider.horizontal.3"
     case .providers: "square.stack.3d.up"
     case .tasks: "checklist"
@@ -42,6 +44,7 @@ enum SettingsDestination: String, CaseIterable, Hashable, Identifiable {
 
 enum PopoverPage: Equatable {
   case home
+  case clipTask
   case usage(ProviderID)
   case tagManagement
 }
@@ -52,6 +55,7 @@ final class PopoverPageController: ObservableObject {
   @Published private(set) var page: PopoverPage = .home
   func showUsage(_ provider: ProviderID = .codex) { navigate(to: .usage(provider)) }
   func showTagManagement() { navigate(to: .tagManagement) }
+  func showClipTask() { navigate(to: .clipTask) }
   func showHome() { navigate(to: .home) }
   func reset() { showHome() }
 

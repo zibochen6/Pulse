@@ -56,6 +56,9 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       : FileManager.default.temporaryDirectory.appendingPathComponent(
         "PulseTestHost-\(ProcessInfo.processInfo.processIdentifier)/ObsidianToday/v1",
         isDirectory: true))
+  private lazy var clips = ClipController.production(defaults: Self.runtimeDefaults,
+    live: Self.runtimeServices.permitsLiveAccess)
+  private lazy var clipNotifications = ClipNotifications()
   private let todayPresentation = TodayTaskPresentation()
   private let settingsPresentation = SettingsPresentation()
   private var settingsController: SettingsWindowController?
@@ -148,6 +151,15 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     NSApp.setActivationPolicy(.accessory)
     vipConfiguration.refresh()
     deepSeekConfiguration.refresh()
+    if Self.runtimeServices.permitsLiveAccess {
+      clipNotifications.register()
+      clips.requestNotifications = { [weak self] in self?.clipNotifications.requestPermission() }
+      clips.onFinish = { [weak self] result in
+        if result.phase != .noClip { self?.clipNotifications.deliver(result) }
+        self?.updates.scheduleAutomaticInstallWhenIdle()
+      }
+      clips.restore()
+    }
     configureStatusItem()
     configurePopover()
     observeMenuInteractions()
@@ -271,7 +283,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
           self?.showSettings(destination, provider: provider)
         },
         onRestartRequested: { [weak self] in self?.requestExit(restarting: true) },
-        focusTimer: focusTimer,
+        clips: clips, focusTimer: focusTimer,
         antigravityUsage: antigravityUsage,
         todayBridge: todayBridge, todayPresentation: todayPresentation,
         onPopoverSizeChanged: { [weak self] size in
@@ -293,7 +305,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       hasPendingWrites: localTasks.isSaving || localTasks.isUndoing
         || localPresentation.hasPendingSubmissions || todayPresentation.hasPendingSubmission
         || todayBridge.hasPendingWrite,
-      focusSessionActive: focusTimer.isRunning)
+      focusSessionActive: focusTimer.isRunning, clipJobActive: clips.snapshot.phase.isActive)
   }
 
   @objc func openSettings(_ sender: Any?) { showSettings() }
@@ -320,7 +332,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
             self.pages.showHome()
             self.showPopover()
           },
-          todayBridge: todayBridge
+          clips: clips, todayBridge: todayBridge
         ))
     }
     // Establish activity before closing the popover: the updater cannot see a

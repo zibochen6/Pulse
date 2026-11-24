@@ -19,6 +19,7 @@ struct SettingsView: View {
   let onRestartRequested: () -> Void
   let onReturnToDraft: () -> Void
   var onTaskEditingChanged: (Bool) -> Void
+  var clips: ClipController?
   var todayBridge: TodayTaskBridge?
   @StateObject private var editing = PulseEditingRegistry()
 
@@ -36,7 +37,7 @@ struct SettingsView: View {
     localPresentation: LocalTaskPresentation? = nil,
     onRestartRequested: @escaping () -> Void = {},
     onReturnToDraft: @escaping () -> Void = {},
-    todayBridge: TodayTaskBridge? = nil
+    clips: ClipController? = nil, todayBridge: TodayTaskBridge? = nil
   ) {
     self.config = config
     self.deepSeekConfiguration = deepSeekConfiguration
@@ -56,6 +57,7 @@ struct SettingsView: View {
     self.onTaskEditingChanged = onTaskEditingChanged
     self.onRestartRequested = onRestartRequested
     self.onReturnToDraft = onReturnToDraft
+    self.clips = clips
     self.todayBridge = todayBridge
   }
 
@@ -77,6 +79,8 @@ struct SettingsView: View {
             ScrollView {
               Group {
                 switch presentation.destination {
+                case .clips:
+                  if let clips { settingsCard { ClipSettingsView(clips: clips) } }
                 case .general: generalContent
                 case .providers: providerContent
                 case .tasks: tasksContent
@@ -166,6 +170,7 @@ struct SettingsView: View {
 
   private var subtitle: String {
     switch presentation.destination {
+    case .clips: PulseLocalization.string("These settings apply to the next recording.")
     case .general: PulseLocalization.string("Make Pulse feel at home on your Mac.")
     case .providers: PulseLocalization.string("Your services, connected on your terms.")
     case .tasks: PulseLocalization.string("A clear place for every thought.")

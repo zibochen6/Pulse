@@ -20,6 +20,7 @@ struct HomeView: View {
   var localPresentation = LocalTaskPresentation()
   var onOpenSettings: (SettingsDestination?, ProviderID?) -> Void = { _, _ in }
   var onRestartRequested: () -> Void = {}
+  var clips: ClipController?
   var focusTimer = FocusTimerController()
   var antigravityUsage = UsageController(provider: InactiveSettingsProvider())
   var todayBridge: TodayTaskBridge?
@@ -45,6 +46,7 @@ struct HomeView: View {
     VStack(spacing: 0) {
       VStack(spacing: 0) {
         toolbar
+        if pages.page == .home, let clips { ClipResultLink(clips: clips) { pages.showClipTask() } }
         HomeProviderStrip(
           config: config, usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
           antigravityUsage: antigravityUsage, deepSeekConfiguration: deepSeekConfiguration,
@@ -62,6 +64,8 @@ struct HomeView: View {
       PopoverContentTransition(page: pages.page) {
         Group {
           switch pages.page {
+          case .clipTask:
+            if let clips { ClipDetailView(clips: clips) { onOpenSettings(.clips, nil) } }
           case .home: homeContent
           case .usage(let provider): usageContent(provider)
           case .tagManagement: tagManagement
@@ -106,6 +110,10 @@ struct HomeView: View {
       }
       Spacer(minLength: 0)
       if pages.page == .home {
+        if let clips {
+          ClipHomeButton(clips: clips, open: { pages.showClipTask() },
+            configure: { onOpenSettings(.clips, nil) })
+        }
         HomeFocusButton(timer: focusTimer)
       }
       Button {
@@ -126,6 +134,7 @@ struct HomeView: View {
 
   private var pageTitle: String {
     switch pages.page {
+    case .clipTask: PulseLocalization.string("Recording edits")
     case .home: "Pulse"
     case .usage(let provider): provider.name
     case .tagManagement: PulseLocalization.string("All tags")
