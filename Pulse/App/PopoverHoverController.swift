@@ -11,6 +11,16 @@ struct PopoverPointerPresence {
   let popoverWindow: Bool
 
   var isInside: Bool { statusButton || content || popoverWindow }
+
+  static func coversPopover(_ pointer: NSPoint, frame: NSRect, screen: NSRect?) -> Bool {
+    if frame.contains(pointer) { return true }
+    guard let screen else { return false }
+    // Keep the strip above the panel alive through the top of its display.
+    // The status item and arrow can have separate frames with gaps between them.
+    return pointer.x >= max(frame.minX, screen.minX)
+      && pointer.x < min(frame.maxX, screen.maxX)
+      && pointer.y >= frame.maxY && pointer.y <= screen.maxY
+  }
 }
 
 enum PopoverHoverState: Equatable {

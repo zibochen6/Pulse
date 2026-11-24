@@ -414,17 +414,21 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   private func pointerPresence() -> PopoverPointerPresence {
     let contentView = popover.contentViewController?.view
+    let pointer = NSEvent.mouseLocation
+    let overPanel = contentView?.window.map {
+      PopoverPointerPresence.coversPopover(pointer, frame: $0.frame, screen: $0.screen?.frame)
+    } ?? false
     return PopoverPointerPresence(
-      statusButton: pointerInside(statusItem.button),
-      content: pointerInside(contentView),
-      popoverWindow: contentView?.window?.frame.contains(NSEvent.mouseLocation) ?? false
+      statusButton: pointerInside(statusItem.button, at: pointer),
+      content: pointerInside(contentView, at: pointer),
+      popoverWindow: overPanel
     )
   }
 
-  private func pointerInside(_ view: NSView?) -> Bool {
+  private func pointerInside(_ view: NSView?, at pointer: NSPoint) -> Bool {
     guard let view, let window = view.window else { return false }
     let rect = window.convertToScreen(view.convert(view.bounds, to: nil))
-    return rect.contains(NSEvent.mouseLocation)
+    return rect.contains(pointer)
   }
 
   private func updateStatusButton(showName: Bool, usageState: UsageRefreshState) {

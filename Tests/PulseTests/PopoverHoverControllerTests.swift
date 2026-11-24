@@ -9,6 +9,29 @@ final class PopoverHoverControllerTests: XCTestCase {
   private let openingDelay: UInt64 = 100_000_000
   private let closeDelay: UInt64 = 80_000_000
 
+  func testPanelHoverCoversItsFullWidthThroughTheMenuBar() {
+    // A secondary display with a nonzero origin and a gap above the popover.
+    let screen = NSRect(x: -1_440, y: 100, width: 1_440, height: 900)
+    let panel = NSRect(x: -650, y: 440, width: 400, height: 520)
+
+    func keepsOpen(_ x: CGFloat, _ y: CGFloat) -> Bool {
+      PopoverPointerPresence.coversPopover(
+        NSPoint(x: x, y: y), frame: panel, screen: screen)
+    }
+
+    XCTAssertTrue(keepsOpen(-450, 978))  // Gap between the panel and menu bar.
+    XCTAssertTrue(keepsOpen(-450, 1_000))  // Top pixel of the display.
+    XCTAssertTrue(keepsOpen(-649, 999))  // Above the left side of the panel.
+    XCTAssertTrue(keepsOpen(-251, 999))  // Above the right side of the panel.
+    XCTAssertTrue(keepsOpen(-450, 441))
+    XCTAssertFalse(keepsOpen(-651, 990))
+    XCTAssertFalse(keepsOpen(-249, 990))
+    XCTAssertFalse(keepsOpen(-450, 439))
+    XCTAssertFalse(keepsOpen(-450, 1_001))
+    XCTAssertFalse(
+      PopoverPointerPresence.coversPopover(NSPoint(x: -450, y: 999), frame: panel, screen: nil))
+  }
+
   func testOpeningIgnoresExitAndRereadsPointerGeometry() async throws {
     var closeCount = 0
     let pointer = TestPointerLocation(statusButton: true)
