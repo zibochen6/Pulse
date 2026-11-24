@@ -5,6 +5,10 @@ private struct PulseReduceMotionOverrideKey: EnvironmentKey {
   static let defaultValue: Bool? = nil
 }
 
+private struct PulseNativeBackdropKey: EnvironmentKey {
+  static let defaultValue = false
+}
+
 extension EnvironmentValues {
   var pulseReduceMotionOverride: Bool? {
     get { self[PulseReduceMotionOverrideKey.self] }
@@ -12,11 +16,15 @@ extension EnvironmentValues {
   }
 
   var pulseReduceMotion: Bool { pulseReduceMotionOverride ?? accessibilityReduceMotion }
+
+  var pulseHasNativeBackdrop: Bool {
+    get { self[PulseNativeBackdropKey.self] }
+    set { self[PulseNativeBackdropKey.self] = newValue }
+  }
 }
 
 /// Shared visual and motion vocabulary for the menu-bar surface and Settings.
-/// Colors resolve against native appearance, keeping both surfaces opaque and
-/// legible without relying on the wallpaper behind a popover.
+/// Cards and controls retain their adaptive colors over the window backdrop.
 enum PulseDesignTokens {
   static let label: CGFloat = 14
   static let footnote: CGFloat = 13
@@ -33,6 +41,10 @@ enum PulseDesignTokens {
   static let taskRowHeight: CGFloat = 36
 
   static let background = adaptive(light: 0xFFFFFF, dark: 0x232427)
+
+  static func windowPaper(transparencyPercent: Int) -> Color {
+    background.opacity(1 - Double(transparencyPercent) / 100)
+  }
   static let surface = adaptive(light: 0xFFFFFF, dark: 0x292A26)
   static let secondarySurface = adaptive(light: 0xF2F2EF, dark: 0x30312E)
   static let ink = adaptive(light: 0x242421, dark: 0xF1F2E9)

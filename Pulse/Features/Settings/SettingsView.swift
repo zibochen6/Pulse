@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
   @ObservedObject var config: AppConfig
+  @Environment(\.pulseHasNativeBackdrop) private var hasNativeBackdrop
   @ObservedObject var deepSeekConfiguration: DeepSeekConfiguration
   @ObservedObject var vipConfiguration: VIPConfiguration
   @ObservedObject var localTasks: LocalTaskController
@@ -112,7 +113,11 @@ struct SettingsView: View {
       width: SettingsWindowController.contentSize.width,
       height: SettingsWindowController.contentSize.height
     )
-    .background(PulseDesignTokens.background)
+    .background(
+      PulseDesignTokens.windowPaper(
+        transparencyPercent: hasNativeBackdrop ? config.effectiveWindowTransparencyPercent : 0
+      )
+    )
     .foregroundStyle(PulseDesignTokens.ink)
     .tint(PulseDesignTokens.accent)
     .onAppear {
@@ -163,7 +168,6 @@ struct SettingsView: View {
         .padding(.vertical, 8).accessibilityIdentifier("quitPulseButton")
     }
     .padding(.horizontal, 8).padding(.vertical, 18).frame(width: 108)
-    .background(PulseDesignTokens.background)
   }
 
   private var subtitle: String {
@@ -179,6 +183,7 @@ struct SettingsView: View {
 
   private var generalContent: some View {
     VStack(alignment: .leading, spacing: 16) {
+      appearanceCard
       settingsCard {
         VStack(alignment: .leading, spacing: 16) {
           preferenceRow(
@@ -209,6 +214,48 @@ struct SettingsView: View {
       }
       Text("Appearance, language and reduced motion follow your Mac’s settings.")
         .font(.system(size: 12)).foregroundStyle(.secondary)
+    }
+  }
+
+  private var appearanceCard: some View {
+    settingsCard {
+      Text("Appearance").font(.system(size: PulseDesignTokens.label, weight: .semibold))
+        .accessibilityAddTraits(.isHeader)
+      Slider(
+        value: Binding(
+          get: { Double(config.windowTransparencyPercent) },
+          set: { config.setWindowTransparencyPercent(Int($0.rounded())) }),
+        in: Double(
+          AppConfig.windowTransparencyRange.lowerBound)...Double(
+            AppConfig.windowTransparencyRange.upperBound),
+        step: Double(AppConfig.windowTransparencyStep)
+      ) {
+        Text("Background transparency")
+      } minimumValueLabel: {
+        Text(0.0, format: .percent)
+      } maximumValueLabel: {
+        Text(Double(AppConfig.windowTransparencyRange.upperBound) / 100, format: .percent)
+      }
+      .disabled(config.systemReducesTransparency)
+      .accessibilityValue(
+        Text(Double(config.windowTransparencyPercent) / 100, format: .percent)
+      )
+      .accessibilityIdentifier("windowTransparencySlider")
+      HStack {
+        Text(
+          LocalizedStringKey(
+            config.systemReducesTransparency
+              ? "Your Mac is reducing transparency."
+              : "Applies to the menu bar panel and Settings.")
+        )
+        .foregroundStyle(PulseDesignTokens.muted)
+        .fixedSize(horizontal: false, vertical: true)
+        Spacer(minLength: 8)
+        Text(Double(config.windowTransparencyPercent) / 100, format: .percent)
+          .monospacedDigit()
+          .accessibilityHidden(true)
+      }
+      .font(.system(size: PulseDesignTokens.caption))
     }
   }
 

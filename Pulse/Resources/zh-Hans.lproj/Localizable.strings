@@ -393,3 +393,7 @@
 "clip.drafting.bilibili" = "正在处理B 站草稿";
 "clip.incompleteEvidence" = "草稿核验证据不完整，请查看各平台结果。";
 "clip.incompletePackage" = "成片、字幕、四画幅封面或审核页尚未齐全，可打开作品文件夹查看。";
+"Appearance" = "外观";
+"Background transparency" = "背景透明度";
+"Your Mac is reducing transparency." = "你的 Mac 已启用「减少透明度」。";
+"Applies to the menu bar panel and Settings." = "同时应用于菜单栏弹窗和设置窗口。";

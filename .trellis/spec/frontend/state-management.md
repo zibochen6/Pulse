@@ -34,7 +34,7 @@ The production initializer supplies `.standard` and `SystemLoginItemService()` b
 - The status item renders the bundled Codex icon plus the current `UsageRefreshState` title (`…`, percentage, `--`, or `!`). `showMenuBarLabel` only adds the word “Pulse”; it never hides the usage state.
 - `CodexMenuIcon.png` is the monochrome template artwork for the macOS status bar only. Popover views use `CodexProviderIcon`, backed by the alpha-enabled `CodexColorIcon.png`, so the Codex mark keeps its supplied blue-violet color in both Aqua and Dark Aqua. Do not set the popover image to template rendering or reuse it for the status item.
 - `DeepSeekProviderIcon` must preserve the actual DeepSeek whale geometry, including the belly, eye and tail negative spaces. The initial generic whale silhouette was rejected by the user. Reuse the shared native vector component on Home, Usage and Settings; preserve aspect ratio inside its existing frame and use the reference blue `#4D6BFE`. Obtain original vector geometry from the official source rather than approximating the mark. Keep attribution in `THIRD_PARTY_NOTICES.md` and inspect an enlarged render as well as the 14–18-point icons in both appearances.
-- The popover uses one `HomeView.popoverSize` for both AppKit and SwiftUI and covers the entire hosting surface with the adaptive opaque `PulseDesignTokens.background`. Section cards use the shared adaptive surface tokens. Native show/close animation is enabled unless NSWorkspace reports Reduce Motion; never restore the former clear background or unconditionally disable motion. Observe accessibility display changes and reread the setting before opening/closing. Animation duration and appearance are owned by macOS.
+- The popover uses one `HomeView.popoverSize` for both AppKit and SwiftUI and covers the entire hosting surface with one adaptive paper layer over the native popover material. Only that paper layer follows the saved transparency percentage. Section cards use the shared adaptive solid surface tokens. Native show/close animation is enabled unless NSWorkspace reports Reduce Motion. Observe accessibility display changes and reread the setting before opening/closing. Animation duration and appearance are owned by macOS.
 - `@Published` emits during `willSet`. Subscribers that update AppKit controls must use the emitted value rather than re-read the stored property in the same callback.
 - Rebuilding the app does not replace an already-running menu bar process. Restart the built app before judging its icon, quota, or popover appearance.
 
@@ -161,7 +161,7 @@ cannot show Connected, and a menu/drag must not dismiss mid-operation.
 ### 6. Tests Required
 Keep native hover/callback and provider formatting tests. Cover navigation
 targets, overlapping holds and stale leases, actual 400-point header geometry,
-720 × 560 Settings, opaque edges, failed/large/multi-currency values and
+720 × 560 Settings, opaque edges in solid mode, failed/large/multi-currency values and
 light/dark × English/Chinese. Render pass is not live mouse/IME acceptance.
 
 ### 7. Wrong vs Correct

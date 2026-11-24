@@ -49,10 +49,15 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
 - Holds are source-scoped. An old lease cannot end a later session after reset.
   NSMenu tracking brackets menu holds; native NSDraggingSource end handles drop,
   outside release and Escape. `dropExited` must not terminate a drag hold.
-- Shared adaptive tokens own color, spacing and motion. Root backgrounds remain
-  opaque. Use actual zero-bounce curves where required; snappy extraBounce zero
-  retains its preset bounce. Reduce Motion removes all geometry feedback.
-- The dashboard palette uses opaque paper and ink, pastel paper for provider
+- Shared adaptive tokens own color, spacing and motion. Use actual zero-bounce
+  curves where required; snappy extraBounce zero retains its preset bounce.
+  Reduce Motion removes all geometry feedback.
+- The dashboard uses one adaptive paper layer over the native AppKit backdrop per
+  window. Settings General and the menu bar panel share a 0–50 percent preference
+  in 5-point steps, default 25. Zero, Reduce Transparency and detached render
+  fixtures use opaque paper. The system override never updates the saved value.
+  Do not apply transparency to the entire window or to task and provider cards.
+- The dashboard palette uses ink, pastel paper for provider
   cards, green selection, and separate semantic and keyboard focus colors.
   Apply the common paper perimeter through `pulsePaper`. Task lists share the
   square completion glyph and circular Add task button. Paired Today adds a

@@ -140,6 +140,44 @@ final class SettingsLifecycleTests: XCTestCase {
     XCTAssertTrue(presentation.hasUnsavedEdits)
   }
 
+  func testSettingsWindowUpdatesNativeBackdropWhenTransparencyChanges() async throws {
+    let suite = "PulseSettingsTransparency.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let runtime = PulseRuntimeServices(environment: ["PULSE_DISABLE_LIVE_USAGE": "1"])
+    let config = AppConfig(defaults: defaults, loginItemService: runtime.loginItemService)
+    let controller = SettingsWindowController(config: config, rootView: Text("Settings"))
+    let window = try XCTUnwrap(controller.window)
+    window.ignoresMouseEvents = true
+    window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
+    window.orderFront(nil)
+    defer { controller.close() }
+    func nativeMaterials(in view: NSView) -> [NSVisualEffectView] {
+      (view as? NSVisualEffectView).map { [$0] } ?? view.subviews.flatMap(nativeMaterials(in:))
+    }
+    let content = try XCTUnwrap(window.contentView)
+    try await Task.sleep(for: .milliseconds(60))
+    content.layoutSubtreeIfNeeded()
+    let materials = nativeMaterials(in: content)
+    XCTAssertEqual(materials.count, 1)
+    XCTAssertEqual(materials.first?.blendingMode, .behindWindow)
+    XCTAssertEqual(materials.first?.frame.size, SettingsWindowController.contentSize)
+
+    XCTAssertFalse(window.isOpaque)
+    XCTAssertEqual(window.backgroundColor.alphaComponent, 0)
+    XCTAssertTrue(window.styleMask.contains(.titled))
+    config.setWindowTransparencyPercent(0)
+    XCTAssertGreaterThan(window.backgroundColor.alphaComponent, 0.99)
+    config.setWindowTransparencyPercent(50)
+    XCTAssertEqual(window.backgroundColor.alphaComponent, 0)
+    config.setSystemReducesTransparency(true)
+    XCTAssertGreaterThan(window.backgroundColor.alphaComponent, 0.99)
+    config.setSystemReducesTransparency(false)
+    XCTAssertEqual(window.backgroundColor.alphaComponent, 0)
+    XCTAssertTrue(controller.window === window)
+    XCTAssertEqual(window.contentView?.frame.size, SettingsWindowController.contentSize)
+  }
+
   func testFocusOutlineFollowsTabNavigationAndClearsOnMouseClick() throws {
     let focus = PulsePopoverFocus()
     func keyDown(_ keyCode: Int, characters: String, flags: NSEvent.ModifierFlags = []) throws

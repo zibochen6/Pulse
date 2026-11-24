@@ -1,9 +1,49 @@
 import Foundation
 import XCTest
+
 @testable import Pulse
 
 @MainActor
 final class AppConfigTests: XCTestCase {
+  func testWindowTransparencyDefaultsClampsAndPersists() throws {
+    let (defaults, suiteName) = try makeDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let service = FakeLoginItemService()
+    let config = AppConfig(defaults: defaults, loginItemService: service)
+    XCTAssertEqual(config.windowTransparencyPercent, 25)
+
+    config.setWindowTransparencyPercent(Int.max)
+    XCTAssertEqual(config.windowTransparencyPercent, 50)
+    config.setWindowTransparencyPercent(Int.min)
+    XCTAssertEqual(config.windowTransparencyPercent, 0)
+    config.setWindowTransparencyPercent(24)
+    XCTAssertEqual(config.windowTransparencyPercent, 25)
+    config.setWindowTransparencyPercent(35)
+    XCTAssertEqual(
+      AppConfig(defaults: defaults, loginItemService: service).windowTransparencyPercent, 35)
+
+    defaults.set(70, forKey: "windowTransparencyPercent")
+    XCTAssertEqual(
+      AppConfig(defaults: defaults, loginItemService: service).windowTransparencyPercent, 50)
+    defaults.set("invalid", forKey: "windowTransparencyPercent")
+    XCTAssertEqual(
+      AppConfig(defaults: defaults, loginItemService: service).windowTransparencyPercent, 25)
+  }
+
+  func testReduceTransparencyOverridesWithoutChangingSavedPreference() throws {
+    let (defaults, suiteName) = try makeDefaults()
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let service = FakeLoginItemService()
+    let config = AppConfig(defaults: defaults, loginItemService: service)
+    config.setWindowTransparencyPercent(40)
+    config.setSystemReducesTransparency(true)
+    XCTAssertEqual(config.effectiveWindowTransparencyPercent, 0)
+    XCTAssertEqual(config.windowTransparencyPercent, 40)
+    XCTAssertEqual(defaults.integer(forKey: "windowTransparencyPercent"), 40)
+    config.setSystemReducesTransparency(false)
+    XCTAssertEqual(config.effectiveWindowTransparencyPercent, 40)
+  }
+
   func testPreferencesDefaultOffAndPersistAcrossInstances() throws {
     let (defaults, suiteName) = try makeDefaults()
     defer { defaults.removePersistentDomain(forName: suiteName) }

@@ -393,3 +393,7 @@
 "clip.drafting.bilibili" = "Working on Bilibili draft";
 "clip.incompleteEvidence" = "Draft evidence is incomplete. Check the individual platform results.";
 "clip.incompletePackage" = "Some media or the review page is missing. Open the work folder for details.";
+"Appearance" = "Appearance";
+"Background transparency" = "Background transparency";
+"Your Mac is reducing transparency." = "Your Mac is reducing transparency.";
+"Applies to the menu bar panel and Settings." = "Applies to the menu bar panel and Settings.";

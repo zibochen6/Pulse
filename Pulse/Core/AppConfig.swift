@@ -3,12 +3,17 @@ import Foundation
 
 @MainActor
 final class AppConfig: ObservableObject {
+  static let defaultWindowTransparencyPercent = 25
+  static let windowTransparencyRange = 0...50
+  static let windowTransparencyStep = 5
+
   private enum Key {
     static let launchAtLoginRequested = "launchAtLoginRequested"
     static let showMenuBarLabel = "showMenuBarLabel"
     static let vipBalanceEnabled = "vipBalanceEnabled"
     static let deepSeekBalanceEnabled = "deepSeekBalanceEnabled"
     static let antigravityEnabled = "antigravityEnabled"
+    static let windowTransparencyPercent = "windowTransparencyPercent"
   }
 
   @Published private(set) var launchAtLoginRequested: Bool
@@ -16,6 +21,8 @@ final class AppConfig: ObservableObject {
   @Published private(set) var vipBalanceEnabled: Bool
   @Published private(set) var deepSeekBalanceEnabled: Bool
   @Published private(set) var antigravityEnabled: Bool
+  @Published private(set) var windowTransparencyPercent: Int
+  @Published private(set) var systemReducesTransparency = false
   @Published private(set) var loginItemStatus: LoginItemStatus
   @Published private(set) var loginItemError: String?
 
@@ -33,7 +40,33 @@ final class AppConfig: ObservableObject {
     vipBalanceEnabled = defaults.object(forKey: Key.vipBalanceEnabled) as? Bool ?? true
     deepSeekBalanceEnabled = defaults.object(forKey: Key.deepSeekBalanceEnabled) as? Bool ?? true
     antigravityEnabled = defaults.bool(forKey: Key.antigravityEnabled)
+    windowTransparencyPercent = Self.normalizedTransparency(
+      defaults.object(forKey: Key.windowTransparencyPercent) as? Int
+        ?? Self.defaultWindowTransparencyPercent)
     loginItemStatus = loginItemService.status
+  }
+
+  var effectiveWindowTransparencyPercent: Int {
+    systemReducesTransparency ? 0 : windowTransparencyPercent
+  }
+
+  func setWindowTransparencyPercent(_ percent: Int) {
+    let percent = Self.normalizedTransparency(percent)
+    guard percent != windowTransparencyPercent else { return }
+    windowTransparencyPercent = percent
+    defaults.set(percent, forKey: Key.windowTransparencyPercent)
+  }
+
+  func setSystemReducesTransparency(_ enabled: Bool) {
+    guard systemReducesTransparency != enabled else { return }
+    systemReducesTransparency = enabled
+  }
+
+  private static func normalizedTransparency(_ value: Int) -> Int {
+    let clamped = min(
+      windowTransparencyRange.upperBound, max(windowTransparencyRange.lowerBound, value))
+    let step = windowTransparencyStep
+    return ((clamped + step / 2) / step) * step
   }
 
   func setShowMenuBarLabel(_ enabled: Bool) {

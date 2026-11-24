@@ -4,7 +4,8 @@ import SwiftUI
 struct HomeView: View {
   static let popoverSize = NSSize(width: 400, height: 520)
 
-  let config: AppConfig
+  @ObservedObject var config: AppConfig
+  @Environment(\.pulseHasNativeBackdrop) private var hasNativeBackdrop
   let usage: UsageController
   let vipUsage: UsageController
   let deepSeekUsage: UsageController
@@ -72,7 +73,6 @@ struct HomeView: View {
           }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(PulseDesignTokens.background)
         .foregroundStyle(PulseDesignTokens.ink)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -80,7 +80,11 @@ struct HomeView: View {
     .frame(width: panelSize.width, height: panelSize.height)
     .onAppear { onPopoverSizeChanged?(panelSize) }
     .onChange(of: panelSize) { onPopoverSizeChanged?($0) }
-    .background(PulseDesignTokens.background)
+    .background(
+      PulseDesignTokens.windowPaper(
+        transparencyPercent: hasNativeBackdrop ? config.effectiveWindowTransparencyPercent : 0
+      )
+    )
     .foregroundStyle(PulseDesignTokens.ink)
     .tint(PulseDesignTokens.accent)
     .clipped()

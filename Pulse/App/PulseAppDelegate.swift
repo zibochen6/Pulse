@@ -113,7 +113,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private var preferencesSubscription: AnyCancellable?
   private var usageTrackingSubscriptions: [AnyCancellable] = []
   private var usageSubscription: AnyCancellable?
-  private var motionPreferencesSubscription: AnyCancellable?
+  private var displayAccessibilitySubscription: AnyCancellable?
   private lazy var hoverController = PopoverHoverController(
     pointerPresence: { [weak self] in
       self?.pointerPresence()
@@ -176,10 +176,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         Task { [weak self] in await self?.todayBridge.refresh() }
       }
 
-    motionPreferencesSubscription = NSWorkspace.shared.notificationCenter
+    displayAccessibilitySubscription = NSWorkspace.shared.notificationCenter
       .publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
       .receive(on: RunLoop.main)
-      .sink { [weak self] _ in self?.updatePopoverMotion() }
+      .sink { [weak self] _ in self?.updateDisplayAccessibility() }
 
     preferencesSubscription = config.$showMenuBarLabel
       .sink { [weak self] showName in
@@ -265,8 +265,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private func configurePopover() {
     popover.behavior = .transient
     popover.delegate = self
-    // Native motion is safe with HomeView's opaque adaptive background.
-    updatePopoverMotion()
+    updateDisplayAccessibility()
     popover.contentSize = HomeView.popoverSize
     let hostingController = NSHostingController(
       rootView: HomeView(
@@ -297,7 +296,9 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
           guard let self, self.popover.contentSize != size else { return }
           self.popover.contentSize = size
         }
-      ).environment(\.pulsePopoverFocus, popoverFocus)
+      )
+      .environment(\.pulsePopoverFocus, popoverFocus)
+      .environment(\.pulseHasNativeBackdrop, true)
     )
     popover.contentViewController = hostingController
     installTrackingArea(on: hostingController.view, owner: contentTrackingOwner)
@@ -322,6 +323,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     settingsPresentation.open(destination, provider: provider)
     if settingsController == nil {
       settingsController = SettingsWindowController(
+        config: config,
         rootView: SettingsView(
           config: config, deepSeekConfiguration: deepSeekConfiguration,
           vipConfiguration: vipConfiguration, localTasks: localTasks, updates: updates,
@@ -475,7 +477,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     }
     interactionHolds.set(.taskEditor, active: taskEditorActive)
     hoverController.setDismissalSuspended(interactionHolds.isActive)
-    updatePopoverMotion()
+    updateDisplayAccessibility()
     popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     guard popover.isShown else {
       hoverController.reset()
@@ -542,8 +544,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     }
   }
 
-  private func updatePopoverMotion() {
-    popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+  private func updateDisplayAccessibility() {
+    let workspace = NSWorkspace.shared
+    config.setSystemReducesTransparency(workspace.accessibilityDisplayShouldReduceTransparency)
+    popover.animates = !workspace.accessibilityDisplayShouldReduceMotion
   }
 
   func popoverDidShow(_ notification: Notification) {
@@ -551,7 +555,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   func popoverShouldClose(_ popover: NSPopover) -> Bool {
-    updatePopoverMotion()
+    updateDisplayAccessibility()
     return true
   }
 

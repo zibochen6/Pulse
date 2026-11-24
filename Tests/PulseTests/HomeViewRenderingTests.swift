@@ -91,7 +91,8 @@ final class HomeViewRenderingTests: XCTestCase {
         return XCTFail("Could not create \(appearanceName) appearance")
       }
       for page in [
-        PopoverPage.home, .usage(.codex), .usage(.vip), .usage(.deepSeek), .tagManagement, .clipTask,
+        PopoverPage.home, .usage(.codex), .usage(.vip), .usage(.deepSeek), .tagManagement,
+        .clipTask,
       ] {
         let pages = PopoverPageController()
         switch page {
@@ -136,6 +137,71 @@ final class HomeViewRenderingTests: XCTestCase {
           XCTAssertEqual(color.alphaComponent, 1, accuracy: 0.01)
         }
       }
+    }
+  }
+
+  func testNativeWindowPaperRevealsMoreOfItsBackdropAtHigherSettings() throws {
+    let suite = "PulsePopoverPaper.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
+    let usage = inactiveDeepSeekUsage()
+    let home = HomeView(
+      config: config, usage: usage, vipUsage: usage, deepSeekUsage: usage,
+      deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
+      vipConfiguration: VIPConfiguration(secretStore: PreviewSecretStore()),
+      localTasks: isolatedLocalTasks(), updates: makeInactiveUpdateController(defaults: defaults),
+      pages: PopoverPageController(), onDeepSeekCredentialsChanged: {},
+      onVIPCredentialsChanged: {}, onQuit: {}
+    ).environment(\.pulseHasNativeBackdrop, true)
+
+    let settings = SettingsView(
+      config: config,
+      deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
+      vipConfiguration: VIPConfiguration(secretStore: PreviewSecretStore()),
+      localTasks: isolatedLocalTasks(), updates: makeInactiveUpdateController(defaults: defaults),
+      onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {}, onQuit: {}
+    ).environment(\.pulseHasNativeBackdrop, true)
+
+    func verifyBackdrop<V: View>(_ surface: V, size: NSSize, appearance: NSAppearance) throws {
+      func visibleBackdrop() throws -> CGFloat {
+        let host = NSHostingView(
+          rootView: ZStack {
+            HStack(spacing: 0) {
+              Color.red
+              Color.blue
+            }
+            surface
+          }
+        )
+        host.appearance = appearance
+        host.frame = NSRect(origin: .zero, size: size)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        let left = try XCTUnwrap(bitmap.colorAt(x: 3, y: 3)?.usingColorSpace(.deviceRGB))
+        let right = try XCTUnwrap(
+          bitmap.colorAt(x: bitmap.pixelsWide - 4, y: 3)?.usingColorSpace(.deviceRGB))
+        return abs(left.redComponent - right.redComponent)
+          + abs(left.blueComponent - right.blueComponent)
+      }
+      config.setWindowTransparencyPercent(0)
+      XCTAssertEqual(try visibleBackdrop(), 0, accuracy: 0.01)
+      config.setWindowTransparencyPercent(25)
+      let midpoint = try visibleBackdrop()
+      XCTAssertGreaterThan(midpoint, 0.1)
+      config.setWindowTransparencyPercent(50)
+      XCTAssertGreaterThan(try visibleBackdrop(), midpoint)
+      config.setSystemReducesTransparency(true)
+      XCTAssertEqual(try visibleBackdrop(), 0, accuracy: 0.01)
+      config.setSystemReducesTransparency(false)
+    }
+
+    for name in [NSAppearance.Name.aqua, .darkAqua] {
+      let appearance = try XCTUnwrap(NSAppearance(named: name))
+      try verifyBackdrop(home, size: HomeView.popoverSize, appearance: appearance)
+      try verifyBackdrop(
+        settings, size: SettingsWindowController.contentSize, appearance: appearance)
     }
   }
 

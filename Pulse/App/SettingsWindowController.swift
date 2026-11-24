@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -8,20 +9,40 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
   var onOpenChanged: ((Bool) -> Void)?
   private let focus = PulsePopoverFocus()
   private var inputMonitor: Any?
+  private var appearanceSubscription: AnyCancellable?
 
-  init<Content: View>(rootView: Content) {
+  init<Content: View>(config: AppConfig? = nil, rootView: Content) {
     let window = NSWindow(
       contentRect: NSRect(origin: .zero, size: Self.contentSize),
       styleMask: [.titled, .closable], backing: .buffered, defer: false)
     window.title = PulseLocalization.string("Pulse Settings")
     window.isReleasedWhenClosed = false
     super.init(window: window)
+    let content = rootView.frame(width: Self.contentSize.width, height: Self.contentSize.height)
+      .environment(\.pulsePopoverFocus, focus)
     window.contentViewController = NSHostingController(
-      rootView: rootView.frame(width: Self.contentSize.width, height: Self.contentSize.height)
-        .environment(\.pulsePopoverFocus, focus))
+      rootView:
+        content
+        .environment(\.pulseHasNativeBackdrop, config != nil)
+        .background {
+          if let config { SettingsWindowBackdrop(config: config) }
+        })
     window.setContentSize(Self.contentSize)
     window.center()
     window.delegate = self
+
+    if let config {
+      let originalBackground = window.backgroundColor
+      let wasOpaque = window.isOpaque
+      appearanceSubscription = config.$windowTransparencyPercent
+        .combineLatest(config.$systemReducesTransparency)
+        .map { percent, reducesTransparency in percent > 0 && !reducesTransparency }
+        .removeDuplicates()
+        .sink { [weak window] usesGlass in
+          window?.backgroundColor = usesGlass ? .clear : originalBackground
+          window?.isOpaque = usesGlass ? false : wasOpaque
+        }
+    }
   }
 
   required init?(coder: NSCoder) { nil }
@@ -61,4 +82,28 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     isOpen = false
     onOpenChanged?(false)
   }
+}
+
+private struct SettingsWindowBackdrop: View {
+  @ObservedObject var config: AppConfig
+
+  var body: some View {
+    if config.effectiveWindowTransparencyPercent > 0 {
+      SettingsVisualEffect()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+  }
+}
+
+private struct SettingsVisualEffect: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSVisualEffectView {
+    let view = NSVisualEffectView()
+    view.material = .sidebar
+    view.blendingMode = .behindWindow
+    view.state = .followsWindowActiveState
+    return view
+  }
+
+  func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
