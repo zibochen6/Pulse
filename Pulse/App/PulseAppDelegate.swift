@@ -112,7 +112,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private var popoverInputMonitor: Any?
   private var credentialRefresh: Task<Void, Never>?
   private var preferencesSubscription: AnyCancellable?
-  private var antigravitySubscription: AnyCancellable?
+  private var usageTrackingSubscriptions: [AnyCancellable] = []
   private var usageSubscription: AnyCancellable?
   private var motionPreferencesSubscription: AnyCancellable?
   private lazy var hoverController = PopoverHoverController(
@@ -195,17 +195,25 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     // The unit test host launches this app; its synthetic tests must not query a real account.
     if Self.shouldStartLiveUsage(environment: ProcessInfo.processInfo.environment) {
       usage.start()
-      vipUsage.start()
-      deepSeekUsage.start()
-      antigravitySubscription = config.$antigravityEnabled.sink { [weak self] enabled in
-        guard let self else { return }
-        if enabled {
-          self.antigravityUsage.start()
-        } else {
-          self.antigravityUsage.stop(reset: true)
-        }
-      }
+      usageTrackingSubscriptions = [
+        trackUsage(config.$vipBalanceEnabled, with: vipUsage),
+        trackUsage(config.$deepSeekBalanceEnabled, with: deepSeekUsage),
+        trackUsage(config.$antigravityEnabled, with: antigravityUsage, resetOnStop: true),
+      ]
       updates.start()
+    }
+  }
+
+  private func trackUsage(
+    _ enabled: Published<Bool>.Publisher, with controller: UsageController,
+    resetOnStop: Bool = false
+  ) -> AnyCancellable {
+    enabled.sink { isEnabled in
+      if isEnabled {
+        controller.start()
+      } else {
+        controller.stop(reset: resetOnStop)
+      }
     }
   }
 
@@ -225,7 +233,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     usage.stop()
     vipUsage.stop()
     deepSeekUsage.stop()
-    antigravitySubscription?.cancel()
+    usageTrackingSubscriptions.removeAll()
     antigravityUsage.stop()
   }
 
@@ -493,8 +501,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         self.credentialRefresh = nil
       }
     }
-    vipUsage.refreshIfStale(maxAge: 60)
-    deepSeekUsage.refreshIfStale(maxAge: 60)
+    if config.vipBalanceEnabled { vipUsage.refreshIfStale(maxAge: 60) }
+    if config.deepSeekBalanceEnabled { deepSeekUsage.refreshIfStale(maxAge: 60) }
     if config.antigravityEnabled, case .success = antigravityUsage.state {
       antigravityUsage.refreshIfStale(maxAge: Self.antigravityRefreshSeconds)
     }

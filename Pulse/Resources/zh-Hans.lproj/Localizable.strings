@@ -264,6 +264,7 @@
 "Todo is the default list." = "Todo 是默认列表。";
 "Todo is the default list. Choose Todo instead." = "Todo 是默认列表，请直接选择 Todo。";
 "Total balance (%@)" = "总余额（%@）";
+"Show balance in Pulse" = "在 Pulse 中显示余额";
 "Track Gemini model quotas" = "跟踪 Gemini 模型额度";
 "Try again" = "重试";
 "Undo" = "撤销";

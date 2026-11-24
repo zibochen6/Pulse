@@ -6,6 +6,39 @@ import XCTest
 
 @MainActor
 final class DeepSeekRenderingTests: XCTestCase {
+  func testBalanceVisibilityPersistsAndEachCardCanBeHiddenIndependently() throws {
+    let suite = "PulseBalanceVisibility.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let config = AppConfig(defaults: defaults, loginItemService: RenderLoginItems())
+    XCTAssertTrue(config.vipBalanceEnabled)
+    XCTAssertTrue(config.deepSeekBalanceEnabled)
+    let usage = UsageController(provider: InactiveSettingsProvider())
+    let localTasks = LocalTaskController(
+      store: LocalTaskStore(
+        fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json")))
+
+    for (showVIP, showDeepSeek) in [(false, true), (true, false), (false, false), (true, true)] {
+      config.setVIPBalanceEnabled(showVIP)
+      config.setDeepSeekBalanceEnabled(showDeepSeek)
+      let capture = HeaderFrameCapture()
+      let root = home(
+        defaults: defaults, localTasks: localTasks, usage: usage, vipUsage: usage,
+        deepSeekUsage: usage, pages: PopoverPageController(), antigravityUsage: usage
+      ).overlayPreferenceValue(ProviderHeaderBoundsKey.self) { anchors in
+        GeometryReader { proxy in
+          HeaderFrameCaptureView(frames: anchors.mapValues { proxy[$0] }, capture: capture)
+        }
+        .allowsHitTesting(false)
+      }
+      _ = try render(NSHostingView(rootView: root), appearance: .aqua)
+      XCTAssertEqual(capture.frames["openVIPUsageButton"] != nil, showVIP)
+      XCTAssertEqual(capture.frames["openDeepSeekUsageButton"] != nil, showDeepSeek)
+      XCTAssertNotNil(capture.frames["openUsageButton"])
+      XCTAssertNotNil(capture.frames["openAntigravityUsageButton"])
+    }
+  }
+
   func testAntigravityIconRendersColoredPixelsAtHomeSize() throws {
     let renderer = ImageRenderer(content: AntigravityProviderIcon(size: 16))
     renderer.scale = 2

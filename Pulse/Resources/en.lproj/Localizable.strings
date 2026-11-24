@@ -264,6 +264,7 @@
 "Todo is the default list." = "Todo is the default list.";
 "Todo is the default list. Choose Todo instead." = "Todo is the default list. Choose Todo instead.";
 "Total balance (%@)" = "Total balance (%@)";
+"Show balance in Pulse" = "Show balance in Pulse";
 "Track Gemini model quotas" = "Track Gemini model quotas";
 "Try again" = "Try again";
 "Undo" = "Undo";

@@ -7,6 +7,7 @@ struct ProviderCredentialForm<Icon: View>: View {
   let provider: ProviderID
   let fieldIdentifier: String
   let actionIdentifier: String
+  let showBalance: Binding<Bool>
   let onCredentialsChanged: () -> Void
   var onEditingChanged: (Bool) -> Void = { _ in }
   @ViewBuilder let icon: () -> Icon
@@ -54,13 +55,15 @@ struct ProviderCredentialForm<Icon: View>: View {
           }
         }
       }
+      Toggle("Show balance in Pulse", isOn: showBalance)
+        .toggleStyle(.switch)
+        .accessibilityIdentifier("balanceUsageToggle.\(provider.rawValue)")
       if isExpanded {
         editor.transition(.opacity)
       }
     }
     .padding(16)
-    .background(PulseDesignTokens.surface, in: RoundedRectangle(cornerRadius: 12))
-    .overlay(RoundedRectangle(cornerRadius: 12).stroke(PulseDesignTokens.border, lineWidth: 1))
+    .pulsePaper()
     .animation(
       reduceMotion ? nil : PulseDesignTokens.composerAnimation,
       value: isExpanded

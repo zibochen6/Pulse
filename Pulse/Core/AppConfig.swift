@@ -6,11 +6,15 @@ final class AppConfig: ObservableObject {
   private enum Key {
     static let launchAtLoginRequested = "launchAtLoginRequested"
     static let showMenuBarLabel = "showMenuBarLabel"
+    static let vipBalanceEnabled = "vipBalanceEnabled"
+    static let deepSeekBalanceEnabled = "deepSeekBalanceEnabled"
     static let antigravityEnabled = "antigravityEnabled"
   }
 
   @Published private(set) var launchAtLoginRequested: Bool
   @Published private(set) var showMenuBarLabel: Bool
+  @Published private(set) var vipBalanceEnabled: Bool
+  @Published private(set) var deepSeekBalanceEnabled: Bool
   @Published private(set) var antigravityEnabled: Bool
   @Published private(set) var loginItemStatus: LoginItemStatus
   @Published private(set) var loginItemError: String?
@@ -26,6 +30,8 @@ final class AppConfig: ObservableObject {
     self.loginItemService = loginItemService
     launchAtLoginRequested = defaults.bool(forKey: Key.launchAtLoginRequested)
     showMenuBarLabel = defaults.bool(forKey: Key.showMenuBarLabel)
+    vipBalanceEnabled = defaults.object(forKey: Key.vipBalanceEnabled) as? Bool ?? true
+    deepSeekBalanceEnabled = defaults.object(forKey: Key.deepSeekBalanceEnabled) as? Bool ?? true
     antigravityEnabled = defaults.bool(forKey: Key.antigravityEnabled)
     loginItemStatus = loginItemService.status
   }
@@ -33,6 +39,18 @@ final class AppConfig: ObservableObject {
   func setShowMenuBarLabel(_ enabled: Bool) {
     showMenuBarLabel = enabled
     defaults.set(enabled, forKey: Key.showMenuBarLabel)
+  }
+
+  func setVIPBalanceEnabled(_ enabled: Bool) {
+    guard vipBalanceEnabled != enabled else { return }
+    vipBalanceEnabled = enabled
+    defaults.set(enabled, forKey: Key.vipBalanceEnabled)
+  }
+
+  func setDeepSeekBalanceEnabled(_ enabled: Bool) {
+    guard deepSeekBalanceEnabled != enabled else { return }
+    deepSeekBalanceEnabled = enabled
+    defaults.set(enabled, forKey: Key.deepSeekBalanceEnabled)
   }
 
   func setAntigravityEnabled(_ enabled: Bool) {

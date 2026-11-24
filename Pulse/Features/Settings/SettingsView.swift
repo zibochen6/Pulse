@@ -238,6 +238,8 @@ struct SettingsView: View {
       ProviderCredentialForm(
         configuration: vipConfiguration, usage: vipUsage, presentation: presentation,
         provider: .vip, fieldIdentifier: "vipAPIKeyField", actionIdentifier: "VIP",
+        showBalance: Binding(
+          get: { config.vipBalanceEnabled }, set: config.setVIPBalanceEnabled),
         onCredentialsChanged: onVIPCredentialsChanged,
         onEditingChanged: { editing.set(source: "vipAPIKeyField", editing: $0) }
       ) { VIPProviderIcon(size: 26) }
@@ -245,6 +247,8 @@ struct SettingsView: View {
       ProviderCredentialForm(
         configuration: deepSeekConfiguration, usage: deepSeekUsage, presentation: presentation,
         provider: .deepSeek, fieldIdentifier: "deepSeekAPIKeyField", actionIdentifier: "DeepSeek",
+        showBalance: Binding(
+          get: { config.deepSeekBalanceEnabled }, set: config.setDeepSeekBalanceEnabled),
         onCredentialsChanged: onDeepSeekCredentialsChanged,
         onEditingChanged: { editing.set(source: "deepSeekAPIKeyField", editing: $0) }
       ) { DeepSeekProviderIcon(size: 26) }

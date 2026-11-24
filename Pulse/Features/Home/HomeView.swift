@@ -286,22 +286,26 @@ private struct HomeProviderStrip: View {
         usage.requestRefresh()
         onOpenUsage(.codex)
       }
-      VIPStatusSummary(state: vipUsage.state, isConfigured: vipConfiguration.hasAPIKey) {
-        if vipConfiguration.hasAPIKey {
-          vipUsage.requestRefresh()
-          onOpenUsage(.vip)
-        } else {
-          onOpenSettings(.vip)
+      if config.vipBalanceEnabled {
+        VIPStatusSummary(state: vipUsage.state, isConfigured: vipConfiguration.hasAPIKey) {
+          if vipConfiguration.hasAPIKey {
+            vipUsage.requestRefresh()
+            onOpenUsage(.vip)
+          } else {
+            onOpenSettings(.vip)
+          }
         }
       }
-      DeepSeekStatusSummary(
-        state: deepSeekUsage.state, isConfigured: deepSeekConfiguration.hasAPIKey
-      ) {
-        if deepSeekConfiguration.hasAPIKey {
-          deepSeekUsage.requestRefresh()
-          onOpenUsage(.deepSeek)
-        } else {
-          onOpenSettings(.deepSeek)
+      if config.deepSeekBalanceEnabled {
+        DeepSeekStatusSummary(
+          state: deepSeekUsage.state, isConfigured: deepSeekConfiguration.hasAPIKey
+        ) {
+          if deepSeekConfiguration.hasAPIKey {
+            deepSeekUsage.requestRefresh()
+            onOpenUsage(.deepSeek)
+          } else {
+            onOpenSettings(.deepSeek)
+          }
         }
       }
       if config.antigravityEnabled {
