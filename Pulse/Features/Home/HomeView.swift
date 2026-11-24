@@ -44,6 +44,8 @@ struct HomeView: View {
   }
 
   var body: some View {
+    let paperOpacity = PulseDesignTokens.paperOpacity(
+      transparencyPercent: hasNativeBackdrop ? config.effectiveWindowTransparencyPercent : 0)
     VStack(spacing: 0) {
       VStack(spacing: 0) {
         toolbar
@@ -80,11 +82,8 @@ struct HomeView: View {
     .frame(width: panelSize.width, height: panelSize.height)
     .onAppear { onPopoverSizeChanged?(panelSize) }
     .onChange(of: panelSize) { onPopoverSizeChanged?($0) }
-    .background(
-      PulseDesignTokens.windowPaper(
-        transparencyPercent: hasNativeBackdrop ? config.effectiveWindowTransparencyPercent : 0
-      )
-    )
+    .background(PulseDesignTokens.background.opacity(paperOpacity))
+    .environment(\.pulsePaperOpacity, paperOpacity)
     .foregroundStyle(PulseDesignTokens.ink)
     .tint(PulseDesignTokens.accent)
     .clipped()

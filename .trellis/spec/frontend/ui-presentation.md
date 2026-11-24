@@ -56,7 +56,10 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
   window. Settings General and the menu bar panel share a 0–50 percent preference
   in 5-point steps, default 25. Zero, Reduce Transparency and detached render
   fixtures use opaque paper. The system override never updates the saved value.
-  Do not apply transparency to the entire window or to task and provider cards.
+  The window tint and paper cards share the transmission so their opacity does
+  not compound into an effectively solid panel. Apply it to card fills while
+  keeping labels, borders and controls legible. Render tests must sample inside
+  visible cards as well as the window margins at low and high settings.
 - The dashboard palette uses ink, pastel paper for provider
   cards, green selection, and separate semantic and keyboard focus colors.
   Apply the common paper perimeter through `pulsePaper`. Task lists share the

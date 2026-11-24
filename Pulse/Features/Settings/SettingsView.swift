@@ -63,6 +63,8 @@ struct SettingsView: View {
   }
 
   var body: some View {
+    let paperOpacity = PulseDesignTokens.paperOpacity(
+      transparencyPercent: hasNativeBackdrop ? config.effectiveWindowTransparencyPercent : 0)
     HStack(spacing: 0) {
       sidebar
       Rectangle().fill(PulseDesignTokens.border).frame(width: 1)
@@ -113,11 +115,8 @@ struct SettingsView: View {
       width: SettingsWindowController.contentSize.width,
       height: SettingsWindowController.contentSize.height
     )
-    .background(
-      PulseDesignTokens.windowPaper(
-        transparencyPercent: hasNativeBackdrop ? config.effectiveWindowTransparencyPercent : 0
-      )
-    )
+    .background(PulseDesignTokens.background.opacity(paperOpacity))
+    .environment(\.pulsePaperOpacity, paperOpacity)
     .foregroundStyle(PulseDesignTokens.ink)
     .tint(PulseDesignTokens.accent)
     .onAppear {

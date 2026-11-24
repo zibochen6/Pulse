@@ -403,11 +403,12 @@ private struct TodayTaskRow: View {
 struct TaskPaper: ViewModifier {
   static let contentInset: CGFloat = 10
   var folded = false
+  @Environment(\.pulsePaperOpacity) private var paperOpacity
 
   func body(content: Content) -> some View {
     let outline = TaskPaperOutline(folded: folded)
     content
-      .background(PulseDesignTokens.taskPaper, in: outline)
+      .background(PulseDesignTokens.taskPaper.opacity(paperOpacity), in: outline)
       .clipShape(outline)
       .overlay(alignment: .topTrailing) {
         if folded {

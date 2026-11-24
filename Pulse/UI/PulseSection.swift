@@ -32,8 +32,18 @@ extension View {
   func pulsePaper(
     _ fill: Color = PulseDesignTokens.surface, radius: CGFloat = PulseDesignTokens.cornerLarge
   ) -> some View {
+    modifier(PulsePaper(fill: fill, radius: radius))
+  }
+}
+
+private struct PulsePaper: ViewModifier {
+  let fill: Color
+  let radius: CGFloat
+  @Environment(\.pulsePaperOpacity) private var opacity
+
+  func body(content: Content) -> some View {
     let shape = RoundedRectangle(cornerRadius: radius)
-    return self.background(fill, in: shape).overlay {
+    content.background(fill.opacity(opacity), in: shape).overlay {
       shape.strokeBorder(PulseDesignTokens.border, lineWidth: 1)
         .allowsHitTesting(false)
         .accessibilityHidden(true)

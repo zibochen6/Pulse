@@ -9,6 +9,10 @@ private struct PulseNativeBackdropKey: EnvironmentKey {
   static let defaultValue = false
 }
 
+private struct PulsePaperOpacityKey: EnvironmentKey {
+  static let defaultValue = 1.0
+}
+
 extension EnvironmentValues {
   var pulseReduceMotionOverride: Bool? {
     get { self[PulseReduceMotionOverrideKey.self] }
@@ -20,6 +24,11 @@ extension EnvironmentValues {
   var pulseHasNativeBackdrop: Bool {
     get { self[PulseNativeBackdropKey.self] }
     set { self[PulseNativeBackdropKey.self] = newValue }
+  }
+
+  var pulsePaperOpacity: Double {
+    get { self[PulsePaperOpacityKey.self] }
+    set { self[PulsePaperOpacityKey.self] = newValue }
   }
 }
 
@@ -42,8 +51,10 @@ enum PulseDesignTokens {
 
   static let background = adaptive(light: 0xFFFFFF, dark: 0x232427)
 
-  static func windowPaper(transparencyPercent: Int) -> Color {
-    background.opacity(1 - Double(transparencyPercent) / 100)
+  static func paperOpacity(transparencyPercent: Int) -> Double {
+    // The window tint and each overlying paper card share the transmission.
+    // Through both layers, their transmissions multiply to the selected value.
+    1 - sqrt(Double(transparencyPercent) / 100)
   }
   static let surface = adaptive(light: 0xFFFFFF, dark: 0x292A26)
   static let secondarySurface = adaptive(light: 0xF2F2EF, dark: 0x30312E)

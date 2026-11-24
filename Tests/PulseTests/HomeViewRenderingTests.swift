@@ -140,17 +140,24 @@ final class HomeViewRenderingTests: XCTestCase {
     }
   }
 
-  func testNativeWindowPaperRevealsMoreOfItsBackdropAtHigherSettings() throws {
+  func testNativeWindowPaperRevealsBackdropThroughTheCards() async throws {
     let suite = "PulsePopoverPaper.\(UUID())"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let config = AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService())
     let usage = inactiveDeepSeekUsage()
+    let localTasks = isolatedLocalTasks()
+    await localTasks.refresh()
+    for index in 1...8 {
+      let saved = await localTasks.saveTask(
+        id: nil, text: "Sample task \(index)", tagIDs: [], newTagNames: [])
+      XCTAssertTrue(saved)
+    }
     let home = HomeView(
       config: config, usage: usage, vipUsage: usage, deepSeekUsage: usage,
       deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
       vipConfiguration: VIPConfiguration(secretStore: PreviewSecretStore()),
-      localTasks: isolatedLocalTasks(), updates: makeInactiveUpdateController(defaults: defaults),
+      localTasks: localTasks, updates: makeInactiveUpdateController(defaults: defaults),
       pages: PopoverPageController(), onDeepSeekCredentialsChanged: {},
       onVIPCredentialsChanged: {}, onQuit: {}
     ).environment(\.pulseHasNativeBackdrop, true)
@@ -163,8 +170,10 @@ final class HomeViewRenderingTests: XCTestCase {
       onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {}, onQuit: {}
     ).environment(\.pulseHasNativeBackdrop, true)
 
-    func verifyBackdrop<V: View>(_ surface: V, size: NSSize, appearance: NSAppearance) throws {
-      func visibleBackdrop() throws -> CGFloat {
+    func verifyBackdrop<V: View>(
+      _ surface: V, size: NSSize, appearance: NSAppearance, cardY: CGFloat, cardInset: CGFloat
+    ) throws {
+      func visibleBackdrop() throws -> (margin: CGFloat, card: CGFloat) {
         let host = NSHostingView(
           rootView: ZStack {
             HStack(spacing: 0) {
@@ -179,29 +188,48 @@ final class HomeViewRenderingTests: XCTestCase {
         host.layoutSubtreeIfNeeded()
         let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
         host.cacheDisplay(in: host.bounds, to: bitmap)
-        let left = try XCTUnwrap(bitmap.colorAt(x: 3, y: 3)?.usingColorSpace(.deviceRGB))
-        let right = try XCTUnwrap(
-          bitmap.colorAt(x: bitmap.pixelsWide - 4, y: 3)?.usingColorSpace(.deviceRGB))
-        return abs(left.redComponent - right.redComponent)
-          + abs(left.blueComponent - right.blueComponent)
+        func contrastBetweenHalves(inset: Int, y: Int) throws -> CGFloat {
+          let left = try XCTUnwrap(bitmap.colorAt(x: inset, y: y)?.usingColorSpace(.deviceRGB))
+          let right = try XCTUnwrap(
+            bitmap.colorAt(x: bitmap.pixelsWide - inset - 1, y: y)?.usingColorSpace(.deviceRGB))
+          return abs(left.redComponent - right.redComponent)
+            + abs(left.blueComponent - right.blueComponent)
+        }
+        let inset = Int(cardInset * Double(bitmap.pixelsWide) / size.width)
+        let y = Int(cardY * Double(bitmap.pixelsHigh) / size.height)
+        return (
+          try contrastBetweenHalves(inset: 3, y: 3), try contrastBetweenHalves(inset: inset, y: y)
+        )
       }
       config.setWindowTransparencyPercent(0)
-      XCTAssertEqual(try visibleBackdrop(), 0, accuracy: 0.01)
+      let solid = try visibleBackdrop()
+      XCTAssertEqual(solid.margin, 0, accuracy: 0.01)
+      XCTAssertEqual(solid.card, 0, accuracy: 0.01)
+      config.setWindowTransparencyPercent(10)
+      let low = try visibleBackdrop()
+      XCTAssertGreaterThan(low.card, 0.08)
+      XCTAssertGreaterThan(low.margin, 0.2)
       config.setWindowTransparencyPercent(25)
       let midpoint = try visibleBackdrop()
-      XCTAssertGreaterThan(midpoint, 0.1)
+      XCTAssertGreaterThan(midpoint.card, low.card)
       config.setWindowTransparencyPercent(50)
-      XCTAssertGreaterThan(try visibleBackdrop(), midpoint)
+      let maximum = try visibleBackdrop()
+      XCTAssertGreaterThan(maximum.card, midpoint.card)
+      XCTAssertGreaterThan(maximum.margin, midpoint.margin)
       config.setSystemReducesTransparency(true)
-      XCTAssertEqual(try visibleBackdrop(), 0, accuracy: 0.01)
+      let reduced = try visibleBackdrop()
+      XCTAssertEqual(reduced.margin, solid.margin, accuracy: 0.01)
+      XCTAssertEqual(reduced.card, solid.card, accuracy: 0.01)
       config.setSystemReducesTransparency(false)
     }
 
     for name in [NSAppearance.Name.aqua, .darkAqua] {
       let appearance = try XCTUnwrap(NSAppearance(named: name))
-      try verifyBackdrop(home, size: HomeView.popoverSize, appearance: appearance)
       try verifyBackdrop(
-        settings, size: SettingsWindowController.contentSize, appearance: appearance)
+        home, size: HomeView.popoverSize, appearance: appearance, cardY: 260, cardInset: 21)
+      try verifyBackdrop(
+        settings, size: SettingsWindowController.contentSize, appearance: appearance,
+        cardY: 190, cardInset: 140)
     }
   }
 

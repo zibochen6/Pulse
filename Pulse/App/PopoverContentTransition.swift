@@ -26,6 +26,7 @@ struct PopoverContentTransition<Content: View>: NSViewRepresentable {
         .environment(\.colorScheme, context.environment.colorScheme)
         .environment(\.pulseReduceMotionOverride, context.environment.pulseReduceMotion)
         .environment(\.pulsePopoverFocus, context.environment.pulsePopoverFocus)
+        .environment(\.pulsePaperOpacity, context.environment.pulsePaperOpacity)
         .tint(PulseDesignTokens.accent))
   }
 
