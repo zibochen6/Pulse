@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 import XCTest
 
@@ -137,6 +138,36 @@ final class SettingsLifecycleTests: XCTestCase {
     controller.close()
     XCTAssertFalse(controller.isOpen)
     XCTAssertTrue(presentation.hasUnsavedEdits)
+  }
+
+  func testFocusOutlineFollowsTabNavigationAndClearsOnMouseClick() throws {
+    let focus = PulsePopoverFocus()
+    func keyDown(_ keyCode: Int, characters: String, flags: NSEvent.ModifierFlags = []) throws
+      -> NSEvent
+    {
+      try XCTUnwrap(
+        NSEvent.keyEvent(
+          with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
+          context: nil, characters: characters, charactersIgnoringModifiers: characters,
+          isARepeat: false, keyCode: UInt16(keyCode)))
+    }
+    let click = try XCTUnwrap(
+      NSEvent.mouseEvent(
+        with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+        context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+
+    focus.beginPresentation(with: click)
+    XCTAssertFalse(focus.showsKeyboardFocus)
+    focus.handleInput(try keyDown(kVK_ANSI_A, characters: "a"))
+    XCTAssertFalse(focus.showsKeyboardFocus)
+    focus.handleInput(try keyDown(kVK_Tab, characters: "\t", flags: .shift))
+    XCTAssertTrue(focus.showsKeyboardFocus)
+    focus.handleInput(click)
+    XCTAssertFalse(focus.showsKeyboardFocus)
+    focus.beginPresentation(with: try keyDown(kVK_ANSI_Grave, characters: "`"))
+    XCTAssertTrue(focus.showsKeyboardFocus)
+    focus.beginPresentation(with: nil)
+    XCTAssertFalse(focus.showsKeyboardFocus)
   }
 
   func testAutomaticInstallRequiresAllSurfacesAndDraftsIdle() {

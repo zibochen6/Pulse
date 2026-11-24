@@ -1,11 +1,10 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 // MARK: - Settings focus compatibility
 
-/// Retains the independent Settings window's existing AppKit ring handling.
-/// When SwiftUI hosts the label inside an NSButton, disable that button's ring.
-/// Popover controls use the scoped SwiftUI focus effect below.
+/// Compatibility for isolated views without a window focus policy.
 struct PulseFocusRingSuppressor: NSViewRepresentable {
   func makeNSView(context: Context) -> FocusRingProbeView {
     let view = FocusRingProbeView(frame: .zero)
@@ -58,16 +57,14 @@ enum PulseFocusShape {
   case roundedRectangle(cornerRadius: CGFloat)
 
   @ViewBuilder
-  fileprivate func strokedView(inset: CGFloat, lineWidth: CGFloat) -> some View {
+  fileprivate func strokedView() -> some View {
     switch self {
     case .capsule:
       Capsule()
-        .inset(by: inset)
-        .strokeBorder(PulseDesignTokens.focusStroke, lineWidth: lineWidth)
+        .strokeBorder(PulseDesignTokens.focusStroke, lineWidth: 1)
     case .roundedRectangle(let cornerRadius):
       RoundedRectangle(cornerRadius: cornerRadius)
-        .inset(by: inset)
-        .strokeBorder(PulseDesignTokens.focusStroke, lineWidth: lineWidth)
+        .strokeBorder(PulseDesignTokens.focusStroke, lineWidth: 1)
     }
   }
 }
@@ -78,6 +75,21 @@ final class PulsePopoverFocus: ObservableObject {
 
   func setKeyboardNavigation(_ active: Bool) {
     if showsKeyboardFocus != active { showsKeyboardFocus = active }
+  }
+
+  func beginPresentation(with event: NSEvent?) {
+    setKeyboardNavigation(event?.type == .keyDown || event?.type == .keyUp)
+  }
+
+  func handleInput(_ event: NSEvent) {
+    switch event.type {
+    case .keyDown where event.keyCode == UInt16(kVK_Tab):
+      setKeyboardNavigation(true)
+    case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+      setKeyboardNavigation(false)
+    default:
+      break
+    }
   }
 }
 
@@ -122,16 +134,8 @@ private struct PulseFocusOutline: View {
   @Environment(\.pulsePopoverFocus) private var popoverFocus
 
   var body: some View {
-    if isFocused {
-      if let popoverFocus {
-        if #available(macOS 14, *) {
-          KeyboardOutline(focus: popoverFocus, shape: shape)
-        }
-      } else {
-        shape.strokedView(inset: -1, lineWidth: PulseDesignTokens.focusStrokeWidth)
-          .allowsHitTesting(false)
-          .accessibilityHidden(true)
-      }
+    if isFocused, let popoverFocus, #available(macOS 14, *) {
+      KeyboardOutline(focus: popoverFocus, shape: shape)
     }
   }
 
@@ -141,7 +145,7 @@ private struct PulseFocusOutline: View {
 
     var body: some View {
       if focus.showsKeyboardFocus {
-        shape.strokedView(inset: 0, lineWidth: 1)
+        shape.strokedView()
           .allowsHitTesting(false)
           .accessibilityHidden(true)
       }

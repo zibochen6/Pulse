@@ -27,7 +27,8 @@ final class UIDemoExportTests: XCTestCase {
         fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
         destination: output.appendingPathComponent("home-\(language)-\(name).png"))
       try await exportStill(
-        fixture.settings, size: SettingsWindowController.contentSize, fixture: fixture,
+        fixture.settings.environment(\.pulsePopoverFocus, fixture.popoverFocus),
+        size: SettingsWindowController.contentSize, fixture: fixture,
         appearance: appearance,
         destination: output.appendingPathComponent("settings-\(language)-\(name).png"))
       if dashboardStillsOnly {

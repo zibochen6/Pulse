@@ -60,7 +60,6 @@ enum PulseDesignTokens {
   static let pressedFill = ink.opacity(0.14)
   static let selectedFill = adaptive(light: 0xCCEAA0, dark: 0x405332)
   static let focusStroke = adaptive(light: 0x665098, dark: 0xD2C5F4)
-  static let focusStrokeWidth: CGFloat = 1.5
   static let focusFill = focusStroke.opacity(0.10)
 
   /// Stable between processes and renames. Swift's randomized hashValue must

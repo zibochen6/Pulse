@@ -1,5 +1,4 @@
 import AppKit
-import Carbon.HIToolbox
 import Combine
 import SwiftUI
 
@@ -460,8 +459,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   private func showPopover() {
     guard let button = statusItem.button, hoverController.state != .closing else { return }
-    let viaKeyboard = NSApp.currentEvent?.type == .keyDown || NSApp.currentEvent?.type == .keyUp
-    popoverFocus.setKeyboardNavigation(viaKeyboard)
+    popoverFocus.beginPresentation(with: NSApp.currentEvent)
+    let viaKeyboard = popoverFocus.showsKeyboardFocus
     pages.reset()
     hoverController.beginOpening()
     let taskEditorActive: Bool
@@ -526,11 +525,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         guard let self, let window = self.popover.contentViewController?.view.window,
           event.window === window
         else { return }
-        if event.type == .keyDown {
-          if event.keyCode == UInt16(kVK_Tab) { self.popoverFocus.setKeyboardNavigation(true) }
-        } else {
-          self.popoverFocus.setKeyboardNavigation(false)
-        }
+        self.popoverFocus.handleInput(event)
       }
       return event
     }
