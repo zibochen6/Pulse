@@ -1,72 +1,57 @@
 # Motion and response
 
-Pulse 0.1.8 uses a fixed 400 × 520 opaque quick panel and
-independent Settings. Native NSPopover open/close remains system-owned; there is
-no extra whole-panel animation or animated window resizing.
+The native 400-point menu-bar popover fits a short paired Today list and caps
+its content at 520 points. Settings uses a separate 720 × 560 window. Each
+window keeps one live surface over its native backdrop.
 
-## Motion vocabulary
+| State change | Response |
+| --- | --- |
+| Press or keyboard focus | Immediate fill or focus indication |
+| Release or hover | 90 ms release, 120 ms hover, stable hit area |
+| Route or status change | 140 ms opacity feedback, input available immediately |
+| Composer or drop | Up to 200 ms of local zero-bounce settling |
+| Task completion | 180 ms checkbox and strike-through feedback |
+| Async activity | Static idle glyph until 150 ms, then a fixed-size busy glyph |
+| Scroll, drag, glass, timer values | Direct feedback |
 
-| Interaction | Target | Character |
-| --- | --- | --- |
-| Hover | 120 ms | color/opacity ease-out |
-| Press | 90 ms | subtle immediate acknowledgement, no bounce |
-| Page body | 140 ms | enter with a short fade, immediate input |
-| Tag selection | Immediate | selected pill changes in place |
-| Composer | 200 ms | new composer content fades in, input immediately usable |
-| Completion | 180 ms | check and strike-through in place |
-| Reorder | 240 ms | slight spring settle at drop location |
-| Usage refresh | 150 ms delay | fixed icon slot, show progress only while a request continues |
-
-All feedback uses shared tokens. A preset's extraBounce of zero is not proof
-of zero total bounce: snappy already has baseline bounce. Use explicit
-non-bouncy curves for acknowledgement and reserve a mild spring for spatial
-movement. Never animate all descendants on arbitrary view updates.
-
-The toolbar remains stable during navigation. End the outgoing native field
-editor, replace the page immediately, and fade in the incoming body. Rapid
-navigation replaces any active fade. Input and save never wait for animation.
-
-Reduce Motion disables native panel motion and the page fade. It also removes
-internal offsets and pressed scaling. The refresh slot shows a static indicator.
-No system accessibility setting is modified by the app or by automated checks.
+A route change ends the outgoing field editor and immediately mounts the next
+body, which can continue an interrupted fade from its current opacity. Drafts
+live in the shared presentation. The panel applies one latest matching height
+target at a time, and a staged update uses the full available height.
+Reduce Motion makes custom feedback immediate, disables native popover motion
+and drag return animation, and uses a static busy glyph.
 
 ## Pointer lifecycle
 
-Opening waits for both its 300 ms minimum guard and native didShow. Departure
-from button/content/window starts a single 180 ms grace interval. Re-entry
-cancels it; duplicate exits do not extend it. Geometry is rechecked at the
-deadline and every 50 ms while shown. Closing cancels timers and ignores late
-show/tracking events until native didClose.
+Opening waits for the 300 ms guard and AppKit's didShow. Departure from the
+panel, arrow and menu-bar corridor starts a single 180 ms delay. Re-entry
+cancels it. Editing, menu tracking and native dragging hold dismissal
+independently. The 50 ms reconciliation loop pauses while held and immediately
+checks geometry after the final release.
 
-Editing, menu tracking and native dragging are independent holding sources.
-Menu end releases only that menu. Drop exit changes only the visual marker;
-NSDraggingSource end/cancel releases the drag. This preserves the user's
-preferred automatic-close behavior without dismissing a menu or drag mid-action.
-Outside clicks and explicit status-item toggle still use native semantics.
+AppKit finishes its native close before Pulse handles a queued status click.
+Additional clicks update the intended final state. Settings and exit cancel
+queued reopening. On cancel or drop, the native drag session releases its hold
+and stops edge scrolling.
 
 ## Runtime acceptance
 
-Use an isolated development build and sample store:
+Use an isolated development build and sample store. Exercise quick toggles,
+pointer re-entry, native menus, keyboard focus, Chinese marked text, editing
+and undo. Check short, 11-to-12 and long Today lists, update staging, rapid
+navigation, status and error changes, and tag edge scrolling and cancellation.
+Inspect both appearances, both languages, Reduce Motion and Reduce
+Transparency. Screenshots and XCTest establish geometry and state, while
+visible input checks establish interaction.
 
-1. Open the panel and keep the pointer over its status icon for two seconds;
-   enter the content and arrow, leave, return within the grace, then leave again.
-2. Open a tag ellipsis/context menu beyond the panel and remain there longer
-   than 180 ms; select or cancel. A remaining editor still holds the panel.
-3. Drag beyond the panel and return; drag to an overflow edge; cancel with
-   Escape and release outside. None may leave a dimmed tag or permanent hold.
-4. Rapidly switch Home, provider details and tag management. No blank flash,
-   delayed input or accidental task submission is acceptable.
-5. Type Chinese with marked-text composition, confirm a candidate, submit,
-   switch lists/windows, return and use native Undo/Redo. Verify both the
-   displayed string and bound draft.
-6. Complete, undo completion, delete/undo and reorder. Rows and delete hit areas
-   stay stable; selected tags remain reachable.
-7. Inspect light/dark, English/Chinese and injected Reduce Motion variants.
-   Native reduced-motion preference is tested only when already set by the user.
-8. Confirm real values, error recovery and first-use Connect states remain
-   understandable without an explanation.
-
-Unit/render tests are necessary but do not establish live animation or event
-quality. The planning baseline passed 79 relevant tests; native Computer Use
-access timed out. Final verification results belong in the active task's
-verification record and must distinguish completed checks from unavailable ones.
+`UIDemoExportTests.testProfileVisibleMotion` is an opt-in native profiling test.
+Build `Pulse` for testing in Release with `ENABLE_TESTABILITY=YES`. Run only this
+test with `TEST_RUNNER_PULSE_MOTION_PROFILE` pointing to an empty output directory
+and `TEST_RUNNER_PULSE_MOTION_SCREEN` selecting an `NSScreen` index. Use an
+unlocked console and the normal isolated test scheme. After `ready.json`
+appears, attach Instruments Hitches and Core Animation Commits to its PID,
+create the `go` file, and wait for `intervals.json`. Create `finish` after
+saving the trace. The first trial warms caches. Compare the following three
+active intervals per scenario against the same fixture on the baseline.
+Display-link callback cadence and compositor hitch time describe different
+parts of the update and are reported separately.

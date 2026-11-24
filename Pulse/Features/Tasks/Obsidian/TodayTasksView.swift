@@ -112,14 +112,14 @@ struct HomeTaskLists: View {
   let localPresentation: LocalTaskPresentation
   let onEditingChanged: (Bool) -> Void
   let onManageTags: () -> Void
-  var onTodayHeight: (CGFloat?) -> Void = { _ in }
+  var onTodayHeight: (URL?, CGFloat?) -> Void = { _, _ in }
 
   var body: some View {
     if let vault = bridge.vaultURL {
       TodayTasksView(
         vault: vault, bridge: bridge, presentation: presentation,
         onEditingChanged: onEditingChanged,
-        onHeight: onTodayHeight
+        onHeight: { onTodayHeight(vault, $0) }
       )
       .id(vault)
     } else {
@@ -127,7 +127,7 @@ struct HomeTaskLists: View {
         controller: localTasks, presentation: localPresentation,
         onEditingChanged: onEditingChanged, onManageTags: onManageTags
       )
-      .onAppear { onTodayHeight(nil) }
+      .onAppear { onTodayHeight(nil, nil) }
     }
   }
 }
@@ -139,6 +139,7 @@ private struct TodayTasksView: View {
   @ObservedObject var presentation: TodayTaskPresentation
   let onEditingChanged: (Bool) -> Void
   let onHeight: (CGFloat?) -> Void
+  @Environment(\.pulseReduceMotion) private var reduceMotion
   private static let headingLabelHeight: CGFloat = 28
   private static let headingInset: CGFloat = 6
   private static let bottomInset: CGFloat = 8
@@ -150,29 +151,29 @@ private struct TodayTasksView: View {
   private var canQueue: Bool {
     bridge.connection != .protocolMismatch && bridge.connection != .storageUnavailable
   }
+  private var canMeasureCompactHeight: Bool { bridge.tasks.count + bridge.failures.count < 12 }
 
   var body: some View {
     VStack(spacing: 0) {
       heading
       ScrollViewReader { proxy in
         ScrollView {
-          if bridge.tasks.count + bridge.failures.count >= 12 {
-            LazyVStack(alignment: .leading, spacing: 3) { rows }
-              .padding(TaskPaper.contentInset)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .onAppear { onHeight(nil) }
-          } else {
-            VStack(alignment: .leading, spacing: 3) { rows }
-              .padding(TaskPaper.contentInset)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .background {
-                GeometryReader { geometry in
-                  Color.clear
-                    .onAppear { reportContentHeight(geometry.size.height) }
-                    .onChange(of: geometry.size.height, perform: reportContentHeight)
-                }
+          LazyVStack(alignment: .leading, spacing: 3) { rows }
+            .padding(TaskPaper.contentInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+              // The measurement policy can change while the rows and the live
+              // composer stay in the same scroll view and layout hierarchy.
+              GeometryReader { geometry in
+                let height = geometry.size.height
+                let measurement =
+                  canMeasureCompactHeight && height > 0
+                  ? Self.headingHeight + height + Self.bottomInset : nil
+                Color.clear
+                  .onAppear { onHeight(measurement) }
+                  .onChange(of: measurement, perform: onHeight)
               }
-          }
+            }
         }
         .task(id: presentation.drafts[vault]?.focusRequest) {
           guard let request = presentation.drafts[vault]?.focusRequest else { return }
@@ -219,10 +220,6 @@ private struct TodayTasksView: View {
     .padding(.vertical, Self.headingInset)
   }
 
-  private func reportContentHeight(_ height: CGFloat) {
-    onHeight(Self.headingHeight + height + Self.bottomInset)
-  }
-
   @ViewBuilder private var rows: some View {
     syncStatus
     if let message = presentation.actionErrors[vault] {
@@ -254,7 +251,11 @@ private struct TodayTasksView: View {
         },
         onDelete: { perform { try await bridge.delete(taskID: task.id) } })
     }
-    composer
+    Group { composer }
+      .animation(
+        reduceMotion ? nil : PulseDesignTokens.composerAnimation,
+        value: presentation.drafts[vault]?.focusRequest != nil
+      )
       .id("todayComposer")
   }
 
@@ -271,6 +272,7 @@ private struct TodayTasksView: View {
       .font(.system(size: PulseDesignTokens.caption))
       .foregroundStyle(PulseDesignTokens.muted)
       .padding(.vertical, 5)
+      .pulseStatusAppearance()
       .accessibilityIdentifier("todayTasksSyncStatus")
     }
   }
@@ -291,6 +293,7 @@ private struct TodayTasksView: View {
             onCancel: { presentation.collapseDraft(in: vault) }
           )
           .frame(height: 26)
+          TaskWriteIndicator(isBusy: busy)
           Button("Add", action: submit)
             .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
             .disabled(
@@ -315,11 +318,14 @@ private struct TodayTasksView: View {
       }
       .padding(.vertical, 6)
       .onExitCommand { presentation.collapseDraft(in: vault) }
+      // Remove the AppKit editor immediately even if a new one opens mid-fade.
+      .transition(.asymmetric(insertion: .opacity, removal: .identity))
     } else {
       TaskPaperAddButton(identifier: "addTodayTaskButton") {
         presentation.beginDraft(in: vault)
       }
       .disabled(!canQueue)
+      .transition(.identity)
     }
   }
 
@@ -368,25 +374,30 @@ private struct TodayTaskRow: View {
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .animation(
           reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: task.completed)
-      if task.isPending {
-        Image(systemName: "clock").font(.system(size: 12))
-          .foregroundStyle(.secondary).frame(width: 28, height: 28)
-          .help("Waiting to sync").accessibilityLabel("Waiting to sync")
-      } else {
+      ZStack {
         Button(action: onDelete) {
           Image(systemName: task.source == .quick ? "trash" : "calendar.badge.minus")
             .font(.system(size: 12)).foregroundStyle(.secondary)
         }
         .buttonStyle(PulseIconButtonStyle()).disabled(!isEditable)
         .focused($deleteFocused)
-        .opacity(hovered || deleteFocused ? 1 : 0)
+        .opacity(!task.isPending && (hovered || deleteFocused) ? 1 : 0)
+        .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: hovered)
+        .accessibilityHidden(task.isPending)
         .help(PulseLocalization.string(deleteTitle))
         .accessibilityLabel(
           PulseLocalization.format(
             task.source == .quick ? "Delete task: %@" : "Remove from Today: %@", task.title)
         )
         .accessibilityIdentifier("deleteTodayTaskButton.\(task.id)")
+        if task.isPending {
+          Image(systemName: "clock").font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .help("Waiting to sync").accessibilityLabel("Waiting to sync")
+            .transition(.identity)
+        }
       }
+      .frame(width: 28, height: 28)
     }
     .contentShape(Rectangle())
     .onHover { hovered = $0 }
@@ -501,11 +512,10 @@ struct TaskCheckboxGlyph: View {
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(PulseDesignTokens.background)
         }
-        .scaleEffect(reduceMotion || completed ? 1 : 0.9)
         .opacity(completed ? 1 : 0)
     }
     .frame(width: 16, height: 16)
-    .animation(reduceMotion ? nil : PulseDesignTokens.selectionAnimation, value: completed)
+    .animation(reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: completed)
     .accessibilityHidden(true)
   }
 }

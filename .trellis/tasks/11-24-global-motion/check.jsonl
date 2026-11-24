@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Panel sizing, navigation and hover lifecycle"}
+{"file": ".trellis/spec/frontend/ui-presentation.md", "reason": "Settings, task drafts, verified status, isolation and motion"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Shared control feedback and platform APIs"}

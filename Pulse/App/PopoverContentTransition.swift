@@ -2,13 +2,13 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
-/// Ends native editing before swapping pages, then fades in the live body.
-struct PopoverContentTransition<Content: View>: NSViewRepresentable {
-  let page: PopoverPage
+/// Ends native editing and replaces the live body when the route changes.
+struct PopoverContentTransition<Page: Equatable, Content: View>: NSViewRepresentable {
+  let page: Page
   let content: Content
   @Environment(\.pulseReduceMotion) private var reduceMotion
 
-  init(page: PopoverPage, @ViewBuilder content: () -> Content) {
+  init(page: Page, @ViewBuilder content: () -> Content) {
     self.page = page
     self.content = content()
   }
@@ -26,17 +26,19 @@ struct PopoverContentTransition<Content: View>: NSViewRepresentable {
         .environment(\.colorScheme, context.environment.colorScheme)
         .environment(\.pulseReduceMotionOverride, context.environment.pulseReduceMotion)
         .environment(\.pulsePopoverFocus, context.environment.pulsePopoverFocus)
+        .environment(\.pulseHasNativeBackdrop, context.environment.pulseHasNativeBackdrop)
         .environment(\.pulsePaperOpacity, context.environment.pulsePaperOpacity)
         .tint(PulseDesignTokens.accent))
   }
 
   final class Container: NSView {
     private let host: NSHostingView<AnyView>
-    private var page: PopoverPage
+    private var page: Page
+    private var pageGeneration: UInt64 = 0
     private static var fadeKey: String { "pageOpacity" }
 
-    init(rootView: AnyView, page: PopoverPage) {
-      host = NSHostingView(rootView: rootView)
+    init(rootView: AnyView, page: Page) {
+      host = NSHostingView(rootView: AnyView(rootView.id(UInt64(0))))
       self.page = page
       super.init(frame: .zero)
       wantsLayer = true
@@ -49,23 +51,35 @@ struct PopoverContentTransition<Content: View>: NSViewRepresentable {
       host.frame = bounds
     }
 
-    func update(rootView: AnyView, page: PopoverPage, reduceMotion: Bool) {
+    func update(rootView: AnyView, page: Page, reduceMotion: Bool) {
       let pageChanged = self.page != page
-      if pageChanged || reduceMotion {
-        host.layer?.removeAnimation(forKey: Self.fadeKey)
-      }
+      let layer = host.layer
+      let interruptedOpacity: Float? =
+        pageChanged && layer?.animation(forKey: Self.fadeKey) != nil
+        ? layer?.presentation()?.opacity : nil
+
       if pageChanged {
-        window?.endEditing(for: nil)
+        if let editor = window?.firstResponder as? NSTextView, editor.isFieldEditor {
+          window?.endEditing(for: nil)
+        }
         self.page = page
+        pageGeneration &+= 1
       }
-      host.rootView = rootView
+      host.rootView = AnyView(rootView.id(pageGeneration))
+
+      if pageChanged || reduceMotion {
+        layer?.removeAnimation(forKey: Self.fadeKey)
+      }
       guard pageChanged, !reduceMotion, window?.isVisible == true, !bounds.isEmpty else { return }
+
+      let opacity = interruptedOpacity ?? 0.90
+      guard opacity < 1 else { return }
       let fade = CABasicAnimation(keyPath: "opacity")
-      fade.fromValue = 0.84
+      fade.fromValue = opacity
       fade.toValue = 1
-      fade.duration = 0.14
+      fade.duration = PulseDesignTokens.contentFadeDuration
       fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-      host.layer?.add(fade, forKey: Self.fadeKey)
+      layer?.add(fade, forKey: Self.fadeKey)
     }
   }
 }

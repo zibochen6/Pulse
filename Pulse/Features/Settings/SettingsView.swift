@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
   @ObservedObject var config: AppConfig
   @Environment(\.pulseHasNativeBackdrop) private var hasNativeBackdrop
+  @Environment(\.pulseReduceMotion) private var reduceMotion
   @ObservedObject var deepSeekConfiguration: DeepSeekConfiguration
   @ObservedObject var vipConfiguration: VIPConfiguration
   @ObservedObject var localTasks: LocalTaskController
@@ -68,48 +69,10 @@ struct SettingsView: View {
     HStack(spacing: 0) {
       sidebar
       Rectangle().fill(PulseDesignTokens.border).frame(width: 1)
-      VStack(alignment: .leading, spacing: 0) {
-        VStack(alignment: .leading, spacing: 6) {
-          Text(presentation.destination.title)
-            .font(.system(size: PulseDesignTokens.displayTitle, weight: .bold))
-            .tracking(-0.6)
-            .accessibilityAddTraits(.isHeader)
-          Text(subtitle).font(.system(size: 13)).foregroundStyle(PulseDesignTokens.muted)
-            .fixedSize(horizontal: false, vertical: true)
-          Rectangle().fill(PulseDesignTokens.border).frame(height: 1)
-            .padding(.top, 6)
-        }
-        .padding(24)
-        if presentation.destination == .tasks {
-          tasksContent.padding(.horizontal, 24).padding(.bottom, 24)
-        } else {
-          ScrollViewReader { proxy in
-            ScrollView {
-              Group {
-                switch presentation.destination {
-                case .clips:
-                  if let clips { settingsCard { ClipSettingsView(clips: clips) } }
-                case .general: generalContent
-                case .providers: providerContent
-                case .tasks: tasksContent
-                case .updates: updatesContent
-                case .about: aboutContent
-                }
-              }
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(.horizontal, 24).padding(.bottom, 24)
-            }
-            .task(id: presentation.revealRequest) {
-              await Task.yield()
-              if presentation.destination == .providers, let provider = presentation.focusedProvider
-              {
-                proxy.scrollTo(provider, anchor: .top)
-              }
-            }
-          }
-        }
+      PopoverContentTransition(page: presentation.destination) {
+        categoryContent(for: presentation.destination)
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .frame(
       width: SettingsWindowController.contentSize.width,
@@ -132,6 +95,55 @@ struct SettingsView: View {
     }
   }
 
+  private func categoryContent(for destination: SettingsDestination) -> some View {
+    let revealRequest = presentation.revealRequest
+    return VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 6) {
+        Text(destination.title)
+          .font(.system(size: PulseDesignTokens.displayTitle, weight: .bold))
+          .tracking(-0.6)
+          .accessibilityAddTraits(.isHeader)
+        Text(subtitle(for: destination)).font(.system(size: 13))
+          .foregroundStyle(PulseDesignTokens.muted)
+          .fixedSize(horizontal: false, vertical: true)
+        Rectangle().fill(PulseDesignTokens.border).frame(height: 1)
+          .padding(.top, 6)
+      }
+      .padding(24)
+      if destination == .tasks {
+        tasksContent.padding(.horizontal, 24).padding(.bottom, 24)
+      } else {
+        ScrollViewReader { proxy in
+          ScrollView {
+            Group {
+              switch destination {
+              case .clips:
+                if let clips { settingsCard { ClipSettingsView(clips: clips) } }
+              case .general: generalContent
+              case .providers: providerContent
+              case .tasks: tasksContent
+              case .updates: updatesContent
+              case .about: aboutContent
+              }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24).padding(.bottom, 24)
+          }
+          .task(id: revealRequest) {
+            guard destination == .providers else { return }
+            await Task.yield()
+            guard !Task.isCancelled, presentation.revealRequest == revealRequest,
+              presentation.destination == destination, let provider = presentation.focusedProvider
+            else { return }
+            proxy.scrollTo(provider, anchor: .top)
+          }
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .foregroundStyle(PulseDesignTokens.ink)
+  }
+
   private var sidebar: some View {
     VStack(spacing: 7) {
       PulseBrandMark(size: 42).padding(.bottom, 9)
@@ -149,6 +161,7 @@ struct SettingsView: View {
                 selected ? PulseDesignTokens.selectedFill : PulseDesignTokens.secondarySurface,
                 in: Circle()
               )
+              .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: selected)
               .accessibilityHidden(true)
             Text(destination.title)
               .font(.system(size: 11, weight: .semibold))
@@ -169,8 +182,8 @@ struct SettingsView: View {
     .padding(.horizontal, 8).padding(.vertical, 18).frame(width: 108)
   }
 
-  private var subtitle: String {
-    switch presentation.destination {
+  private func subtitle(for destination: SettingsDestination) -> String {
+    switch destination {
     case .clips: PulseLocalization.string("These settings apply to the next recording.")
     case .general: PulseLocalization.string("Make Pulse feel at home on your Mac.")
     case .providers: PulseLocalization.string("Your services, connected on your terms.")
@@ -269,8 +282,7 @@ struct SettingsView: View {
               .font(.system(size: 12)).foregroundStyle(.secondary)
           }
           Spacer()
-          Button("Check connection") { usage.requestRefresh() }
-            .buttonStyle(PulseActionButtonStyle()).disabled(usage.isRefreshing)
+          connectionCheckButton(usage)
         }
         Text("Uses the Codex account signed in on this Mac. No API key needed.")
           .font(.system(size: 12)).foregroundStyle(.secondary)
@@ -316,9 +328,7 @@ struct SettingsView: View {
         }
         Spacer()
         if config.antigravityEnabled {
-          Button("Check connection") { antigravityUsage.requestRefresh() }
-            .buttonStyle(PulseActionButtonStyle())
-            .disabled(antigravityUsage.isRefreshing)
+          connectionCheckButton(antigravityUsage)
             .accessibilityIdentifier("checkAntigravityConnection")
         }
       }
@@ -335,6 +345,23 @@ struct SettingsView: View {
         Text(message).font(.system(size: 12)).foregroundStyle(PulseDesignTokens.warning)
       }
     }
+  }
+
+  private func connectionCheckButton(_ controller: UsageController) -> some View {
+    Button {
+      controller.requestRefresh()
+    } label: {
+      HStack(spacing: 6) {
+        PulseBusyGlyph(isBusy: controller.isRefreshing, startedAt: controller.refreshStartedAt) {
+          Image(systemName: "arrow.clockwise")
+        }
+        .frame(width: 14, height: 14)
+        .accessibilityHidden(true)
+        Text("Check connection")
+      }
+    }
+    .buttonStyle(PulseActionButtonStyle())
+    .disabled(controller.isRefreshing)
   }
 
   @ViewBuilder private var tasksContent: some View {
@@ -360,10 +387,13 @@ struct SettingsView: View {
             Text("Pulse \(updates.currentVersionText)").font(.system(size: 16, weight: .semibold))
             Text(updates.statusText).font(.system(size: 12))
               .foregroundStyle(statusColor).fixedSize(horizontal: false, vertical: true)
+              .pulseContentFeedback(updates.statusText)
               .accessibilityIdentifier("updateStatusText")
           }
           Spacer(minLength: 8)
-          if updates.isBusy { ProgressView().controlSize(.small) }
+          PulseBusyGlyph(isBusy: updates.isBusy) { Color.clear }
+            .frame(width: 16, height: 16)
+            .accessibilityHidden(true)
         }
         HStack(spacing: 8) {
           if updates.canRestartToUpdate {
@@ -371,7 +401,7 @@ struct SettingsView: View {
               .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
               .accessibilityIdentifier("restartToUpdateButton")
           }
-          Button(LocalizedStringKey(updates.isBusy ? "Checking…" : "Check for updates")) {
+          Button("Check for updates") {
             Task { await updates.checkForUpdates() }
           }
           .buttonStyle(

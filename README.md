@@ -67,7 +67,7 @@ Requirements: macOS 13 or newer and Xcode 26.6 or a compatible Xcode version.
 
 1. Open `Pulse.xcodeproj` in Xcode.
 2. Select the `Pulse` scheme and **My Mac**, then Run.
-3. Sign in to Codex if needed, then click the Codex icon in the menu bar. The Home popover shows Tasks first; click its compact Codex status for quota details, or the gear for Settings. Usage returns to Home; Settings opens in its own window and is also available with **⌘,**. Click the menu bar item again or click outside to dismiss the popover. Pointer departure from both it and the menu bar item starts a 180 ms grace interval; returning cancels the close. Opening and dismissal use native macOS animation, with a short 300 ms opening guard that also waits for presentation to finish. System **Reduce Motion** disables native panel motion and removes internal movement/scale, retaining gentle state fades. Choose **Quit Pulse** in Settings to exit. Pulse has no Dock icon.
+3. Sign in to Codex if needed, then click the Codex icon in the menu bar. The Home popover shows Tasks first; click its compact Codex status for quota details, or the gear for Settings. Usage returns to Home; Settings opens in its own window and is also available with **⌘,**. Click the menu bar item again or click outside to dismiss the popover. Pointer departure from both it and the menu bar item starts a 180 ms grace interval; returning cancels the close. Opening and dismissal use native macOS animation, with a short 300 ms opening guard that also waits for presentation to finish. System **Reduce Motion** disables panel and custom transitions and uses static busy indicators. Choose **Quit Pulse** in Settings to exit. Pulse has no Dock icon.
 
 Command-line build:
 

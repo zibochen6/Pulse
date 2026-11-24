@@ -6,6 +6,49 @@ import XCTest
 
 @MainActor
 final class DeepSeekRenderingTests: XCTestCase {
+  func testBusyGlyphPreservesItsIdleMarkUntilTheDelayAndRestoresItAfterCompletion() throws {
+    let now = ContinuousClock.Instant.now
+
+    func renderMark(isBusy: Bool, startedAt: ContinuousClock.Instant?) throws -> NSBitmapImageRep {
+      let renderer = ImageRenderer(
+        content: PulseBusyGlyph(isBusy: isBusy, startedAt: startedAt) {
+          Rectangle().fill(Color.red).frame(width: 18, height: 18)
+        }
+        .frame(width: 24, height: 24)
+        .foregroundStyle(Color.black)
+        .background(Color.white)
+        .environment(\.pulseReduceMotionOverride, true))
+      renderer.scale = 2
+      let data = try XCTUnwrap(renderer.nsImage?.tiffRepresentation)
+      return try XCTUnwrap(NSBitmapImageRep(data: data))
+    }
+
+    let waiting = try renderMark(isBusy: true, startedAt: now.advanced(by: .seconds(30)))
+    let ongoing = try renderMark(isBusy: true, startedAt: now.advanced(by: .seconds(-1)))
+    let finished = try renderMark(isBusy: false, startedAt: now.advanced(by: .seconds(-1)))
+    XCTAssertEqual(waiting.size, ongoing.size)
+    XCTAssertEqual(ongoing.size, finished.size)
+
+    func redDominance(_ bitmap: NSBitmapImageRep) throws -> CGFloat {
+      let color = try XCTUnwrap(
+        bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)?
+          .usingColorSpace(.deviceRGB))
+      return color.redComponent - color.greenComponent
+    }
+    XCTAssertGreaterThan(try redDominance(waiting), 0.5)
+    XCTAssertLessThan(try redDominance(ongoing), 0.05)
+    XCTAssertGreaterThan(try redDominance(finished), 0.5)
+    let showsStaticMark = (0..<ongoing.pixelsHigh).contains { y in
+      (0..<ongoing.pixelsWide).contains { x in
+        guard let pixel = ongoing.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+          return false
+        }
+        return pixel.alphaComponent > 0.8 && pixel.brightnessComponent < 0.5
+      }
+    }
+    XCTAssertTrue(showsStaticMark, "Reduce Motion still presents a visible busy indicator")
+  }
+
   func testBalanceVisibilityPersistsAndEachCardCanBeHiddenIndependently() throws {
     let suite = "PulseBalanceVisibility.\(UUID())"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

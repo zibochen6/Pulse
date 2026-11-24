@@ -112,14 +112,14 @@ enum PulseDesignTokens {
       })
   }
 
-  // Color and opacity do not need springs. Spatial transitions have explicit
-  // zero bounce; only sorting has a small physical overshoot. snappy with
-  // extraBounce: 0 still includes the preset's bounce and is not a substitute.
+  // Color and opacity ease out. Spatial changes settle without overshooting.
+  static let contentFadeDuration: TimeInterval = 0.14
+  static let busyFeedbackDelay: Duration = .milliseconds(150)
   static var hoverAnimation: Animation { .easeOut(duration: 0.12) }
-  static var pressAnimation: Animation { .easeOut(duration: 0.09) }
-  static var selectionAnimation: Animation { .spring(duration: 0.18, bounce: 0) }
-  static var tabSwitchAnimation: Animation { .spring(duration: 0.18, bounce: 0) }
+  static var releaseAnimation: Animation { .easeOut(duration: 0.09) }
+  static var feedbackAnimation: Animation { .easeOut(duration: contentFadeDuration) }
   static var composerAnimation: Animation { .spring(duration: 0.20, bounce: 0) }
   static var completionAnimation: Animation { .easeOut(duration: 0.18) }
-  static var reorderAnimation: Animation { .spring(duration: 0.24, bounce: 0.08) }
+  static var tabSwitchAnimation: Animation { composerAnimation }
+  static var reorderAnimation: Animation { composerAnimation }
 }

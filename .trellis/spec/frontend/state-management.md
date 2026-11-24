@@ -113,27 +113,32 @@ interaction-hold and update preflight contracts.
   Missing optional credentials offer connection configuration; unavailable and
   failure remain distinct from a successful reading. Never invent values.
 - Paired Today Tasks fits the measured header and list, capped at 520 points.
-  Long lists scroll. Other pages and an active update banner use the full
-  surface. Sync the SwiftUI frame to NSPopover.contentSize.
+  The list stays lazy as it crosses the short-list limit. Other pages and an
+  active update banner use the full surface. Home reports the route, vault and
+  staged version with the size. AppKit owns the viewport and applies the latest
+  matching target once per main-queue pass. Reuse a valid Home size on reopen.
 - Settings navigation never lives in PopoverPage. Its ordinary reopen restores
   category and session inputs; contextual links select their provider/category.
 - Opening waits for both 300 ms minimum guard and native popoverDidShow.
   Geometry includes button, content and whole window/arrow. Departure from all
   regions schedules one 180 ms close; re-entry cancels, duplicate exits do not
-  move the deadline. Geometry is checked every 50 ms only while shown and again
-  before closing. Closing cancels work, ignores stale events and cannot reverse.
+  move the deadline. Geometry is checked every 50 ms while shown and eligible
+  for hover dismissal, then checked at the deadline. Native closing cancels
+  tracking work. Explicit status clicks during closing toggle a pending
+  reopening, consumed on the main queue after didClose resets the session.
+  Settings and exit clear that pending request.
 - Editor, native menu and native drag sessions independently suspend hover
   close. Releasing one source cannot release others. Final release resamples
   geometry and starts a fresh grace interval if outside. Outside-click/status
   toggle still use native transient dismissal.
 - willClose stops hover work; didClose resets quick navigation to Home after
   native animation finishes. Settings state and all retained drafts survive.
-- Call window.endEditing(for:) before replacing a page. Replace the old
-  content immediately and fade in the new body for 140 ms, without capturing a
-  bitmap or retaining an outgoing field editor. Same-page updates do not start
-  a new animation. A new transition replaces the previous layer animation.
-- Reduce Motion disables native panel motion and geometry changes internally,
-  including pressed scales. Skip the page fade under Reduce Motion.
+- End the native field editor before replacing a route. Replace content
+  immediately in one live host. Fade the new body for 140 ms, using the
+  in-flight presentation opacity when interrupted. Same-route updates retain
+  the host state and existing animation.
+- Reduce Motion disables native popover animation and all custom transition
+  animation. Geometry reports, control values and focus still update immediately.
 - Begin opening before refreshing credentials or task data. Read credential
   presence off the main thread and reject results superseded by a later read,
   save or removal. Keep ready task content visible across background loads.
@@ -150,6 +155,8 @@ interaction-hold and update preflight contracts.
 | Menu ends while editor active | Editor still holds panel |
 | Click DeepSeek | Open DeepSeek details, not Codex |
 | Close panel on a subpage | Next open Home; drafts retained |
+| Click during native closing | Apply final toggle intent after cleanup |
+| Update ready on a compact Home | Expand once and show update actions |
 | Open Settings during draft | Same app-owned draft remains available |
 | Change key during refresh | Existing generation guard rejects old result |
 
@@ -159,8 +166,9 @@ can connect optional services without a false error. Bad: saved invalid key
 cannot show Connected, and a menu/drag must not dismiss mid-operation.
 
 ### 6. Tests Required
-Keep native hover/callback and provider formatting tests. Cover navigation
-targets, overlapping holds and stale leases, actual 400-point header geometry,
+Keep native hover/callback and provider formatting tests. Cover rapid toggle
+parity, held reconciliation, short-list resizing and update staging,
+navigation targets, overlapping holds and stale leases, 400-point header geometry,
 720 × 560 Settings, opaque edges in solid mode, failed/large/multi-currency values and
 light/dark × English/Chinese. Render pass is not live mouse/IME acceptance.
 
@@ -260,7 +268,8 @@ Tests use isolated defaults and temporary stores.
   view remounts, and older results cannot clear newer versions of the intent.
 - Completed rows stay exactly where they are: dimmed/struck through, in stored
   order, with no section heading and no collapse state. Checkbox is
-  disabled/spinner shown while pending.
+  disabled immediately. Keep its previous glyph for 150 ms, then show busy
+  feedback if still pending. Use a static clock with Reduce Motion.
 - Reserve delete-control width; hover/focus changes visibility without text
   reflow. Keyboard and context-menu actions reach delete. Row/editor delete
   has no confirmation and exposes Undo after confirmed removal. Controller

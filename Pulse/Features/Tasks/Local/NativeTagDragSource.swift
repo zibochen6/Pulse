@@ -1,5 +1,27 @@
 import AppKit
+import QuartzCore
 import SwiftUI
+
+@MainActor
+struct DraggableTagTab: View {
+  let source: NativeTagDragSource
+  let isSelected: Bool
+  @State private var isPointerPressed = false
+
+  var body: some View {
+    PulsePillTab(
+      title: source.title, isSelected: isSelected,
+      isPointerPressed: isPointerPressed, action: source.onSelect
+    )
+    .overlay { dragSurface.accessibilityHidden(true) }
+  }
+
+  private var dragSurface: NativeTagDragSource {
+    var surface = source
+    surface.onPointerPressChanged = { isPointerPressed = $0 }
+    return surface
+  }
+}
 
 /// SwiftUI's onDrag has no reliable cancellation callback on macOS 13. This
 /// transparent mouse surface owns the native session so leaving the popover or
@@ -20,14 +42,17 @@ struct NativeTagDragSource: NSViewRepresentable {
   let onDelete: () -> Void
   let onMoveLeft: () -> Void
   let onMoveRight: () -> Void
+  var onPointerPressChanged: (Bool) -> Void = { _ in }
 
   func makeNSView(context: Context) -> TagDragView {
     let view = TagDragView()
-    view.update(self)
+    view.update(self, reduceMotion: context.environment.pulseReduceMotion)
     return view
   }
 
-  func updateNSView(_ view: TagDragView, context: Context) { view.update(self) }
+  func updateNSView(_ view: TagDragView, context: Context) {
+    view.update(self, reduceMotion: context.environment.pulseReduceMotion)
+  }
 
   static func dismantleNSView(_ view: TagDragView, coordinator: ()) { view.finishSession() }
 
@@ -35,24 +60,36 @@ struct NativeTagDragSource: NSViewRepresentable {
     private var configuration: NativeTagDragSource?
     private var startEvent: NSEvent?
     private var sessionActive = false
-    private var scrollTimer: Timer?
-    private var scrollDirection: CGFloat = 0
+    private var reduceMotion = false
+    private var dragPoint: NSPoint?
+    private var cancelScrollClock: (() -> Void)?
+    private var lastScrollTime: CFTimeInterval = 0
+    private var requestedScrollX: CGFloat?
+    private var appliedScrollX: CGFloat?
 
     override var isFlipped: Bool { true }
 
-    func update(_ configuration: NativeTagDragSource) {
+    func update(_ configuration: NativeTagDragSource, reduceMotion: Bool) {
       self.configuration = configuration
+      self.reduceMotion = reduceMotion
       toolTip = configuration.title
     }
 
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      if window == nil { finishSession() }
+    }
+
     override func mouseDown(with event: NSEvent) {
-      guard configuration?.isEnabled == true else { return }
+      guard let configuration, configuration.isEnabled else { return }
       startEvent = event
+      configuration.onPointerPressChanged(true)
     }
 
     override func mouseUp(with event: NSEvent) {
-      defer { startEvent = nil }
-      guard startEvent != nil, !sessionActive, configuration?.isEnabled == true,
+      guard startEvent != nil else { return }
+      clearPointerPress()
+      guard !sessionActive, configuration?.isEnabled == true,
         bounds.contains(convert(event.locationInWindow, from: nil))
       else { return }
       configuration?.onSelect()
@@ -70,10 +107,11 @@ struct NativeTagDragSource: NSViewRepresentable {
       pasteboard.setString(configuration.tagID.uuidString, forType: .string)
       let item = NSDraggingItem(pasteboardWriter: pasteboard)
       item.setDraggingFrame(bounds, contents: dragImage(title: configuration.title))
+      clearPointerPress()
       sessionActive = true
       configuration.onBegin()
       let session = beginDraggingSession(with: [item], event: event, source: self)
-      session.animatesToStartingPositionsOnCancelOrFail = true
+      session.animatesToStartingPositionsOnCancelOrFail = !reduceMotion
     }
 
     func draggingSession(
@@ -82,9 +120,11 @@ struct NativeTagDragSource: NSViewRepresentable {
       context == .withinApplication ? .move : []
     }
 
-    func draggingSession(_ session: NSDraggingSession, movedTo screenPoint: NSPoint) {
-      updateAutoscroll(at: screenPoint)
-      reportLocation(at: screenPoint)
+    func draggingSession(_ session: NSDraggingSession, movedTo _: NSPoint) {
+      let point = session.draggingLocation
+      dragPoint = point
+      updateAutoscroll(at: point)
+      reportLocation(at: point)
     }
 
     func draggingSession(
@@ -96,13 +136,18 @@ struct NativeTagDragSource: NSViewRepresentable {
     func ignoreModifierKeys(for session: NSDraggingSession) -> Bool { true }
 
     func finishSession() {
-      scrollTimer?.invalidate()
-      scrollTimer = nil
-      scrollDirection = 0
-      startEvent = nil
+      stopAutoscroll()
+      clearPointerPress()
+      dragPoint = nil
       guard sessionActive else { return }
       sessionActive = false
       configuration?.onEnd()
+    }
+
+    private func clearPointerPress() {
+      guard startEvent != nil else { return }
+      startEvent = nil
+      configuration?.onPointerPressChanged(false)
     }
 
     private func reportLocation(at screenPoint: NSPoint) {
@@ -112,47 +157,88 @@ struct NativeTagDragSource: NSViewRepresentable {
     }
 
     private func updateAutoscroll(at point: NSPoint) {
-      guard let scroll = enclosingScrollView, let window else { return }
+      guard let window, scrollParameters(at: point) != nil else {
+        stopAutoscroll()
+        return
+      }
+      guard cancelScrollClock == nil else { return }
+      lastScrollTime = CACurrentMediaTime()
+      if #available(macOS 14, *) {
+        // The source pill can scroll out of view. The window stays on the
+        // actual display and continues ticking for the duration of the drag.
+        let target = ScrollDisplayTarget(view: self)
+        let link = window.displayLink(target: target, selector: #selector(ScrollDisplayTarget.tick))
+        cancelScrollClock = { link.invalidate() }
+        link.add(to: .main, forMode: .common)
+        link.add(to: .main, forMode: .eventTracking)
+      } else {
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+          MainActor.assumeIsolated { self?.scrollOneStep(at: CACurrentMediaTime()) }
+        }
+        cancelScrollClock = { timer.invalidate() }
+        RunLoop.main.add(timer, forMode: .common)
+        RunLoop.main.add(timer, forMode: .eventTracking)
+      }
+    }
+
+    private func stopAutoscroll() {
+      cancelScrollClock?()
+      cancelScrollClock = nil
+      requestedScrollX = nil
+      appliedScrollX = nil
+    }
+
+    private func scrollParameters(at point: NSPoint)
+      -> (scroll: NSScrollView, maximum: CGFloat, velocity: CGFloat)?
+    {
+      guard sessionActive, let scroll = enclosingScrollView, let document = scroll.documentView,
+        let window
+      else { return nil }
       let clip = scroll.contentView
       let local = clip.convert(window.convertPoint(fromScreen: point), from: nil)
-      let bounds = clip.bounds
-      guard local.y >= bounds.minY - 16, local.y <= bounds.maxY + 16 else {
-        setScrollDirection(0)
-        return
-      }
-      let direction: CGFloat =
-        local.x < bounds.minX + 24 ? -1 : (local.x > bounds.maxX - 24 ? 1 : 0)
-      setScrollDirection(direction)
+      let maximum = max(0, document.bounds.width - clip.bounds.width)
+      let velocity = TagEdgeAutoscroll.velocity(at: local, in: clip.bounds)
+      guard TagEdgeAutoscroll.canScroll(from: clip.bounds.minX, to: maximum, velocity: velocity)
+      else { return nil }
+      return (scroll, maximum, velocity)
     }
 
-    private func setScrollDirection(_ direction: CGFloat) {
-      scrollDirection = direction
-      guard direction != 0 else {
-        scrollTimer?.invalidate()
-        scrollTimer = nil
-        return
-      }
-      guard scrollTimer == nil else { return }
-      let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] _ in
-        MainActor.assumeIsolated { self?.scrollOneStep() }
-      }
-      scrollTimer = timer
-      RunLoop.main.add(timer, forMode: .common)
-      RunLoop.main.add(timer, forMode: .eventTracking)
-    }
-
-    private func scrollOneStep() {
-      guard sessionActive, let scroll = enclosingScrollView, let document = scroll.documentView
+    private func scrollOneStep(at time: CFTimeInterval) {
+      guard let point = dragPoint, let (scroll, maximum, velocity) = scrollParameters(at: point)
       else {
-        setScrollDirection(0)
+        stopAutoscroll()
         return
       }
       let clip = scroll.contentView
-      let maximum = max(0, document.bounds.width - clip.bounds.width)
-      let x = min(maximum, max(0, clip.bounds.minX + 10 * scrollDirection))
+      let currentX = clip.bounds.minX
+      // Preserve fractional motion when AppKit rounds the clip origin to a pixel.
+      // Rebase it if the native clip moves independently of the drag clock.
+      let origin = appliedScrollX == currentX ? requestedScrollX ?? currentX : currentX
+      let x = TagEdgeAutoscroll.origin(
+        from: origin, to: maximum, velocity: velocity, elapsed: time - lastScrollTime)
+      lastScrollTime = time
+      requestedScrollX = x
       clip.scroll(to: NSPoint(x: x, y: clip.bounds.minY))
-      scroll.reflectScrolledClipView(clip)
-      reportLocation(at: NSEvent.mouseLocation)
+      appliedScrollX = clip.bounds.minX
+      if clip.bounds.minX != currentX {
+        scroll.reflectScrolledClipView(clip)
+        reportLocation(at: point)
+      }
+      if !TagEdgeAutoscroll.canScroll(from: x, to: maximum, velocity: velocity) {
+        stopAutoscroll()
+      }
+    }
+
+    @available(macOS 14, *)
+    @MainActor
+    private final class ScrollDisplayTarget: NSObject {
+      private weak var view: TagDragView?
+
+      init(view: TagDragView) { self.view = view }
+
+      @objc func tick(_: CADisplayLink) {
+        view?.scrollOneStep(at: CACurrentMediaTime())
+      }
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
@@ -176,19 +262,47 @@ struct NativeTagDragSource: NSViewRepresentable {
     }
 
     private func dragImage(title: String) -> NSImage {
-      let image = NSImage(size: bounds.size)
-      image.lockFocus()
-      NSColor.controlBackgroundColor.setFill()
-      NSBezierPath(roundedRect: bounds, xRadius: 12, yRadius: 12).fill()
-      let attributes: [NSAttributedString.Key: Any] = [
-        .font: NSFont.systemFont(ofSize: 13, weight: .medium),
-        .foregroundColor: NSColor.labelColor,
-      ]
-      (title as NSString).draw(
-        in: bounds.insetBy(dx: 10, dy: 5), withAttributes: attributes)
-      image.unlockFocus()
-      return image
+      let appearance = effectiveAppearance
+      return NSImage(size: bounds.size, flipped: false) { rect in
+        appearance.performAsCurrentDrawingAppearance {
+          NSColor.controlBackgroundColor.setFill()
+          NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2)
+            .fill()
+          let paragraph = NSMutableParagraphStyle()
+          paragraph.lineBreakMode = .byTruncatingTail
+          (title as NSString).draw(
+            in: rect.insetBy(dx: 10, dy: 5),
+            withAttributes: [
+              .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+              .foregroundColor: NSColor.labelColor,
+              .paragraphStyle: paragraph,
+            ])
+        }
+        return true
+      }
     }
+  }
+}
+
+enum TagEdgeAutoscroll {
+  static func velocity(at point: CGPoint, in viewport: CGRect) -> CGFloat {
+    guard !viewport.isEmpty, viewport.insetBy(dx: -16, dy: -16).contains(point) else { return 0 }
+    let edgeWidth = min(24, viewport.width / 2)
+    let left = point.x - viewport.minX
+    let right = viewport.maxX - point.x
+    let progress = min(1, max(0, 1 - min(left, right) / edgeWidth))
+    return (left < right ? -360 : 360) * progress
+  }
+
+  static func canScroll(from origin: CGFloat, to maximum: CGFloat, velocity: CGFloat) -> Bool {
+    (velocity < 0 && origin > 0) || (velocity > 0 && origin < maximum)
+  }
+
+  static func origin(
+    from origin: CGFloat, to maximum: CGFloat, velocity: CGFloat, elapsed: TimeInterval
+  ) -> CGFloat {
+    let interval = min(1.0 / 20, max(0, elapsed))
+    return min(maximum, max(0, origin + velocity * interval))
   }
 }
 
@@ -212,6 +326,18 @@ struct TagScrollMetrics: Equatable {
   var width: CGFloat = 0
   var minX: CGFloat = 0
   var viewportWidth: CGFloat = 0
+
+  struct Buttons: Equatable {
+    let overflows: Bool
+    let hasPrevious: Bool
+    let hasNext: Bool
+
+    init(metrics: TagScrollMetrics = TagScrollMetrics()) {
+      overflows = metrics.width > metrics.viewportWidth + 1
+      hasPrevious = metrics.minX < -1
+      hasNext = metrics.width + metrics.minX > metrics.viewportWidth + 1
+    }
+  }
 }
 
 /// Read the actual native clip/document geometry. SwiftUI's ScrollView may

@@ -5,11 +5,11 @@ struct ClipHomeButton: View {
   @ObservedObject var clips: ClipController
   let open: () -> Void
   let configure: () -> Void
-  @Environment(\.pulseReduceMotion) private var reduceMotion
 
   var body: some View {
     let phase = clips.snapshot.phase
-    let title = phase.isActive ? phase.title : PulseLocalization.string("Edit recording")
+    let buttonPhase = phase.isActive ? phase : .idle
+    let caption = toolbarCaption(buttonPhase)
     Button {
       if clips.snapshot.phase.isActive {
         open()
@@ -20,27 +20,34 @@ struct ClipHomeButton: View {
       }
     } label: {
       HStack(spacing: 5) {
-        if clips.snapshot.phase == .running && !reduceMotion {
-          ProgressView().controlSize(.mini).frame(width: 14)
-        } else {
-          Image(systemName: clips.snapshot.phase == .running ? "waveform" : "scissors")
-            .frame(width: 14)
+        PulseBusyGlyph(isBusy: phase.isActive) {
+          Image(systemName: "scissors")
         }
-        Text(phase == .checking ? PulseLocalization.string("Checking…") : title)
-          .lineLimit(1)
-          .fixedSize(horizontal: true, vertical: false)
+        .frame(width: 14, height: 14)
+        .accessibilityHidden(true)
+        ZStack(alignment: .leading) {
+          // Reserve the longest localized caption while the job changes phase.
+          ForEach([ClipPhase.idle, .starting, .running, .checking], id: \.self) { phase in
+            Text(toolbarCaption(phase)).hidden().accessibilityHidden(true)
+          }
+          Text(caption).pulseContentFeedback(caption)
+        }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
       }
     }
-    .buttonStyle(
-      PulseActionButtonStyle(emphasis: .focusTimer(isRunning: clips.snapshot.phase.isActive))
-    )
+    .buttonStyle(PulseActionButtonStyle(emphasis: .focusTimer(isRunning: phase.isActive)))
     .help("Edit the latest recording in Downloads")
-    .accessibilityLabel(title)
+    .accessibilityLabel(buttonPhase.title)
     .accessibilityIdentifier("editRecordingButton")
     .contextMenu { Button("Last editing task", action: open) }
     .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
       ["editRecordingButton": $0]
     }
+  }
+
+  private func toolbarCaption(_ phase: ClipPhase) -> String {
+    phase == .checking ? PulseLocalization.string("Checking…") : phase.title
   }
 }
 
@@ -59,16 +66,15 @@ struct ClipResultLink: View {
     } else if !clips.isResultDone, state.phase != .idle,
       state.phase != .starting || !state.source.isEmpty
     {
+      let title = state.phase.isActive
+        ? PulseLocalization.string("clip." + (state.activity ?? "launch")) : state.phase.title
       HStack(spacing: 8) {
         Button(action: open) {
           HStack(spacing: 6) {
-            Text(
-              state.phase.isActive
-                ? PulseLocalization.string("clip." + (state.activity ?? "launch"))
-                : state.phase.title
-            )
-            .lineLimit(1)
-            .layoutPriority(1)
+            Text(title)
+              .lineLimit(1)
+              .layoutPriority(1)
+              .pulseContentFeedback(title)
             Spacer(minLength: 6)
             Text(verbatim: state.source).lineLimit(1).truncationMode(.middle)
             Image(systemName: "chevron.right").accessibilityHidden(true)
@@ -117,6 +123,7 @@ struct ClipDetailView: View {
               let silent = max(0, Int(timeline.date.timeIntervalSince1970 - state.updated))
               VStack(alignment: .leading, spacing: 5) {
                 Text(activityTitle(state.activity)).font(.subheadline)
+                  .pulseContentFeedback(state.activity)
                 Text(
                   PulseLocalization.format(
                     "Elapsed %@",
@@ -129,6 +136,8 @@ struct ClipDetailView: View {
           }
           if let detail = state.detail, !detail.isEmpty {
             Text(PulseLocalization.string(detail)).font(.callout).textSelection(.enabled)
+              .pulseContentFeedback(detail)
+              .pulseStatusAppearance()
           }
         }
         ForEach(state.platforms, id: \.platform) { draft in
@@ -139,7 +148,9 @@ struct ClipDetailView: View {
               Text(PulseLocalization.string("clip." + draft.status))
                 .foregroundStyle(
                   draft.status == "saved_verified"
-                    ? PulseDesignTokens.success : PulseDesignTokens.muted)
+                    ? PulseDesignTokens.success : PulseDesignTokens.muted
+                )
+                .pulseContentFeedback(draft.status)
             }
             if !draft.detail.isEmpty {
               Text(PulseLocalization.string(draft.detail)).font(.caption).foregroundStyle(
@@ -181,6 +192,8 @@ struct ClipDetailView: View {
 
 struct ClipSettingsView: View {
   @ObservedObject var clips: ClipController
+  @State private var isChoosingWorkspace = false
+
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       LabeledContent("Model") {
@@ -194,15 +207,9 @@ struct ClipSettingsView: View {
       HStack {
         Text("Editing workspace")
         Spacer()
-        Button("Choose folder…") {
-          let panel = NSOpenPanel()
-          panel.canChooseDirectories = true
-          panel.canChooseFiles = false
-          panel.allowsMultipleSelection = false
-          if !clips.workspace.isEmpty { panel.directoryURL = URL(fileURLWithPath: clips.workspace) }
-          if panel.runModal() == .OK, let url = panel.url { clips.workspace = url.path }
-        }
-        .buttonStyle(PulseActionButtonStyle())
+        Button("Choose folder…", action: chooseWorkspace)
+          .buttonStyle(PulseActionButtonStyle())
+          .disabled(isChoosingWorkspace)
       }
       if !clips.workspace.isEmpty {
         Text(verbatim: clips.workspace).font(.callout).textSelection(.enabled)
@@ -215,5 +222,26 @@ struct ClipSettingsView: View {
           .foregroundStyle(.secondary)
       }
     }
+  }
+
+  private func chooseWorkspace() {
+    guard !isChoosingWorkspace else { return }
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.allowsMultipleSelection = false
+    if !clips.workspace.isEmpty { panel.directoryURL = URL(fileURLWithPath: clips.workspace) }
+    isChoosingWorkspace = true
+    if let window = NSApp.keyWindow {
+      panel.beginSheetModal(for: window) { finishWorkspaceSelection($0, panel: panel) }
+    } else {
+      panel.begin { finishWorkspaceSelection($0, panel: panel) }
+    }
+  }
+
+  private func finishWorkspaceSelection(_ response: NSApplication.ModalResponse, panel: NSOpenPanel)
+  {
+    isChoosingWorkspace = false
+    if response == .OK, let url = panel.url { clips.workspace = url.path }
   }
 }

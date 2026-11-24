@@ -31,6 +31,11 @@ final class FocusTimerControllerTests: XCTestCase {
     XCTAssertFalse(timer.isRunning)
     XCTAssertEqual(timer.remainingSeconds, 0)
     XCTAssertEqual(chimes, 1)
+    XCTAssertTrue(timer.justCompleted)
+    timer.start()
+    XCTAssertTrue(timer.isRunning)
+    XCTAssertFalse(timer.justCompleted)
+    timer.cancel()
   }
 
   func testCancelledSessionStaysSilentAndReplacementGetsItsOwnDeadline() {
@@ -43,6 +48,7 @@ final class FocusTimerControllerTests: XCTestCase {
     now = start.advanced(by: .seconds(900))
     timer.cancel()
     XCTAssertFalse(timer.isRunning)
+    XCTAssertFalse(timer.justCompleted)
     XCTAssertEqual(chimes, 0)
     timer.start()
 

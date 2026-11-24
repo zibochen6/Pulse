@@ -1288,9 +1288,14 @@ final class LocalTasksRenderingTests: XCTestCase {
     let task = LocalTask(text: "Geometry must not shift while saving")
     let idle = try rowFrame(task: task, isPending: false)
     let saving = try rowFrame(task: task, isPending: true)
+    var completed = task
+    completed.completed = true
+    let confirmed = try rowFrame(task: completed, isPending: false)
     XCTAssertGreaterThan(idle.height, 30)
     XCTAssertEqual(idle.width, saving.width, accuracy: 0.5, "Row width is unchanged")
     XCTAssertEqual(idle.height, saving.height, accuracy: 0.5, "Row height is unchanged")
+    XCTAssertEqual(idle.width, confirmed.width, accuracy: 0.5, "Completion keeps row width")
+    XCTAssertEqual(idle.height, confirmed.height, accuracy: 0.5, "Completion keeps row height")
   }
 
   /// The tag bar's selected fill has to be visible in an off-window render:

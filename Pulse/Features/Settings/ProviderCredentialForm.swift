@@ -12,7 +12,6 @@ struct ProviderCredentialForm<Icon: View>: View {
   var onEditingChanged: (Bool) -> Void = { _ in }
   @ViewBuilder let icon: () -> Icon
   @FocusState private var keyFocused: Bool
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private var connection: ProviderConnectionState {
     .resolve(
@@ -27,12 +26,20 @@ struct ProviderCredentialForm<Icon: View>: View {
         icon().frame(width: 28, height: 28)
         VStack(alignment: .leading, spacing: 4) {
           Text(provider.name).font(.system(size: 15, weight: .semibold))
-          Label(connection.title, systemImage: statusSymbol)
-            .font(.system(size: 12)).foregroundStyle(statusColor)
-            .accessibilityIdentifier("connectionStatus.\(provider.rawValue)")
+          Label {
+            Text(connection.title)
+              .pulseContentFeedback(connection)
+          } icon: {
+            PulseBusyGlyph(isBusy: usage.isRefreshing, startedAt: usage.refreshStartedAt) {
+              Image(systemName: statusSymbol)
+            }
+            .frame(width: 14, height: 14)
+            .accessibilityHidden(true)
+          }
+          .font(.system(size: 12)).foregroundStyle(statusColor)
+          .accessibilityIdentifier("connectionStatus.\(provider.rawValue)")
         }
         Spacer()
-        if usage.isRefreshing { ProgressView().controlSize(.small) }
         if !isExpanded {
           Button(LocalizedStringKey(configuration.hasAPIKey ? "Manage connection" : "Connect")) {
             presentation.beginEditing(provider)
@@ -49,25 +56,23 @@ struct ProviderCredentialForm<Icon: View>: View {
         VStack(alignment: .leading, spacing: 8) {
           Text(message).font(.system(size: 12)).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+            .pulseContentFeedback(message)
           if configuration.hasAPIKey {
             Button("Check connection") { usage.requestRefresh() }
               .buttonStyle(PulseActionButtonStyle()).disabled(usage.isRefreshing)
           }
         }
+        .pulseStatusAppearance()
       }
       Toggle("Show balance in Pulse", isOn: showBalance)
         .toggleStyle(.switch)
         .accessibilityIdentifier("balanceUsageToggle.\(provider.rawValue)")
       if isExpanded {
-        editor.transition(.opacity)
+        editor.pulseStatusAppearance()
       }
     }
     .padding(16)
     .pulsePaper()
-    .animation(
-      reduceMotion ? nil : PulseDesignTokens.composerAnimation,
-      value: isExpanded
-    )
     .onChange(of: keyFocused) { onEditingChanged($0) }
     .onDisappear { onEditingChanged(false) }
   }

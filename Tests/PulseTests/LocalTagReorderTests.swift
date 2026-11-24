@@ -127,4 +127,36 @@ final class LocalTagReorderTests: XCTestCase {
     // [A, B, C] -> move B to the end -> [A, C, B]: B ends at index 2.
     XCTAssertEqual(try XCTUnwrap(target(500, dragging: b)).index, 2)
   }
+
+  func testEdgeAutoscrollOnlyMovesNearTheClipEdges() {
+    let viewport = CGRect(x: 100, y: 0, width: 140, height: 32)
+    func velocity(_ x: CGFloat, _ y: CGFloat = 16) -> CGFloat {
+      TagEdgeAutoscroll.velocity(at: CGPoint(x: x, y: y), in: viewport)
+    }
+    XCTAssertEqual(velocity(100), -360)
+    XCTAssertEqual(velocity(112), -180)
+    XCTAssertEqual(velocity(170), 0)
+    XCTAssertEqual(velocity(228), 180)
+    XCTAssertEqual(velocity(240), 360)
+    XCTAssertEqual(velocity(240, 55), 0)
+    XCTAssertEqual(velocity(300), 0)
+    XCTAssertFalse(TagEdgeAutoscroll.canScroll(from: 0, to: 100, velocity: -180))
+    XCTAssertFalse(TagEdgeAutoscroll.canScroll(from: 100, to: 100, velocity: 180))
+    XCTAssertFalse(TagEdgeAutoscroll.canScroll(from: 0, to: 0, velocity: 180))
+    XCTAssertTrue(TagEdgeAutoscroll.canScroll(from: 40, to: 100, velocity: 180))
+  }
+
+  func testEdgeAutoscrollUsesElapsedTimeAndClampsAfterAnInterruption() {
+    func travel(at framesPerSecond: Int) -> CGFloat {
+      (0..<framesPerSecond).reduce(0) { position, _ in
+        TagEdgeAutoscroll.origin(
+          from: position, to: 500, velocity: 180, elapsed: 1.0 / Double(framesPerSecond))
+      }
+    }
+    XCTAssertEqual(travel(at: 60), travel(at: 144), accuracy: 0.0001)
+    XCTAssertEqual(travel(at: 144), 180, accuracy: 0.0001)
+    XCTAssertEqual(TagEdgeAutoscroll.origin(from: 10, to: 500, velocity: 180, elapsed: 1), 19)
+    XCTAssertEqual(TagEdgeAutoscroll.origin(from: 499, to: 500, velocity: 180, elapsed: 1), 500)
+    XCTAssertEqual(TagEdgeAutoscroll.origin(from: 1, to: 500, velocity: -180, elapsed: 1), 0)
+  }
 }

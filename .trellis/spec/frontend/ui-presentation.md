@@ -49,9 +49,19 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
 - Holds are source-scoped. An old lease cannot end a later session after reset.
   NSMenu tracking brackets menu holds; native NSDraggingSource end handles drop,
   outside release and Escape. `dropExited` must not terminate a drag hold.
-- Shared adaptive tokens own color, spacing and motion. Use actual zero-bounce
-  curves where required; snappy extraBounce zero retains its preset bounce.
-  Reduce Motion removes all geometry feedback.
+- Shared adaptive tokens own color, spacing and motion. Press and keyboard
+  focus update immediately. Scope release and hover animation to the fill, and
+  use a 140 ms opacity transition for semantic changes. Use zero-bounce
+  settling for local geometry. Animated layout skips persistent data refreshes.
+- Share the 150 ms busy glyph for ongoing activity. Reserve the slot and update
+  the true state and action availability immediately. An operation ending
+  before the threshold keeps its previous glyph. Unmounting cancels pending
+  feedback. Reduce Motion makes custom transitions immediate and displays
+  static busy feedback.
+- Tag dragging uses NSDraggingSession. Drive edge scrolling with the view's
+  display link on macOS 14 and elapsed-time stepping on macOS 13. Store the
+  current geometry for input. Publish only changed visual drop targets.
+  Release the scroll driver and drag state at session end.
 - The dashboard uses one adaptive paper layer over the native AppKit backdrop per
   window. Settings General and the menu bar panel share a 0–50 percent preference
   in 5-point steps, default 25. Zero, Reduce Transparency and detached render

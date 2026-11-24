@@ -115,10 +115,9 @@ final class LocalTaskPresentation: ObservableObject {
   /// previews the drop; the store's order still decides drafts, selection and
   /// undo, and replaces this as soon as the write lands.
   @Published var pendingTagOrder: [UUID]?
-  /// Measured pill centres of the tag bar. They live here rather than in view
-  /// state so the drop coordinator can read them live instead of freezing a
-  /// layout snapshot at the moment the drag started.
-  @Published var tagBarGeometry = TagBarGeometry()
+  /// Event handlers read these latest measurements without invalidating the list.
+  var tagBarGeometry = TagBarGeometry()
+  var tagScrollMetrics = TagScrollMetrics()
 
   var selectedTagID: UUID? {
     if case .tag(let id) = selectedFilter { return id }
@@ -229,17 +228,18 @@ final class LocalTaskPresentation: ObservableObject {
   }
 
   func updateTagDrop(_ target: LocalTagDropTarget?) {
+    guard tagDropTarget != target else { return }
     tagDropTarget = target
   }
 
   func endTagDrag() {
-    nativeTagDragActive = false
+    if nativeTagDragActive { nativeTagDragActive = false }
     clearTagDragPreview()
   }
 
   private func clearTagDragPreview() {
-    draggingTagID = nil
-    tagDropTarget = nil
+    if draggingTagID != nil { draggingTagID = nil }
+    updateTagDrop(nil)
   }
 
   /// Publishes the drop immediately and returns the store's `toIndex`.
@@ -454,9 +454,7 @@ struct LocalTasksView: View {
   @ObservedObject var presentation: LocalTaskPresentation
   let onEditingChanged: (Bool) -> Void
   var onManageTags: () -> Void = {}
-  @State private var tagViewportWidth: CGFloat = 0
-  @State private var tagContentWidth: CGFloat = 0
-  @State private var tagContentMinX: CGFloat = 0
+  @State private var tagScrollButtons = TagScrollMetrics.Buttons()
   @State private var dropCoordinator = TagBarDropCoordinator()
   @Environment(\.pulseReduceMotion) private var reduceMotion
 
@@ -470,7 +468,9 @@ struct LocalTasksView: View {
             set: { value in
               guard presentation.editDraft?.creationID == draft.creationID else { return }
               presentation.editDraft = value
-            }))
+            })
+        )
+        .pulseStatusAppearance()
       } else {
         taskList
       }
@@ -514,9 +514,14 @@ struct LocalTasksView: View {
         taskScrollView
       case .loading:
         initialTaskContent {
-          Label("Loading tasks", systemImage: "list.bullet")
-            .font(.caption).foregroundStyle(.secondary)
-            .accessibilityIdentifier("loadingLocalTasks")
+          Label {
+            Text("Loading tasks")
+          } icon: {
+            PulseBusyGlyph(isBusy: true) { Image(systemName: "list.bullet") }
+              .frame(width: 16, height: 16).accessibilityHidden(true)
+          }
+          .font(.caption).foregroundStyle(.secondary)
+          .accessibilityIdentifier("loadingLocalTasks")
         }
       case .failed(let message):
         initialTaskContent {
@@ -543,7 +548,7 @@ struct LocalTasksView: View {
   private var taskScrollView: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        VStack(alignment: .leading, spacing: 2) {
+        LazyVStack(alignment: .leading, spacing: 2) {
           let filter = presentation.selectedFilter
           let tasks = controller.tasks(matching: filter)
           if tasks.isEmpty {
@@ -552,7 +557,7 @@ struct LocalTasksView: View {
               .foregroundStyle(PulseDesignTokens.muted).padding(.vertical, 12)
           }
           ForEach(tasks) { task in
-            taskRow(task).id(task.id)
+            taskRow(task)
           }
           composerSlot.id(filter)
           Color.clear.frame(height: 1).id("taskComposerEnd")
@@ -637,7 +642,6 @@ struct LocalTasksView: View {
   private func tagBar(_ tags: [TaskTag]) -> some View {
     let displayed = presentation.displayOrder(tags)
     let tagIDs = displayed.map(\.id)
-    let overflows = tagContentWidth > tagViewportWidth + 1
     return HStack(spacing: 4) {
       PulsePillTab(
         title: "Todo", isSelected: presentation.selectedFilter == .untagged,
@@ -649,8 +653,10 @@ struct LocalTasksView: View {
       .anchorPreference(key: LocalTagBarBoundsKey.self, value: .bounds) { ["todo": $0] }
       ScrollViewReader { proxy in
         HStack(spacing: 0) {
-          if overflows {
-            tagScrollButton("chevron.left", label: "Previous tags", enabled: tagContentMinX < -1) {
+          if tagScrollButtons.overflows {
+            tagScrollButton(
+              "chevron.left", label: "Previous tags", enabled: tagScrollButtons.hasPrevious
+            ) {
               scrollTags(displayed, direction: -1, proxy: proxy)
             }
           }
@@ -665,13 +671,7 @@ struct LocalTasksView: View {
               measured.todoMidX = 0  // Todo is pinned outside this scrollable coordinate space.
               presentation.tagBarGeometry = measured
             }
-            .background {
-              NativeTagScrollMetricsReader { metrics in
-                tagContentWidth = metrics.width
-                tagContentMinX = metrics.minX
-                tagViewportWidth = metrics.viewportWidth
-              }
-            }
+            .background { NativeTagScrollMetricsReader(onChange: updateTagScrollMetrics) }
             .onDrop(of: [.text], delegate: dropCoordinator)
             .animation(
               reduceMotion ? nil : PulseDesignTokens.reorderAnimation,
@@ -682,13 +682,13 @@ struct LocalTasksView: View {
             proxy.scrollTo(selection)
           }
           .onAppear { proxy.scrollTo(presentation.selectedFilter, anchor: .center) }
-          .onChange(of: tags.map(\.id)) { _ in
+          .onChange(of: Set(tags.map(\.id))) { _ in
             proxy.scrollTo(presentation.selectedFilter, anchor: .center)
           }
-          if overflows {
+          if tagScrollButtons.overflows {
             tagScrollButton(
               "chevron.right", label: "Next tags",
-              enabled: tagContentWidth + tagContentMinX > tagViewportWidth + 1
+              enabled: tagScrollButtons.hasNext
             ) { scrollTags(displayed, direction: 1, proxy: proxy) }
           }
         }
@@ -733,7 +733,8 @@ struct LocalTasksView: View {
   }
 
   private func scrollTags(_ tags: [TaskTag], direction: Int, proxy: ScrollViewProxy) {
-    let visibleCenter = -tagContentMinX + tagViewportWidth / 2
+    let metrics = presentation.tagScrollMetrics
+    let visibleCenter = -metrics.minX + metrics.viewportWidth / 2
     let target =
       direction > 0
       ? tags.first(where: { (presentation.tagBarGeometry.tagMidXByID[$0.id] ?? 0) > visibleCenter })
@@ -744,6 +745,12 @@ struct LocalTasksView: View {
     }
   }
 
+  private func updateTagScrollMetrics(_ metrics: TagScrollMetrics) {
+    presentation.tagScrollMetrics = metrics
+    let buttons = TagScrollMetrics.Buttons(metrics: metrics)
+    if tagScrollButtons != buttons { tagScrollButtons = buttons }
+  }
+
   private func tagPill(_ tag: TaskTag, tagIDs: [UUID]) -> some View {
     let isDragging = presentation.draggingTagID == tag.id
     let selected = presentation.selectedFilter == .tag(tag.id)
@@ -751,13 +758,8 @@ struct LocalTasksView: View {
     let dropEdge =
       presentation.tagDropTarget?.pillID == tag.id ? presentation.tagDropTarget?.edge : nil
     return HStack(spacing: 0) {
-      PulsePillTab(
-        title: tag.name, isSelected: selected,
-        action: { presentation.selectedFilter = .tag(tag.id) }
-      )
-      .background(tagMidpointReporter { TagBarGeometry(tagMidXByID: [tag.id: $0]) })
-      .overlay {
-        NativeTagDragSource(
+      DraggableTagTab(
+        source: NativeTagDragSource(
           tagID: tag.id, title: tag.name, isEnabled: !controller.isSaving,
           canMoveLeft: index > 0, canMoveRight: index < tagIDs.count - 1,
           onSelect: { presentation.selectedFilter = .tag(tag.id) },
@@ -781,9 +783,10 @@ struct LocalTasksView: View {
           },
           onMoveLeft: { moveTag(tag, in: tagIDs, to: index - 1) },
           onMoveRight: { moveTag(tag, in: tagIDs, to: index + 1) }
-        )
-        .accessibilityHidden(true)
-      }
+        ),
+        isSelected: selected
+      )
+      .background(tagMidpointReporter { TagBarGeometry(tagMidXByID: [tag.id: $0]) })
       Menu {
         tagMenu(tag, tagIDs: tagIDs)
       } label: {
@@ -807,7 +810,7 @@ struct LocalTasksView: View {
       if dropEdge == .trailing { tagDropCaret.offset(x: 1) }
     }
     .opacity(isDragging ? 0.5 : 1)
-    .scaleEffect(reduceMotion ? 1 : (isDragging ? 0.98 : 1))
+    .animation(reduceMotion ? nil : PulseDesignTokens.feedbackAnimation, value: isDragging)
     .accessibilityHint("Drag to reorder")
     .accessibilityAction(named: Text("Rename")) {
       presentation.tagIntent = LocalTagIntent(action: .rename(tag.id), name: tag.name)
@@ -919,6 +922,18 @@ struct LocalTasksView: View {
   }
 }
 
+struct TaskWriteIndicator: View {
+  let isBusy: Bool
+
+  var body: some View {
+    PulseBusyGlyph(isBusy: isBusy) { Color.clear }
+      .frame(width: 16, height: 16)
+      .foregroundStyle(.secondary)
+      .accessibilityLabel("Saving")
+      .accessibilityHidden(!isBusy)
+  }
+}
+
 @MainActor
 struct LocalDeletionUndoBar: View {
   @ObservedObject var controller: LocalTaskController
@@ -931,8 +946,9 @@ struct LocalDeletionUndoBar: View {
         HStack(spacing: 8) {
           Text(receipt.undoSummary).font(.caption).foregroundStyle(.secondary)
             .lineLimit(1).help(receipt.undoSummary)
+            .pulseContentFeedback(receipt.undoSummary)
           Spacer(minLength: 0)
-          if controller.isUndoing { ProgressView().controlSize(.mini) }
+          TaskWriteIndicator(isBusy: controller.isUndoing)
           Button(receipt.undoButtonTitle) {
             Task {
               guard let receipt = controller.deletionHistory.last else { return }
@@ -949,6 +965,7 @@ struct LocalDeletionUndoBar: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 7)
       }
+      .pulseStatusAppearance()
       .accessibilityIdentifier("localDeletionUndoBar")
       .anchorPreference(key: LocalDeletionUndoBoundsKey.self, value: .bounds) { [$0] }
     }
@@ -1038,6 +1055,7 @@ struct LocalTagEntry: View {
         HStack {
           Button("Cancel") { presentation.tagIntent = nil }
           Spacer()
+          TaskWriteIndicator(isBusy: isSubmitting)
           Button("Delete list", role: .destructive, action: submit)
             .disabled(blocked || controller.isSaving)
             .accessibilityIdentifier("confirmDeleteLocalTagButton")
@@ -1058,6 +1076,7 @@ struct LocalTagEntry: View {
             onCancel: { presentation.tagIntent = nil }
           )
           .frame(height: 28)
+          TaskWriteIndicator(isBusy: isSubmitting)
           Button(LocalizedStringKey(intent.action == .create ? "Create" : "Save"), action: submit)
             .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
             .disabled(!intent.hasValidName(in: tags) || controller.isSaving)
@@ -1077,7 +1096,6 @@ struct LocalTagEntry: View {
           }
         }
       }
-      if isSubmitting { ProgressView().controlSize(.mini) }
     }
     .buttonStyle(PulseActionButtonStyle()).font(.system(size: 12))
     .padding(12)
@@ -1085,6 +1103,7 @@ struct LocalTagEntry: View {
     .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
     .disabled(isSubmitting)
     .accessibilityIdentifier("localTagEntry")
+    .pulseStatusAppearance()
     .onAppear { focusRequest = UUID() }
     .onChange(of: presentation.tagIntent?.id) { _ in focusRequest = UUID() }
   }
@@ -1123,6 +1142,7 @@ struct LocalTagEntry: View {
 private struct LocalTaskQuickComposer: View {
   @ObservedObject var controller: LocalTaskController
   @ObservedObject var presentation: LocalTaskPresentation
+  @Environment(\.pulseReduceMotion) private var reduceMotion
   private var draft: Binding<LocalTaskDraft> {
     let origin = presentation.selectedFilter
     let creationID = presentation.quickDraft.creationID
@@ -1143,17 +1163,25 @@ private struct LocalTaskQuickComposer: View {
       .name ?? "Todo"
   }
   var body: some View {
+    let origin = presentation.selectedFilter
+    let request = presentation.focusRequest
+    let focusChanged: (Bool) -> Void = { focused in
+      guard presentation.selectedFilter == origin, presentation.focusRequest == request,
+        presentation.isComposerExpanded
+      else { return }
+      presentation.composerFocused = focused
+    }
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 6) {
         TaskEntryField(
           text: draft.text, placeholder: PulseLocalization.format("Add to %@…", listName),
           identifier: "localTaskTextField",
-          focusRequest: presentation.focusRequest, isEnabled: !isBusy, onSubmit: submit,
-          onFocusChanged: { presentation.composerFocused = $0 },
+          focusRequest: request, isEnabled: !isBusy, onSubmit: submit,
+          onFocusChanged: focusChanged,
           onCancel: { presentation.collapseComposer() }
         )
         .frame(height: 26)
-        if isBusy { ProgressView().controlSize(.mini) }
+        TaskWriteIndicator(isBusy: isBusy)
         Button("Add", action: submit)
           .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
           .disabled(
@@ -1188,14 +1216,20 @@ private struct LocalTaskQuickComposer: View {
         .buttonStyle(PulseActionButtonStyle()).disabled(isBusy)
         .accessibilityIdentifier("discardLocalTaskDraftButton")
       }
-      if presentation.quickDraft.optionsExpanded {
-        LocalTaskOptions(
-          controller: controller, draft: draft,
-          onFocusChanged: { presentation.composerFocused = $0 },
-          onCancel: { presentation.collapseComposer() }
-        )
-        .disabled(isBusy)
+      Group {
+        if presentation.quickDraft.optionsExpanded {
+          LocalTaskOptions(
+            controller: controller, draft: draft,
+            onFocusChanged: focusChanged,
+            onCancel: { presentation.collapseComposer() }
+          )
+          .disabled(isBusy)
+          .transition(.asymmetric(insertion: .opacity, removal: .identity))
+        }
       }
+      .animation(
+        reduceMotion ? nil : PulseDesignTokens.composerAnimation,
+        value: presentation.quickDraft.optionsExpanded)
     }
     .padding(.vertical, 9)
     .accessibilityIdentifier("localTaskInlineComposer")
@@ -1265,6 +1299,7 @@ private struct LocalTaskOptions: View {
           .accessibilityIdentifier("newDraftTagButton")
         } label: {
           Text(listName).lineLimit(1).truncationMode(.middle)
+            .pulseContentFeedback(listName)
         }
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityLabel("Choose task list").accessibilityIdentifier("localTaskTagsMenu")
@@ -1289,6 +1324,7 @@ private struct LocalTaskOptions: View {
             .disabled(draft.newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityIdentifier("addDraftTagButton")
         }
+        .pulseStatusAppearance()
       }
       HStack {
         Text("Repeat daily").foregroundStyle(.secondary)
@@ -1321,7 +1357,7 @@ private struct LocalTaskEditor: View {
           .foregroundStyle(PulseDesignTokens.ink)
         Spacer(minLength: 0)
         HStack(spacing: 4) {
-          if isSubmitting { ProgressView().controlSize(.mini) }
+          TaskWriteIndicator(isBusy: isSubmitting)
           Button("Save", action: save)
             .disabled(draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .keyboardShortcut("s", modifiers: .command)
@@ -1398,24 +1434,13 @@ struct LocalTaskRow: View {
   var body: some View {
     HStack(alignment: .top, spacing: 2) {
       Button(action: onToggle) {
-        // Keep the check mounted under the pending overlay so the completed
-        // state animates on the same control when the write finishes.
-        ZStack {
-          TaskCheckboxGlyph(completed: task.completed).opacity(isPending ? 0 : 1)
-          if isPending {
-            if reduceMotion {
-              Image(systemName: "clock").foregroundStyle(.secondary)
-            } else {
-              ProgressView().controlSize(.mini).transition(.opacity)
-            }
-          }
+        PulseBusyGlyph(isBusy: isPending) {
+          TaskCheckboxGlyph(completed: task.completed)
         }
+        .frame(width: 16, height: 16).foregroundStyle(.secondary).accessibilityHidden(true)
         .padding(.top, 2).frame(width: 28, height: 30, alignment: .top).contentShape(Rectangle())
       }
       .buttonStyle(PulseRowButtonStyle(isHovered: isHovered)).disabled(isPending)
-      .animation(
-        reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: isPending
-      )
       .focused($focusedControl, equals: .complete)
       .help(PulseLocalization.string(task.completed ? "Mark incomplete" : "Mark complete"))
       .accessibilityLabel(
@@ -1458,14 +1483,12 @@ struct LocalTaskRow: View {
         .buttonStyle(PulseIconButtonStyle()).disabled(isPending)
         .focused($focusedControl, equals: .delete)
         .opacity(isHovered || focusedControl != nil ? 1 : 0)
-        .scaleEffect(reduceMotion ? 1 : (isHovered || focusedControl != nil ? 1 : 0.98))
+        .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
         .help("Delete task").accessibilityLabel("Delete task: \(task.text)")
         .accessibilityIdentifier("deleteLocalTaskRowButton.\(task.id.uuidString)")
       }
     }
     .onHover { isHovered = $0 }
-    .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
-    .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: focusedControl)
     .contextMenu {
       Button("Edit task", action: onEdit).disabled(isPending)
       if let onDelete {

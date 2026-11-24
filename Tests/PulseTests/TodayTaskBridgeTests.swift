@@ -253,7 +253,10 @@ final class TodayTaskBridgeTests: XCTestCase {
     let tasks = HomeTaskLists(
       bridge: bridge, presentation: presentation, localTasks: localTasks,
       localPresentation: localPresentation, onEditingChanged: { _ in }, onManageTags: {},
-      onTodayHeight: { measurements.append($0) }
+      onTodayHeight: { source, height in
+        XCTAssertEqual(source, vault.url)
+        measurements.append(height)
+      }
     ).background(PulseDesignTokens.background)
     let size = NSSize(width: HomeView.popoverSize.width, height: 360)
     let host = NSHostingView(rootView: tasks.environment(\.locale, Locale(identifier: "en")))
@@ -272,6 +275,23 @@ final class TodayTaskBridgeTests: XCTestCase {
     XCTAssertGreaterThan(shortHeight, 130)
     XCTAssertLessThan(shortHeight, size.height)
     window.setContentSize(NSSize(width: size.width, height: shortHeight))
+
+    let wrapped = TodayBridgeRecordedTask(
+      id: fixture.quick.id,
+      title: String(repeating: "A short Today list can still contain a long title. ", count: 3),
+      completed: false, source: .quick)
+    measurements.removeAll()
+    try fixture.publish(vault, tasks: [wrapped, completed])
+    await bridge.refresh()
+    for _ in 0..<50 {
+      host.layoutSubtreeIfNeeded()
+      if let measurement = measurements.last?.flatMap({ $0 }), measurement > shortHeight { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    let wrappedHeight = try XCTUnwrap(measurements.last?.flatMap { $0 })
+    XCTAssertGreaterThan(wrappedHeight, shortHeight + 12)
+    XCTAssertLessThan(wrappedHeight, size.height)
+    window.setContentSize(NSSize(width: size.width, height: wrappedHeight))
 
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "PulseTodayDashboardRender")
@@ -332,6 +352,29 @@ final class TodayTaskBridgeTests: XCTestCase {
       scroll.documentVisibleRect.intersects(field.convert(field.bounds, to: scroll.documentView)))
     editor.insertText("临时任务", replacementRange: NSRange(location: 0, length: 0))
     XCTAssertEqual(presentation.drafts[vault.url]?.title, "临时任务")
+
+    // Crossing the compact measurement threshold must keep the real field
+    // editor and its pending input mounted, including the return to a tall list.
+    for count in [11, 12] {
+      measurements.removeAll()
+      try fixture.publish(vault, tasks: Array(longList.prefix(count)))
+      await bridge.refresh()
+      for _ in 0..<50 {
+        host.layoutSubtreeIfNeeded()
+        if let report = measurements.last, (report == nil) == (count == 12) { break }
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      let report = try XCTUnwrap(measurements.last)
+      if count == 11 {
+        XCTAssertGreaterThan(try XCTUnwrap(report), wrappedHeight)
+      } else {
+        XCTAssertNil(report)
+      }
+      let activeField = try await focusedComposer()
+      XCTAssertTrue(activeField === field)
+      XCTAssertEqual((activeField.currentEditor() as? NSTextView)?.string, "临时任务")
+    }
+
     presentation.collapseDraft(in: vault.url)
     host.layoutSubtreeIfNeeded()
     XCTAssertEqual(presentation.drafts[vault.url]?.title, "临时任务")

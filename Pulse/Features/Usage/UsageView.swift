@@ -57,14 +57,19 @@ struct UsageView: View {
       case .loading:
         Text("Checking usage…")
           .foregroundStyle(.secondary)
+          .pulseStatusAppearance()
       case .unavailable(let message):
         Label(message, systemImage: "minus.circle")
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+          .pulseStatusAppearance()
       case .failure(let message):
         Label(message, systemImage: "exclamationmark.triangle")
           .foregroundStyle(PulseDesignTokens.destructive)
           .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+          .pulseStatusAppearance()
       case .success(let snapshot):
         ForEach(Array(snapshot.quotaWindows.enumerated()), id: \.offset) { index, window in
           if index > 0 { Divider() }
@@ -94,14 +99,19 @@ struct UsageView: View {
       case .loading:
         Text("Checking balance…")
           .foregroundStyle(.secondary)
+          .pulseStatusAppearance()
       case .unavailable(let message):
         Label(message, systemImage: "minus.circle")
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+          .pulseStatusAppearance()
       case .failure(let message):
         Label(message, systemImage: "exclamationmark.triangle")
           .foregroundStyle(PulseDesignTokens.destructive)
           .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+          .pulseStatusAppearance()
       case .success(let snapshot):
         if snapshot.metrics.contains(.unlimited) {
           detailRow("Balance", value: PulseLocalization.string("Unlimited"))
@@ -152,10 +162,13 @@ struct UsageView: View {
       switch deepSeekUsage.state {
       case .loading:
         Text("Checking balance…").foregroundStyle(.secondary)
+          .pulseStatusAppearance()
       case .unavailable(let message):
         Label(message, systemImage: "minus.circle")
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+          .pulseStatusAppearance()
         Button("Open Providers settings", action: onAddProvider)
           .buttonStyle(.borderless)
           .font(.caption.weight(.medium))
@@ -164,6 +177,8 @@ struct UsageView: View {
         Label(message, systemImage: "exclamationmark.triangle")
           .foregroundStyle(PulseDesignTokens.destructive)
           .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+          .pulseStatusAppearance()
       case .success(let snapshot):
         ForEach(snapshot.balances, id: \.currency) { balance in
           detailRow(
@@ -279,12 +294,8 @@ private struct UsageRefreshButton: View {
     let title = PulseLocalization.string(isRefreshing ? refreshingTitle : refreshTitle)
     Button(action: action) {
       HStack(spacing: 6) {
-        Group {
-          if let refreshStartedAt {
-            BusyGlyph(startedAt: refreshStartedAt).id(refreshStartedAt)
-          } else {
-            Image(systemName: "arrow.clockwise")
-          }
+        PulseBusyGlyph(isBusy: isRefreshing, startedAt: refreshStartedAt) {
+          Image(systemName: "arrow.clockwise")
         }
         .frame(width: 16, height: 16)
         .accessibilityHidden(true)
@@ -292,42 +303,10 @@ private struct UsageRefreshButton: View {
       }
       .font(.system(size: 12, weight: .medium))
     }
-    .buttonStyle(.borderless)
+    .buttonStyle(PulseActionButtonStyle())
     .disabled(isRefreshing)
     .help(title)
     .accessibilityLabel(title)
     .accessibilityIdentifier(identifier)
-  }
-
-  private struct BusyGlyph: View {
-    @Environment(\.pulseReduceMotion) private var reduceMotion
-    @State private var showsBusyIndicator: Bool
-    private let deadline: ContinuousClock.Instant
-
-    init(startedAt: ContinuousClock.Instant) {
-      let deadline = startedAt.advanced(by: .milliseconds(150))
-      self.deadline = deadline
-      _showsBusyIndicator = State(initialValue: deadline <= .now)
-    }
-
-    var body: some View {
-      Group {
-        if !showsBusyIndicator {
-          Image(systemName: "arrow.clockwise")
-        } else if reduceMotion {
-          Image(systemName: "clock")
-        } else {
-          ProgressView().controlSize(.mini)
-        }
-      }
-      .task {
-        guard !showsBusyIndicator else { return }
-        do {
-          try await Task.sleep(until: deadline, clock: .continuous)
-          try Task.checkCancellation()
-          showsBusyIndicator = true
-        } catch { return }
-      }
-    }
   }
 }

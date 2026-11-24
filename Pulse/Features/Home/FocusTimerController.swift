@@ -6,6 +6,7 @@ final class FocusTimerController: ObservableObject {
   static let sessionDuration: Duration = .seconds(30 * 60)
 
   @Published private(set) var isRunning = false
+  @Published private(set) var justCompleted = false
 
   private let duration: Duration
   private let now: @MainActor () -> ContinuousClock.Instant
@@ -25,6 +26,8 @@ final class FocusTimerController: ObservableObject {
 
   func start() {
     guard deadline == nil else { return }
+    timerTask?.cancel()
+    if justCompleted { justCompleted = false }
     let deadline = now().advanced(by: duration)
     self.deadline = deadline
     timerTask = Task { [weak self] in
@@ -58,6 +61,13 @@ final class FocusTimerController: ObservableObject {
   func finishIfDue() {
     guard let deadline, now() >= deadline else { return }
     cancel()
+    justCompleted = true
+    timerTask = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(1.4))
+      guard !Task.isCancelled, let self else { return }
+      self.timerTask = nil
+      self.justCompleted = false
+    }
     onCompletion()
   }
 }

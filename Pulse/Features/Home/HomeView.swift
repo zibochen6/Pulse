@@ -4,6 +4,18 @@ import SwiftUI
 struct HomeView: View {
   static let popoverSize = NSSize(width: 400, height: 520)
 
+  struct PopoverLayout: Equatable {
+    let page: PopoverPage
+    let vault: URL?
+    let stagedVersion: UpdateVersion?
+    let size: NSSize
+  }
+
+  private struct TodayMeasurement: Equatable {
+    let vault: URL
+    let height: CGFloat
+  }
+
   @ObservedObject var config: AppConfig
   @Environment(\.pulseHasNativeBackdrop) private var hasNativeBackdrop
   let usage: UsageController
@@ -12,7 +24,7 @@ struct HomeView: View {
   let deepSeekConfiguration: DeepSeekConfiguration
   let vipConfiguration: VIPConfiguration
   let localTasks: LocalTaskController
-  let updates: UpdateController
+  @ObservedObject var updates: UpdateController
   @ObservedObject var pages: PopoverPageController
   let onDeepSeekCredentialsChanged: () -> Void
   let onVIPCredentialsChanged: () -> Void
@@ -26,24 +38,33 @@ struct HomeView: View {
   var antigravityUsage = UsageController(provider: InactiveSettingsProvider())
   var todayBridge: TodayTaskBridge?
   var todayPresentation = TodayTaskPresentation()
-  var onPopoverSizeChanged: ((NSSize) -> Void)?
+  var onPopoverLayoutChanged: ((PopoverLayout) -> Void)?
   @State private var hidesUpdateBanner = false
-  @State private var headerHeight: CGFloat = 0
-  @State private var todayHeight: CGFloat?
+  @State private var homeHeaderHeight: CGFloat = 0
+  @State private var todayMeasurement: TodayMeasurement?
 
   static func sizeForToday(header: CGFloat, tasks: CGFloat?) -> NSSize {
     guard header > 0, let tasks else { return popoverSize }
     return NSSize(width: popoverSize.width, height: min(popoverSize.height, ceil(header + tasks)))
   }
 
-  private var panelSize: NSSize {
-    guard onPopoverSizeChanged != nil, pages.page == .home,
-      hidesUpdateBanner || updates.stagedRelease == nil
-    else { return Self.popoverSize }
-    return Self.sizeForToday(header: headerHeight, tasks: todayHeight)
+  private var popoverLayout: PopoverLayout {
+    let vault = todayBridge?.vaultURL
+    let stagedVersion = updates.stagedRelease?.version
+    let size: NSSize
+    if onPopoverLayoutChanged != nil,
+      pages.page == .home, hidesUpdateBanner || stagedVersion == nil,
+      let measurement = todayMeasurement, measurement.vault == vault
+    {
+      size = Self.sizeForToday(header: homeHeaderHeight, tasks: measurement.height)
+    } else {
+      size = Self.popoverSize
+    }
+    return PopoverLayout(page: pages.page, vault: vault, stagedVersion: stagedVersion, size: size)
   }
 
   var body: some View {
+    let layout = popoverLayout
     let paperOpacity = PulseDesignTokens.paperOpacity(
       transparencyPercent: hasNativeBackdrop ? config.effectiveWindowTransparencyPercent : 0)
     VStack(spacing: 0) {
@@ -58,10 +79,12 @@ struct HomeView: View {
         )
       }
       .background {
-        GeometryReader { geometry in
-          Color.clear
-            .onAppear { headerHeight = geometry.size.height }
-            .onChange(of: geometry.size.height) { headerHeight = $0 }
+        if pages.page == .home, onPopoverLayoutChanged != nil {
+          GeometryReader { geometry in
+            Color.clear
+              .onAppear { homeHeaderHeight = geometry.size.height }
+              .onChange(of: geometry.size.height) { homeHeaderHeight = $0 }
+          }
         }
       }
       PopoverContentTransition(page: pages.page) {
@@ -79,9 +102,12 @@ struct HomeView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(width: panelSize.width, height: panelSize.height)
-    .onAppear { onPopoverSizeChanged?(panelSize) }
-    .onChange(of: panelSize) { onPopoverSizeChanged?($0) }
+    .frame(
+      width: layout.size.width,
+      height: onPopoverLayoutChanged == nil ? layout.size.height : nil
+    )
+    .onAppear { onPopoverLayoutChanged?(layout) }
+    .onChange(of: layout) { onPopoverLayoutChanged?($0) }
     .background(PulseDesignTokens.background.opacity(paperOpacity))
     .environment(\.pulsePaperOpacity, paperOpacity)
     .foregroundStyle(PulseDesignTokens.ink)
@@ -92,7 +118,7 @@ struct HomeView: View {
   private var toolbar: some View {
     HStack(alignment: .center, spacing: 6) {
       if pages.page == .home {
-        homeTitle
+        homeTitle.pulseStatusAppearance()
       } else {
         Button {
           pages.showHome()
@@ -104,6 +130,8 @@ struct HomeView: View {
         .accessibilityLabel("Back to Home").accessibilityIdentifier("backToHomeButton")
         Text(pageTitle)
           .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .bold))
+          .pulseContentFeedback(pageTitle)
+          .pulseStatusAppearance()
           .accessibilityAddTraits(.isHeader)
       }
       Spacer(minLength: 0)
@@ -159,9 +187,9 @@ struct HomeView: View {
 
   private var homeContent: some View {
     VStack(spacing: 0) {
-      if !hidesUpdateBanner {
-        HomeUpdateBanner(
-          updates: updates, onRestart: onRestartRequested,
+      if !hidesUpdateBanner, let release = updates.stagedRelease {
+        PulseUpdateBanner(
+          version: release.version.description, onRestart: onRestartRequested,
           onDismiss: { hidesUpdateBanner = true })
       }
       Group {
@@ -170,7 +198,13 @@ struct HomeView: View {
             bridge: todayBridge, presentation: todayPresentation,
             localTasks: localTasks, localPresentation: localPresentation,
             onEditingChanged: onTaskEditingChanged, onManageTags: { pages.showTagManagement() },
-            onTodayHeight: { todayHeight = $0 })
+            onTodayHeight: { vault, height in
+              guard vault == todayBridge.vaultURL else { return }
+              let measurement = vault.flatMap { source in
+                height.map { TodayMeasurement(vault: source, height: $0) }
+              }
+              if measurement != todayMeasurement { todayMeasurement = measurement }
+            })
         } else {
           LocalTasksView(
             controller: localTasks, presentation: localPresentation,
@@ -216,6 +250,14 @@ private struct HomeFocusButton: View {
   var body: some View {
     let idleTitle = PulseLocalization.string("Focus")
     let startTitle = PulseLocalization.string("Focus 30 min")
+    let indicator: (symbol: String, color: Color) =
+      if timer.isRunning {
+        ("stop.circle.fill", PulseDesignTokens.accent)
+      } else if timer.justCompleted {
+        ("checkmark", PulseDesignTokens.success)
+      } else {
+        ("timer", .secondary)
+      }
     Button {
       if timer.isRunning {
         timer.cancel()
@@ -224,9 +266,10 @@ private struct HomeFocusButton: View {
       }
     } label: {
       HStack(spacing: 6) {
-        Image(systemName: timer.isRunning ? "stop.circle.fill" : "timer")
+        Image(systemName: indicator.symbol)
           .frame(width: 14)
-          .foregroundStyle(timer.isRunning ? PulseDesignTokens.accent : Color.secondary)
+          .foregroundStyle(indicator.color)
+          .pulseContentFeedback(indicator.symbol)
           .accessibilityHidden(true)
         ZStack(alignment: .leading) {
           // Keep the toolbar stable when the label becomes a countdown.
@@ -240,7 +283,9 @@ private struct HomeFocusButton: View {
                 .accessibilityLabel(PulseLocalization.format("%@ · Cancel", countdown))
             }
           } else {
-            Text(idleTitle).accessibilityLabel(startTitle)
+            Text(idleTitle)
+              .accessibilityLabel(
+                timer.justCompleted ? PulseLocalization.string("Focus complete") : startTitle)
           }
         }
         .monospacedDigit()
@@ -316,20 +361,6 @@ private struct HomeProviderStrip: View {
           onOpenUsage(.antigravity)
         }
       }
-    }
-  }
-}
-
-private struct HomeUpdateBanner: View {
-  @ObservedObject var updates: UpdateController
-  let onRestart: () -> Void
-  let onDismiss: () -> Void
-
-  var body: some View {
-    if let release = updates.stagedRelease {
-      PulseUpdateBanner(
-        version: release.version.description, onRestart: onRestart, onDismiss: onDismiss
-      )
     }
   }
 }

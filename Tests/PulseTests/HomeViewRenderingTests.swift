@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 import XCTest
 
@@ -27,7 +28,7 @@ final class HomeViewRenderingTests: XCTestCase {
   }
 
   func testPopoverBodySwapsInPlaceAndSkipsFadeWithReduceMotion() throws {
-    let content = PopoverContentTransition<Text>.Container(
+    let content = PopoverContentTransition<PopoverPage, Text>.Container(
       rootView: AnyView(Text("Home")), page: .home)
     let window = NSWindow(
       contentRect: NSRect(origin: .zero, size: HomeView.popoverSize),
@@ -43,7 +44,9 @@ final class HomeViewRenderingTests: XCTestCase {
     let layer = try XCTUnwrap(host.layer)
     content.update(rootView: AnyView(Text("Usage")), page: .usage(.codex), reduceMotion: false)
     XCTAssertEqual(content.subviews, [host], "Do not capture or retain an outgoing page")
-    XCTAssertEqual(layer.animation(forKey: "pageOpacity")?.duration, 0.14)
+    let fade = try XCTUnwrap(layer.animation(forKey: "pageOpacity") as? CABasicAnimation)
+    XCTAssertEqual(fade.duration, PulseDesignTokens.contentFadeDuration)
+    XCTAssertEqual(try XCTUnwrap(fade.fromValue as? NSNumber).doubleValue, 0.90, accuracy: 0.001)
 
     content.update(rootView: AnyView(Text("Tags")), page: .tagManagement, reduceMotion: true)
     XCTAssertEqual(content.subviews, [host])

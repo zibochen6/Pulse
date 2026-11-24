@@ -109,19 +109,17 @@ final class PopoverHoverController {
 
   /// Editing suppresses hover departure only; AppKit outside clicks still dismiss.
   func setDismissalSuspended(_ suspended: Bool) {
-    guard state != .closing else { return }
+    guard state != .closed, state != .closing, suspended != dismissalSuspended else { return }
     dismissalSuspended = suspended
-    guard state != .closed, state != .opening else { return }
     if suspended {
-      pendingCloseTask?.cancel()
-      pendingCloseTask = nil
-      state = .interactive
+      stopReconciliation()
+      updateCloseSchedule()
     } else {
       let presence = pointerPresence()
-      overStatusButton = presence.statusButton
-      overContent = presence.content
-      overPopoverWindow = presence.popoverWindow
-      updateCloseSchedule()
+      synchronize(
+        statusButton: presence.statusButton, content: presence.content,
+        popoverWindow: presence.popoverWindow)
+      startReconciliation()
     }
   }
 
@@ -143,8 +141,7 @@ final class PopoverHoverController {
     openingTask = nil
     pendingCloseTask?.cancel()
     pendingCloseTask = nil
-    reconciliationTask?.cancel()
-    reconciliationTask = nil
+    stopReconciliation()
     overStatusButton = false
     overContent = false
     overPopoverWindow = false
@@ -155,7 +152,7 @@ final class PopoverHoverController {
   }
 
   private func setInside(_ inside: Bool, region: PopoverPointerRegion) {
-    guard state != .closed, state != .closing else { return }
+    guard state != .closed, state != .closing, !dismissalSuspended else { return }
     switch region {
     case .statusButton:
       overStatusButton = inside
@@ -170,15 +167,22 @@ final class PopoverHoverController {
     guard state == .opening, openingProtectionFinished, presentationFinished else { return }
     // Entry/exit events around the click can be stale or missing. The current
     // geometry, including the popover arrow, is authoritative at this boundary.
-    let presence = pointerPresence()
-    overStatusButton = presence.statusButton
-    overContent = presence.content
-    overPopoverWindow = presence.popoverWindow
     state = .interactive
-    updateCloseSchedule()
+    if !dismissalSuspended {
+      let presence = pointerPresence()
+      synchronize(
+        statusButton: presence.statusButton, content: presence.content,
+        popoverWindow: presence.popoverWindow)
+    }
+  }
+
+  private func stopReconciliation() {
+    reconciliationTask?.cancel()
+    reconciliationTask = nil
   }
 
   private func startReconciliation() {
+    guard reconciliationTask == nil else { return }
     reconciliationTask = Task { [weak self, reconciliationNanoseconds] in
       while !Task.isCancelled {
         do {

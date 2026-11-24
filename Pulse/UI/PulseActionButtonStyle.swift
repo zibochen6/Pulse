@@ -17,10 +17,10 @@ struct PulseActionButtonStyle: ButtonStyle {
     let configuration: ButtonStyleConfiguration
     let emphasis: Emphasis
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.pulseReduceMotion) private var reduceMotion
     @State private var isHovered = false
     @FocusState private var focused: Bool
 
+    private var isPressed: Bool { isEnabled && configuration.isPressed }
     private var isDestructive: Bool { configuration.role == .destructive }
     private var tint: Color {
       isDestructive ? PulseDesignTokens.destructive : PulseDesignTokens.accent
@@ -47,7 +47,11 @@ struct PulseActionButtonStyle: ButtonStyle {
         .foregroundStyle(
           isPrimary ? PulseDesignTokens.actionInk : (isDestructive ? tint : PulseDesignTokens.ink)
         )
-        .background(background, in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall))
+        .background {
+          RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
+            .fill(background)
+            .pulsePointerFeedback(isPressed: isPressed, isHovered: isHovered)
+        }
         .overlay {
           RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
             .strokeBorder(border, lineWidth: 0.7)
@@ -61,23 +65,20 @@ struct PulseActionButtonStyle: ButtonStyle {
         .focused($focused)
         .pulseDisableSystemFocusRing()
         .onHover { isHovered = $0 }
-        .animation(reduceMotion ? nil : PulseDesignTokens.hoverAnimation, value: isHovered)
-        .animation(
-          reduceMotion ? nil : PulseDesignTokens.pressAnimation, value: configuration.isPressed)
     }
 
     private var background: Color {
       if let timerIsRunning {
-        if configuration.isPressed { return PulseDesignTokens.pressedFill }
+        if isPressed { return PulseDesignTokens.pressedFill }
         if isHovered && isEnabled { return tint.opacity(timerIsRunning ? 0.18 : 0.10) }
         return timerIsRunning ? PulseDesignTokens.selectedFill : PulseDesignTokens.secondarySurface
       }
       if isPrimary {
-        if configuration.isPressed { return PulseDesignTokens.primaryActionPressed }
+        if isPressed { return PulseDesignTokens.primaryActionPressed }
         return isHovered && isEnabled
           ? PulseDesignTokens.primaryActionHover : PulseDesignTokens.primaryActionFill
       }
-      if configuration.isPressed { return tint.opacity(isDestructive ? 0.18 : 0.12) }
+      if isPressed { return tint.opacity(isDestructive ? 0.18 : 0.12) }
       if isHovered && isEnabled { return tint.opacity(0.08) }
       return isDestructive ? tint.opacity(0.05) : PulseDesignTokens.surface
     }

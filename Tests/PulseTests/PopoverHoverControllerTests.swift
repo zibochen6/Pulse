@@ -227,6 +227,58 @@ final class PopoverHoverControllerTests: XCTestCase {
     XCTAssertEqual(closeCount, 1)
   }
 
+  func testHoverHoldStopsReconciliationAndSamplesOnceOnRelease() async throws {
+    var samples = 0
+    let controller = PopoverHoverController(
+      openingNanoseconds: openingDelay,
+      closeDelayNanoseconds: closeDelay,
+      reconciliationNanoseconds: 10_000_000,
+      pointerPresence: {
+        samples += 1
+        return PopoverPointerPresence(statusButton: false, content: false, popoverWindow: false)
+      },
+      close: {}
+    )
+    defer { controller.reset() }
+    controller.beginOpening()
+    controller.setDismissalSuspended(true)
+    controller.presentationDidShow()
+    try await waitForState(.interactive, on: controller)
+    controller.exited(.statusButton)
+    try await Task.sleep(for: .milliseconds(60))
+    XCTAssertEqual(samples, 0)
+
+    controller.setDismissalSuspended(false)
+    XCTAssertEqual(samples, 1)
+    XCTAssertEqual(controller.state, .pendingClose)
+  }
+
+  func testStatusReopenPreservesClickParityThroughNativeClose() {
+    var intent = PopoverReopenIntent()
+    intent.toggle(from: .pointer)
+    XCTAssertNil(intent.consumeScheduledOpen())
+    intent.toggle(from: .keyboard)
+    XCTAssertFalse(intent.scheduleAfterClose())
+
+    intent.toggle(from: .keyboard)
+    XCTAssertTrue(intent.scheduleAfterClose())
+    XCTAssertFalse(intent.scheduleAfterClose(), "Only one open is scheduled")
+    intent.toggle(from: .pointer)
+    intent.toggle(from: .keyboard)
+    XCTAssertEqual(intent.consumeScheduledOpen(), .keyboard)
+    XCTAssertFalse(intent.isScheduled)
+    XCTAssertNil(intent.consumeScheduledOpen())
+  }
+
+  func testSettingsAndExitCanClearScheduledPopoverOpen() {
+    var intent = PopoverReopenIntent()
+    intent.request(from: .keyboard)
+    XCTAssertTrue(intent.scheduleAfterClose())
+    intent.clear()
+    XCTAssertNil(intent.consumeScheduledOpen())
+    XCTAssertFalse(intent.isScheduled)
+  }
+
   func testProtectionExpiryWaitsForNativePresentationCompletion() async throws {
     var closeCount = 0
     let pointer = TestPointerLocation()

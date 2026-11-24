@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import SwiftUI
 import XCTest
 
 @testable import Pulse
@@ -103,6 +105,63 @@ final class UpdateControllerTests: XCTestCase {
     XCTAssertEqual(controller.statusText, "Pulse 0.2.0 is ready. Restart to update.")
     XCTAssertTrue(installer.plans.isEmpty, "Nothing is installed while a draft may be open")
     XCTAssertEqual(preferences.lastCheckDate, Date(timeIntervalSince1970: 1_800_000_000))
+  }
+
+  func testStagedUpdateExpandsTheOpenCompactTodayPanel() async throws {
+    let (release, downloader, appURL) = makeRelease()
+    let updates = makeController(release: release, downloader: downloader, appURL: appURL)
+    let suite = "PulseUpdateLayout.\(UUID())"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let vault = directory.appendingPathComponent("Vault", isDirectory: true)
+    let plugin = vault.appendingPathComponent(".obsidian/plugins/dora-personal-dashboard")
+    try FileManager.default.createDirectory(at: plugin, withIntermediateDirectories: true)
+    try Data(#"{"id":"dora-personal-dashboard","version":"0.6.10"}"#.utf8)
+      .write(to: plugin.appendingPathComponent("manifest.json"))
+    let bridge = TodayTaskBridge(
+      defaults: defaults, bridgeRoot: directory.appendingPathComponent("ObsidianToday/v1"))
+    try await bridge.connect(to: vault)
+    let runtime = PulseRuntimeServices(environment: ["PULSE_DISABLE_LIVE_USAGE": "1"])
+    let config = AppConfig(defaults: defaults, loginItemService: runtime.loginItemService)
+    let usage = UsageController(provider: InactiveSettingsProvider())
+    let tasks = LocalTaskController(
+      store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
+
+    var layout: HomeView.PopoverLayout?
+    let host = NSHostingView(
+      rootView: HomeView(
+        config: config, usage: usage, vipUsage: usage, deepSeekUsage: usage,
+        deepSeekConfiguration: DeepSeekConfiguration(secretStore: runtime.secretStore),
+        vipConfiguration: VIPConfiguration(secretStore: runtime.secretStore),
+        localTasks: tasks, updates: updates, pages: PopoverPageController(),
+        onDeepSeekCredentialsChanged: {}, onVIPCredentialsChanged: {}, onQuit: {},
+        todayBridge: bridge, onPopoverLayoutChanged: { layout = $0 }
+      ))
+    let window = NSWindow(
+      contentRect: NSRect(origin: .zero, size: HomeView.popoverSize), styleMask: [.borderless],
+      backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.ignoresMouseEvents = true
+    window.contentView = host
+    window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
+    window.orderFront(nil)
+    defer { window.close() }
+    host.layoutSubtreeIfNeeded()
+
+    for _ in 0..<40 where (layout?.size ?? HomeView.popoverSize) == HomeView.popoverSize {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    let compact = try XCTUnwrap(layout)
+    XCTAssertEqual(compact.vault, bridge.vaultURL)
+    XCTAssertLessThan(compact.size.height, HomeView.popoverSize.height)
+    window.setContentSize(compact.size)
+
+    await updates.checkForUpdates()
+    for _ in 0..<40 where layout?.stagedVersion == nil {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(layout?.stagedVersion, release.version)
+    XCTAssertEqual(layout?.size, HomeView.popoverSize)
   }
 
   func testAutomaticInstallRunsWhenTheAppIsIdle() async throws {

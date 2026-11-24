@@ -107,6 +107,11 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     }
   )
   private let popover = NSPopover()
+  private var reopenIntent = PopoverReopenIntent()
+  private var isPopoverPresenting = false
+  private var latestPopoverLayout: HomeView.PopoverLayout?
+  private var homePopoverLayout: HomeView.PopoverLayout?
+  private var isPopoverResizeScheduled = false
   private let popoverFocus = PulsePopoverFocus()
   private var popoverInputMonitor: Any?
   private var credentialRefresh: Task<Void, Never>?
@@ -121,9 +126,6 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     },
     close: { [weak self] in self?.popover.performClose(nil) }
   )
-  private var isPopoverWindowVisible: Bool {
-    popover.contentViewController?.view.window?.isVisible == true
-  }
   private lazy var statusTrackingOwner = PopoverPointerTrackingOwner(
     onEnter: { [weak self] in
       guard let self, self.popover.isShown else { return }
@@ -221,6 +223,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   func applicationWillTerminate(_ notification: Notification) {
+    reopenIntent.clear()
     hoverController.reset()
     stopTrackingPopoverInput()
     credentialRefresh?.cancel()
@@ -266,7 +269,6 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     popover.behavior = .transient
     popover.delegate = self
     updateDisplayAccessibility()
-    popover.contentSize = HomeView.popoverSize
     let hostingController = NSHostingController(
       rootView: HomeView(
         config: config,
@@ -292,21 +294,53 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         clips: clips, focusTimer: focusTimer,
         antigravityUsage: antigravityUsage,
         todayBridge: todayBridge, todayPresentation: todayPresentation,
-        onPopoverSizeChanged: { [weak self] size in
-          guard let self, self.popover.contentSize != size else { return }
-          self.popover.contentSize = size
-        }
+        onPopoverLayoutChanged: { [weak self] layout in self?.reportPopoverLayout(layout) }
       )
       .environment(\.pulsePopoverFocus, popoverFocus)
       .environment(\.pulseHasNativeBackdrop, true)
     )
+    // AppKit has one explicit size target. SwiftUI lays out in that viewport.
+    hostingController.sizingOptions = []
     popover.contentViewController = hostingController
+    popover.contentSize = HomeView.popoverSize
     installTrackingArea(on: hostingController.view, owner: contentTrackingOwner)
+  }
+
+  private func reportPopoverLayout(_ layout: HomeView.PopoverLayout) {
+    latestPopoverLayout = layout
+    if layout.page == .home { homePopoverLayout = layout }
+    schedulePopoverResize()
+  }
+
+  private var canResizePopover: Bool {
+    popover.isShown && !isPopoverPresenting && hoverController.state != .closing
+  }
+
+  private func schedulePopoverResize() {
+    guard canResizePopover, !isPopoverResizeScheduled else { return }
+    isPopoverResizeScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.isPopoverResizeScheduled = false
+      guard self.canResizePopover, let layout = self.latestPopoverLayout,
+        self.matchesCurrentLayout(layout)
+      else { return }
+      self.setPopoverSize(layout.size)
+    }
+  }
+
+  private func matchesCurrentLayout(_ layout: HomeView.PopoverLayout) -> Bool {
+    layout.page == pages.page && layout.vault == todayBridge.vaultURL
+      && layout.stagedVersion == updates.stagedRelease?.version
+  }
+
+  private func setPopoverSize(_ size: NSSize) {
+    if popover.contentSize != size { popover.contentSize = size }
   }
 
   private var exitPolicy: PulseExitPolicy {
     PulseExitPolicy(
-      popoverOpen: popover.isShown,
+      popoverOpen: popover.isShown || reopenIntent.isScheduled,
       settingsOpen: settingsController?.isOpen == true,
       hasUnsavedEdits: localPresentation.hasUnsavedEdits || todayPresentation.hasUnsavedEdits
         || settingsPresentation.hasUnsavedEdits,
@@ -320,6 +354,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
 
   private func showSettings(_ destination: SettingsDestination? = nil, provider: ProviderID? = nil)
   {
+    reopenIntent.clear()
     settingsPresentation.open(destination, provider: provider)
     if settingsController == nil {
       settingsController = SettingsWindowController(
@@ -339,7 +374,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
             guard let self else { return }
             self.settingsController?.close()
             self.pages.showHome()
-            self.showPopover()
+            self.showPopover(from: PopoverReopenIntent.Source(event: NSApp.currentEvent))
           },
           clips: clips, todayBridge: todayBridge
         ))
@@ -377,6 +412,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   @objc func requestQuit(_ sender: Any?) { requestExit(restarting: false) }
 
   private func requestExit(restarting: Bool) {
+    reopenIntent.clear()
     Task { [weak self] in
       await self?.exitCoordinator.request(restarting ? .restart : .quit)
     }
@@ -455,19 +491,31 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   @objc private func togglePopover() {
-    guard hoverController.state != .closing else { return }
-    if popover.isShown {
+    let source = PopoverReopenIntent.Source(event: NSApp.currentEvent)
+    if hoverController.state == .closing || reopenIntent.isScheduled {
+      reopenIntent.toggle(from: source)
+    } else if popover.isShown {
       hoverController.requestClose()
     } else {
-      showPopover()
+      showPopover(from: source)
     }
   }
 
-  private func showPopover() {
-    guard let button = statusItem.button, hoverController.state != .closing else { return }
-    popoverFocus.beginPresentation(with: NSApp.currentEvent)
-    let viaKeyboard = popoverFocus.showsKeyboardFocus
+  private func showPopover(from source: PopoverReopenIntent.Source) {
+    if hoverController.state == .closing || reopenIntent.isScheduled {
+      reopenIntent.request(from: source)
+      return
+    }
+    guard !popover.isShown, let button = statusItem.button, button.window != nil else { return }
+    let viaKeyboard = source == .keyboard
+    popoverFocus.setKeyboardNavigation(viaKeyboard)
     pages.reset()
+
+    if let layout = homePopoverLayout, matchesCurrentLayout(layout) {
+      setPopoverSize(layout.size)
+    } else {
+      setPopoverSize(HomeView.popoverSize)
+    }
     hoverController.beginOpening()
     let taskEditorActive: Bool
     if let vault = todayBridge.vaultURL {
@@ -478,8 +526,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     interactionHolds.set(.taskEditor, active: taskEditorActive)
     hoverController.setDismissalSuspended(interactionHolds.isActive)
     updateDisplayAccessibility()
+    isPopoverPresenting = true
     popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     guard popover.isShown else {
+      isPopoverPresenting = false
       hoverController.reset()
       return
     }
@@ -551,10 +601,22 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   func popoverDidShow(_ notification: Notification) {
+    isPopoverPresenting = false
     hoverController.presentationDidShow()
+    schedulePopoverResize()
   }
 
   func popoverShouldClose(_ popover: NSPopover) -> Bool {
+    // The status action owns clicks on its button. A transient close for that
+    // same click would turn the forthcoming action into a spurious reopen.
+    if hoverController.state != .closing, let event = NSApp.currentEvent,
+      event.type == .leftMouseDown || event.type == .leftMouseUp,
+      let button = statusItem.button, let buttonWindow = button.window,
+      event.window === buttonWindow,
+      button.bounds.contains(button.convert(event.locationInWindow, from: nil))
+    {
+      return false
+    }
     updateDisplayAccessibility()
     return true
   }
@@ -564,10 +626,56 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   func popoverDidClose(_ notification: Notification) {
+    isPopoverPresenting = false
     stopTrackingPopoverInput()
     menuLeases.removeAll()
     interactionHolds.reset()
     hoverController.reset()
     pages.reset()
+
+    guard reopenIntent.scheduleAfterClose() else { return }
+    // Opening here would reenter AppKit's closing notification stack.
+    DispatchQueue.main.async { [weak self] in
+      guard let self, let source = self.reopenIntent.consumeScheduledOpen() else { return }
+      self.showPopover(from: source)
+    }
+  }
+}
+
+/// One explicit open request can cross the native close boundary. Extra
+/// status-item clicks toggle it while AppKit finishes closing.
+struct PopoverReopenIntent {
+  enum Source: Equatable {
+    case pointer, keyboard
+
+    init(event: NSEvent?) {
+      self = event?.type == .keyDown || event?.type == .keyUp ? .keyboard : .pointer
+    }
+  }
+
+  private var source: Source?
+  private(set) var isScheduled = false
+
+  mutating func toggle(from source: Source) {
+    self.source = self.source == nil ? source : nil
+  }
+
+  mutating func request(from source: Source) {
+    self.source = source
+  }
+
+  mutating func clear() { source = nil }
+
+  mutating func scheduleAfterClose() -> Bool {
+    guard source != nil, !isScheduled else { return false }
+    isScheduled = true
+    return true
+  }
+
+  mutating func consumeScheduledOpen() -> Source? {
+    guard isScheduled else { return nil }
+    isScheduled = false
+    defer { source = nil }
+    return source
   }
 }

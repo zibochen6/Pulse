@@ -20,6 +20,7 @@ struct LocalTagSettingsView: View {
   }
 
   var body: some View {
+    let visibleTags = filteredTags
     VStack(alignment: .leading, spacing: 12) {
       HStack(spacing: 8) {
         HStack(spacing: 8) {
@@ -65,25 +66,27 @@ struct LocalTagSettingsView: View {
             .pulsePaper(PulseDesignTokens.taskPaper)
           }
           if controller.isLoading {
-            ProgressView("Loading tags").font(.system(size: 12)).padding()
-          } else if filteredTags.isEmpty {
+            Label {
+              Text("Loading tags")
+            } icon: {
+              PulseBusyGlyph(isBusy: true) { Image(systemName: "tag") }
+                .frame(width: 16, height: 16).accessibilityHidden(true)
+            }
+            .font(.system(size: 12)).foregroundStyle(.secondary).padding()
+          } else if visibleTags.isEmpty {
             Text(
               LocalizedStringKey(
                 tags.isEmpty ? "Create your first tag to organize tasks." : "No matching tags")
             )
             .font(.system(size: 13)).foregroundStyle(.secondary).padding(12)
           }
-          ForEach(filteredTags) { tag in tagRow(tag) }
+          ForEach(visibleTags) { tag in tagRow(tag) }
         }
       }
       .accessibilityIdentifier("localTagManagerList")
       if let message = controller.errorMessage {
-        HStack {
-          Text(message).font(.system(size: 12)).foregroundStyle(PulseDesignTokens.destructive)
-            .fixedSize(horizontal: false, vertical: true)
-          Spacer(minLength: 0)
+        PulseErrorBanner(message: message) {
           Button("Dismiss") { controller.dismissError() }
-            .buttonStyle(PulseActionButtonStyle())
         }
       }
       LocalDeletionUndoBar(controller: controller, presentation: presentation)
@@ -103,7 +106,7 @@ struct LocalTagSettingsView: View {
 
   private func tagRow(_ tag: TaskTag) -> some View {
     let index = tags.firstIndex(where: { $0.id == tag.id }) ?? 0
-    let count = controller.document?.tasks.filter { $0.tagIDs.contains(tag.id) }.count ?? 0
+    let count = controller.document?.tasks.count { $0.tagIDs.contains(tag.id) } ?? 0
     return HStack(alignment: .center, spacing: 10) {
       Image(systemName: "tag")
         .font(.system(size: 13))
@@ -125,7 +128,7 @@ struct LocalTagSettingsView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         Text(PulseLocalization.format(count == 1 ? "%lld task" : "%lld tasks", count))
-          .font(.system(size: 12)).foregroundStyle(.secondary)
+          .font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       Button("Rename") {

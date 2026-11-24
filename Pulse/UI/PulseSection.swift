@@ -18,6 +18,7 @@ struct PulseSection<Content: View>: View {
             PulseDesignTokens.secondarySurface, in: Circle())
         Text(LocalizedStringKey(title))
           .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
+          .pulseContentFeedback(title)
       }
       content
         .frame(maxWidth: .infinity, alignment: .leading)
