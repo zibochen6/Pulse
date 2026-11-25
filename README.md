@@ -191,7 +191,8 @@ vault opens again. Coordination is local to this Mac.
 ## Direction
 
 - **AI status:** Codex, 88VIP, and DeepSeek are connected. Provider-specific capabilities for OpenAI API, GLM, OpenRouter, and custom endpoints are planned. A balance and a rate-limit window are displayed as different kinds of information.
-- **Tasks:** native lists support tags and daily repeat. The optional Obsidian connection brings the dashboard's Today Tasks into the same menu bar panel.
+- **Tasks:** search by title in the current list. Native lists support tags and daily repeat. The optional Obsidian connection brings the dashboard's Today Tasks into the same menu bar panel.
+- **Quick Copy:** open the Home capsule to save named prompts and commands. Click an entry's name to copy its full text to the clipboard.
 - **Privacy:** the app runs locally. 88VIP and DeepSeek API keys are stored in macOS Keychain. Native tasks, the paired vault preference and its sync state stay on this Mac. Pulse has no analytics.
 
 See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration](docs/phase2-codex-provider.md), [Phase 1 foundation](docs/phase1-foundation.md), [menu bar status requirements](docs/08-menu-bar-status-requirements.md), [the roadmap](docs/06-mvp-roadmap.md), [architecture decisions](docs/02-architecture-decisions.md), and [reference analysis](docs/01-reference-analysis.md). Contributions and issue reports are welcome. Please do not post API keys or private notes in issues.
@@ -203,6 +204,7 @@ Pulse 是本地优先的 macOS 菜单栏工具，将 AI 服务状态和每日待
 - **AI 状态**：Codex 额度、88VIP USD 余额和 DeepSeek 原币种余额。点击哪个服务，就查看哪个服务；未配置、验证中、连接成功和失败分别表达，保存密钥不冒充连接成功。
 - **标签即列表**：Todo 固定保留，自定义标签可通过可见的省略号菜单编辑、删除和排序；全部标签入口支持搜索，没有人为数量上限。删除标签会一并删除列表任务，一次撤销可恢复整组；最多保留当前运行内最近 20 次删除，并保护未提交草稿。
 - **日常操作**：列表下方添加任务，支持每日重复；完成任务原地显示，删除任务可以撤销。跨标签、页面和窗口保留草稿；中文输入法确认候选词不会误提交。
+- **快速复制**：从首页打开「快速复制」，给常用提示词或指令命名。点击名称即可复制全文，条目上会短暂显示「已复制」。
 - **设置与动画**：使用齿轮或 ⌘, 打开独立设置。保留鼠标移出 180 毫秒后关闭面板的习惯，输入、菜单和拖拽期间暂停；跟随系统减少动态效果。
 - **今日待办同步**：在 Pulse 的「设置 → 待办」选择已安装兼容看板插件的知识库。两端可新增、勾选、撤销完成和删除，Obsidian 关闭时操作会在本机排队。断开知识库后可访问原有本地清单。
 - **本地数据**：原有任务文件保持 schema 1，密钥保存在 macOS Keychain，待办同步通过本机文件完成。

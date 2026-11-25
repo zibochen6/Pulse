@@ -103,6 +103,7 @@ final class HomeViewRenderingTests: XCTestCase {
         case .usage(let provider): pages.showUsage(provider)
         case .clipTask: pages.showClipTask()
         case .tagManagement: pages.showTagManagement()
+        case .quickCopy: pages.showQuickCopy()
         }
         let host = NSHostingView(
           rootView: HomeView(

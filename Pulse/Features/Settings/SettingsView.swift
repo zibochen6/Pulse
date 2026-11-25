@@ -272,14 +272,16 @@ struct SettingsView: View {
   }
 
   private var providerContent: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    let codexConnection = ProviderConnectionState.resolve(hasCredential: true, state: usage.state)
+    return VStack(alignment: .leading, spacing: 12) {
       settingsCard {
         HStack(spacing: 12) {
           CodexProviderIcon(size: 26)
           VStack(alignment: .leading, spacing: 4) {
             Text("Codex").font(.system(size: 15, weight: .semibold))
-            Text(ProviderConnectionState.resolve(hasCredential: true, state: usage.state).title)
+            Text(codexConnection.title)
               .font(.system(size: 12)).foregroundStyle(.secondary)
+              .pulseContentFeedback(codexConnection)
           }
           Spacer()
           connectionCheckButton(usage)
@@ -325,6 +327,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
           Text("Gemini · Antigravity").font(.system(size: 15, weight: .semibold))
           Text(connection.title).font(.system(size: 12)).foregroundStyle(.secondary)
+            .pulseContentFeedback(connection)
         }
         Spacer()
         if config.antigravityEnabled {
@@ -527,6 +530,7 @@ private struct TodayTasksSettings: View {
               .lineLimit(1).truncationMode(.middle).help(vault.path)
               .accessibilityIdentifier("todayTasksVaultName")
             Text(bridge.connection.todayTaskMessage)
+              .pulseContentFeedback(bridge.connection)
               .accessibilityIdentifier("todayTasksSettingsConnectionStatus")
             if bridge.pendingCount > 0 { Text(bridge.pendingStatus) }
           } else {

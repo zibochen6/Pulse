@@ -116,7 +116,8 @@ interaction-hold and update preflight contracts.
   The list stays lazy as it crosses the short-list limit. Other pages and an
   active update banner use the full surface. Home reports the route, vault and
   staged version with the size. AppKit owns the viewport and applies the latest
-  matching target once per main-queue pass. Reuse a valid Home size on reopen.
+  matching target once per main-queue pass without animating the window frame.
+  Reuse a valid Home size on reopen.
 - Settings navigation never lives in PopoverPage. Its ordinary reopen restores
   category and session inputs; contextual links select their provider/category.
 - Opening waits for both 300 ms minimum guard and native popoverDidShow.
@@ -127,8 +128,9 @@ interaction-hold and update preflight contracts.
   tracking work. Explicit status clicks during closing toggle a pending
   reopening, consumed on the main queue after didClose resets the session.
   Settings and exit clear that pending request.
-- Editor, native menu and native drag sessions independently suspend hover
-  close. Releasing one source cannot release others. Final release resamples
+- Editor, keyboard navigation, native menu and native drag sessions each
+  suspend hover close. A pointer click in the panel releases the keyboard
+  hold. Releasing one source preserves the other holds. Final release resamples
   geometry and starts a fresh grace interval if outside. Outside-click/status
   toggle still use native transient dismissal.
 - willClose stops hover work; didClose resets quick navigation to Home after
@@ -139,6 +141,14 @@ interaction-hold and update preflight contracts.
   the host state and existing animation.
 - Reduce Motion disables native popover animation and all custom transition
   animation. Geometry reports, control values and focus still update immediately.
+- Keep the inline Add field mounted outside the scrolling rows. Add performs
+  the native focus transfer before returning and retains a pending request
+  until the window's first responder is the actual field editor. SwiftUI
+  updates avoid writing values into an active field. Publish committed input
+  and use the editing identity to reject callbacks from retired sessions.
+- Quick Copy uses a local, atomic document. Only a successful write to the
+  pasteboard can start the confirmation. A newer copy replaces the displayed
+  entry and cancels the old expiry. Closing the page clears only feedback.
 - Begin opening before refreshing credentials or task data. Read credential
   presence off the main thread and reject results superseded by a later read,
   save or removal. Keep ready task content visible across background loads.

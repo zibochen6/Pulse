@@ -57,19 +57,16 @@ struct UsageView: View {
       case .loading:
         Text("Checking usage…")
           .foregroundStyle(.secondary)
-          .pulseStatusAppearance()
       case .unavailable(let message):
         Label(message, systemImage: "minus.circle")
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
           .pulseContentFeedback(message)
-          .pulseStatusAppearance()
       case .failure(let message):
         Label(message, systemImage: "exclamationmark.triangle")
           .foregroundStyle(PulseDesignTokens.destructive)
           .fixedSize(horizontal: false, vertical: true)
           .pulseContentFeedback(message)
-          .pulseStatusAppearance()
       case .success(let snapshot):
         ForEach(Array(snapshot.quotaWindows.enumerated()), id: \.offset) { index, window in
           if index > 0 { Divider() }
@@ -99,19 +96,16 @@ struct UsageView: View {
       case .loading:
         Text("Checking balance…")
           .foregroundStyle(.secondary)
-          .pulseStatusAppearance()
       case .unavailable(let message):
         Label(message, systemImage: "minus.circle")
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
           .pulseContentFeedback(message)
-          .pulseStatusAppearance()
       case .failure(let message):
         Label(message, systemImage: "exclamationmark.triangle")
           .foregroundStyle(PulseDesignTokens.destructive)
           .fixedSize(horizontal: false, vertical: true)
           .pulseContentFeedback(message)
-          .pulseStatusAppearance()
       case .success(let snapshot):
         if snapshot.metrics.contains(.unlimited) {
           detailRow("Balance", value: PulseLocalization.string("Unlimited"))
@@ -162,13 +156,11 @@ struct UsageView: View {
       switch deepSeekUsage.state {
       case .loading:
         Text("Checking balance…").foregroundStyle(.secondary)
-          .pulseStatusAppearance()
       case .unavailable(let message):
         Label(message, systemImage: "minus.circle")
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
           .pulseContentFeedback(message)
-          .pulseStatusAppearance()
         Button("Open Providers settings", action: onAddProvider)
           .buttonStyle(.borderless)
           .font(.caption.weight(.medium))
@@ -178,7 +170,6 @@ struct UsageView: View {
           .foregroundStyle(PulseDesignTokens.destructive)
           .fixedSize(horizontal: false, vertical: true)
           .pulseContentFeedback(message)
-          .pulseStatusAppearance()
       case .success(let snapshot):
         ForEach(snapshot.balances, id: \.currency) { balance in
           detailRow(
@@ -203,6 +194,7 @@ struct UsageView: View {
         Text(window.remainingPercent.map { "\($0)%" } ?? "--")
           .font(.system(size: 17, weight: .semibold))
           .monospacedDigit()
+          .pulseContentFeedback(window.remainingPercent)
           .layoutPriority(1)
       }
       Text(
@@ -232,6 +224,7 @@ struct UsageView: View {
         .monospacedDigit()
         .multilineTextAlignment(.trailing)
         .fixedSize(horizontal: false, vertical: true)
+        .pulseContentFeedback(value)
         .layoutPriority(1)
     }
   }

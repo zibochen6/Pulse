@@ -6,7 +6,9 @@ import Foundation
 @MainActor
 final class PopoverInteractionHolds {
   enum Source: Hashable {
+    case keyboardNavigation
     case taskEditor
+    case quickCopyEditor
     case tagEditor
     case menu(ObjectIdentifier)
     case drag(UUID)

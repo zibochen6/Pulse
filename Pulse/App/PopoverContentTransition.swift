@@ -43,13 +43,11 @@ struct PopoverContentTransition<Page: Equatable, Content: View>: NSViewRepresent
       super.init(frame: .zero)
       wantsLayer = true
       host.wantsLayer = true
+      host.frame = bounds
+      host.autoresizingMask = [.width, .height]
       addSubview(host)
     }
     required init?(coder: NSCoder) { nil }
-    override func layout() {
-      super.layout()
-      host.frame = bounds
-    }
 
     func update(rootView: AnyView, page: Page, reduceMotion: Bool) {
       let pageChanged = self.page != page
@@ -59,9 +57,7 @@ struct PopoverContentTransition<Page: Equatable, Content: View>: NSViewRepresent
         ? layer?.presentation()?.opacity : nil
 
       if pageChanged {
-        if let editor = window?.firstResponder as? NSTextView, editor.isFieldEditor {
-          window?.endEditing(for: nil)
-        }
+        endEditingInOutgoingPage()
         self.page = page
         pageGeneration &+= 1
       }
@@ -80,6 +76,17 @@ struct PopoverContentTransition<Page: Equatable, Content: View>: NSViewRepresent
       fade.duration = PulseDesignTokens.contentFadeDuration
       fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
       layer?.add(fade, forKey: Self.fadeKey)
+    }
+
+    private func endEditingInOutgoingPage() {
+      guard let window, let editor = window.firstResponder as? NSTextView else { return }
+      let field = editor.isFieldEditor ? editor.delegate as? NSView : nil
+      guard editor.isDescendant(of: host) || field?.isDescendant(of: host) == true else { return }
+
+      // Let AppKit finish marked text and notify the old field before replacing it.
+      if !window.makeFirstResponder(nil), editor.isFieldEditor, window.firstResponder === editor {
+        window.endEditing(for: field)
+      }
     }
   }
 }

@@ -89,8 +89,9 @@ final class LocalTaskPresentation: ObservableObject {
     didSet {
       guard oldValue != selectedFilter else { return }
       selectionRevision += 1
-      composerFocused = false
+      clearComposerFocus()
       ensureQuickDraft()
+      composerActivation.configureField()
     }
   }
   @Published var quickDrafts: [LocalTaskFilter: LocalTaskDraft] = [.untagged: LocalTaskDraft()]
@@ -99,12 +100,14 @@ final class LocalTaskPresentation: ObservableObject {
   @Published var tagSearch = ""
   @Published var composerFocused = false
   @Published var focusRequest = UUID()
+  @Published private(set) var pendingComposerFocus: UUID?
   @Published var revealedTaskID: UUID?
   @Published var revealRequest = UUID()
   @Published var submittingIDs = Set<UUID>()
   @Published var expandedComposers = Set<LocalTaskFilter>()
   private var expansionRevisions: [LocalTaskFilter: Int] = [:]
   private var selectionRevision = 0
+  let composerActivation = TaskEntryActivation()
 
   /// Only an actual native session holds dismissal; its guaranteed ended callback
   /// releases the hold even when a drag leaves the panel or Escape cancels it.
@@ -130,7 +133,7 @@ final class LocalTaskPresentation: ObservableObject {
   var isComposerExpanded: Bool { expandedComposers.contains(selectedFilter) }
   var isEditing: Bool {
     editDraft != nil || tagIntent != nil
-      || (isComposerExpanded && (composerFocused || quickDraft.isDirty))
+      || (isComposerExpanded && (pendingComposerFocus != nil || composerFocused || quickDraft.isDirty))
       || submittingIDs.contains(quickDraft.creationID)
   }
   var isInteractionActive: Bool {
@@ -154,7 +157,7 @@ final class LocalTaskPresentation: ObservableObject {
     editDraft = nil
     tagIntent = nil
     expandedComposers.removeAll()
-    composerFocused = false
+    clearComposerFocus()
     ensureQuickDraft()
   }
 
@@ -208,11 +211,23 @@ final class LocalTaskPresentation: ObservableObject {
     expandedComposers.insert(selectedFilter)
     expansionRevisions[selectedFilter, default: 0] += 1
     focusRequest = UUID()
+    pendingComposerFocus = focusRequest
+    composerActivation.configureField()
   }
   func collapseComposer() {
     expandedComposers.remove(selectedFilter)
     expansionRevisions[selectedFilter, default: 0] += 1
-    composerFocused = false
+    clearComposerFocus()
+    composerActivation.configureField()
+  }
+  func confirmComposerFocus(_ focused: Bool, for request: UUID) {
+    guard focusRequest == request, isComposerExpanded else { return }
+    if composerFocused != focused { composerFocused = focused }
+    if focused, pendingComposerFocus == request { pendingComposerFocus = nil }
+  }
+  func clearComposerFocus() {
+    if pendingComposerFocus != nil { pendingComposerFocus = nil }
+    if composerFocused { composerFocused = false }
   }
   func beginCreatingTag() {
     guard tagIntent == nil else { return }
@@ -302,7 +317,7 @@ final class LocalTaskPresentation: ObservableObject {
     guard editDraft == nil else { return }
     editDraft = LocalTaskDraft(
       taskID: task.id, text: task.text, tagIDs: task.tagIDs, repeatsDaily: task.repeatsDaily)
-    composerFocused = false
+    clearComposerFocus()
   }
   func finishDraft(id: UUID) {
     if editDraft?.creationID == id {
@@ -408,7 +423,7 @@ final class LocalTaskPresentation: ObservableObject {
     quickDrafts[submission.origin] = LocalTaskDraft(tagIDs: originID.map { [$0] } ?? [])
     expandedComposers.remove(submission.origin)
     if selectedFilter == submission.origin, selectionRevision == submission.selectionRevision {
-      composerFocused = false
+      clearComposerFocus()
       if let task { reveal(task, tags: tags) }
     }
   }
@@ -456,7 +471,12 @@ struct LocalTasksView: View {
   var onManageTags: () -> Void = {}
   @State private var tagScrollButtons = TagScrollMetrics.Buttons()
   @State private var dropCoordinator = TagBarDropCoordinator()
+  @State private var search = ""
+  @State private var rowHeight: CGFloat?
+  @FocusState private var searchFocused: Bool
   @Environment(\.pulseReduceMotion) private var reduceMotion
+
+  private var isInteracting: Bool { presentation.isInteractionActive || searchFocused }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -470,7 +490,7 @@ struct LocalTasksView: View {
               presentation.editDraft = value
             })
         )
-        .pulseStatusAppearance()
+        .transition(.identity)
       } else {
         taskList
       }
@@ -481,15 +501,15 @@ struct LocalTasksView: View {
         presentation.reconcileTags(tags)
         presentation.reconcileTagOrder(tags)
       }
-      onEditingChanged(presentation.isInteractionActive)
+      onEditingChanged(isInteracting)
     }
     .task {
       if controller.document == nil { await controller.refresh() }
       await controller.resetRepeatingTasks()
     }
-    .onChange(of: presentation.isInteractionActive) { onEditingChanged($0) }
+    .onChange(of: isInteracting) { onEditingChanged($0) }
     .onDisappear {
-      presentation.composerFocused = false
+      presentation.clearComposerFocus()
       presentation.endTagDrag()
       onEditingChanged(false)
     }
@@ -511,6 +531,9 @@ struct LocalTasksView: View {
           LocalTagEntry(controller: controller, presentation: presentation)
         }
         errorBanner.padding(.horizontal, PulseDesignTokens.contentInset)
+        TaskListSearch(text: $search, isFocused: $searchFocused, identifier: "searchLocalTasksField")
+          .padding(.horizontal, PulseDesignTokens.contentInset)
+          .padding(.top, 4)
         taskScrollView
       case .loading:
         initialTaskContent {
@@ -546,75 +569,52 @@ struct LocalTasksView: View {
   }
 
   private var taskScrollView: some View {
-    ScrollViewReader { proxy in
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: 2) {
-          let filter = presentation.selectedFilter
-          let tasks = controller.tasks(matching: filter)
-          if tasks.isEmpty {
-            Text(LocalizedStringKey(filter == .untagged ? "No tasks yet" : "No tasks in this tag"))
-              .font(.system(size: PulseDesignTokens.footnote))
-              .foregroundStyle(PulseDesignTokens.muted).padding(.vertical, 12)
+    let filter = presentation.selectedFilter
+    let query = TaskListSearch.query(search)
+    let list = controller.tasks(matching: filter)
+    let tasks = query.isEmpty ? list : list.filter { TaskListSearch.matches($0.text, query: query) }
+    let measuresRows = list.count < 12
+    let emptyMessage = query.isEmpty
+      ? (filter == .untagged ? "No tasks yet" : "No tasks in this tag") : "No matching tasks"
+    return VStack(spacing: 2) {
+      ScrollViewReader { proxy in
+        ScrollView {
+          LocalTaskRows(
+            tasks: tasks, pendingIDs: controller.pendingTaskIDs, emptyMessage: emptyMessage,
+            controller: controller, presentation: presentation
+          )
+          .equatable()
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .onGeometryChange(for: CGFloat?.self) { geometry in
+            measuresRows ? ceil(geometry.size.height) : nil
+          } action: { height in
+            rowHeight = height
           }
-          ForEach(tasks) { task in
-            taskRow(task)
-          }
-          composerSlot.id(filter)
-          Color.clear.frame(height: 1).id("taskComposerEnd")
         }
-        .padding(TaskPaper.contentInset)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(TaskPaper())
-        .padding(.horizontal, PulseDesignTokens.contentInset)
-        .padding(.vertical, 8)
+        .frame(maxHeight: measuresRows ? rowHeight : nil)
+        .accessibilityIdentifier("localTaskList")
+        .onAppear { prepareToRevealTask(using: proxy) }
+        .onChange(of: presentation.revealRequest) { _ in prepareToRevealTask(using: proxy) }
+        .onChange(of: filter) { _ in search = "" }
       }
-      .accessibilityIdentifier("localTaskList")
-      .onAppear {
-        scrollToRevealedTask(using: proxy)
-        if presentation.isComposerExpanded { scrollToComposer(using: proxy) }
-      }
-      .onChange(of: presentation.focusRequest) { _ in scrollToComposer(using: proxy) }
-      .onChange(of: presentation.selectedFilter) { _ in
-        if presentation.isComposerExpanded { scrollToComposer(using: proxy) }
-      }
-      .onChange(of: presentation.quickDraft.optionsExpanded) { _ in
-        scrollToComposer(using: proxy)
-      }
-      .onChange(of: presentation.quickDraft.newTagInputVisible) { _ in
-        scrollToComposer(using: proxy)
-      }
-      .onChange(of: presentation.revealRequest) { _ in scrollToRevealedTask(using: proxy) }
+      LocalTaskQuickComposer(controller: controller, presentation: presentation)
     }
+    .padding(TaskPaper.contentInset)
+    .modifier(TaskPaper())
+    .padding(.horizontal, PulseDesignTokens.contentInset)
+    .padding(.vertical, 8)
+    .frame(maxHeight: .infinity, alignment: .top)
   }
 
-  private var composerSlot: some View {
-    Group {
-      if presentation.isComposerExpanded {
-        LocalTaskQuickComposer(controller: controller, presentation: presentation)
-          // Dismantle the native field immediately on removal so a late callback
-          // cannot send its old text into the next editing session.
-          .transition(.asymmetric(insertion: .opacity, removal: .identity))
-      } else {
-        TaskPaperAddButton(identifier: "addLocalTaskButton") {
-          presentation.beginAddingTask()
-        }
-        .transition(.identity)
-      }
+  private func prepareToRevealTask(using proxy: ScrollViewProxy) {
+    guard let id = presentation.revealedTaskID else { return }
+    // A save or Undo must be able to show the affected row even with a query active.
+    if let task = controller.document?.tasks.first(where: { $0.id == id }),
+      !TaskListSearch.matches(task.text, query: TaskListSearch.query(search))
+    {
+      search = ""
     }
-    .animation(
-      reduceMotion ? nil : PulseDesignTokens.composerAnimation,
-      value: presentation.isComposerExpanded)
-  }
-
-  private func scrollToComposer(using proxy: ScrollViewProxy) {
-    let origin = presentation.selectedFilter
-    let request = presentation.focusRequest
-    DispatchQueue.main.async {
-      guard presentation.isComposerExpanded, presentation.selectedFilter == origin,
-        presentation.focusRequest == request, presentation.editDraft == nil
-      else { return }
-      proxy.scrollTo("taskComposerEnd", anchor: .bottom)
-    }
+    scrollToRevealedTask(using: proxy)
   }
 
   private func scrollToRevealedTask(using proxy: ScrollViewProxy) {
@@ -629,14 +629,6 @@ struct LocalTasksView: View {
       proxy.scrollTo(id, anchor: .center)
       presentation.revealedTaskID = nil
     }
-  }
-
-  private func taskRow(_ task: LocalTask) -> some View {
-    LocalTaskRow(
-      task: task, isPending: controller.pendingTaskIDs.contains(task.id),
-      onToggle: { controller.setCompleted(!task.completed, taskID: task.id) },
-      onEdit: { presentation.beginEditingTask(task) },
-      onDelete: { Task { _ = await controller.deleteTask(id: task.id) } })
   }
 
   private func tagBar(_ tags: [TaskTag]) -> some View {
@@ -965,7 +957,7 @@ struct LocalDeletionUndoBar: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 7)
       }
-      .pulseStatusAppearance()
+      .transition(.identity)
       .accessibilityIdentifier("localDeletionUndoBar")
       .anchorPreference(key: LocalDeletionUndoBoundsKey.self, value: .bounds) { [$0] }
     }
@@ -1073,7 +1065,7 @@ struct LocalTagEntry: View {
               }),
             placeholder: "Tag name", identifier: "newLocalTagNameField", focusRequest: focusRequest,
             isEnabled: !isSubmitting, onSubmit: submit, onFocusChanged: { _ in },
-            onCancel: { presentation.tagIntent = nil }
+            onCancel: { presentation.tagIntent = nil }, editingID: intentID
           )
           .frame(height: 28)
           TaskWriteIndicator(isBusy: isSubmitting)
@@ -1103,7 +1095,7 @@ struct LocalTagEntry: View {
     .padding(.horizontal, PulseDesignTokens.contentInset).padding(.vertical, 8)
     .disabled(isSubmitting)
     .accessibilityIdentifier("localTagEntry")
-    .pulseStatusAppearance()
+    .transition(.identity)
     .onAppear { focusRequest = UUID() }
     .onChange(of: presentation.tagIntent?.id) { _ in focusRequest = UUID() }
   }
@@ -1162,61 +1154,79 @@ private struct LocalTaskQuickComposer: View {
       ?? controller.document?.tags.first(where: { $0.id == presentation.quickDraft.selectedTagID })?
       .name ?? "Todo"
   }
+
+  private var isExpanded: Bool { presentation.isComposerExpanded }
+
+  private func entryField() -> TaskEntryField {
+    let request = presentation.focusRequest
+    let origin = presentation.selectedFilter
+    let creationID = presentation.quickDraft.creationID
+    let presenter = presentation
+    return TaskEntryField(
+      text: Binding(
+        get: { presenter.quickDrafts[origin]?.text ?? "" },
+        set: {
+          guard presenter.selectedFilter == origin, presenter.isComposerExpanded,
+            presenter.focusRequest == request, presenter.quickDrafts[origin]?.creationID == creationID,
+            presenter.quickDrafts[origin]?.text != $0
+          else { return }
+          presenter.quickDrafts[origin]?.text = $0
+        }),
+      placeholder: PulseLocalization.format("Add to %@…", listName),
+      identifier: "localTaskTextField",
+      focusRequest: isExpanded ? presenter.pendingComposerFocus : nil,
+      isEnabled: !isBusy, onSubmit: submit,
+      onFocusChanged: { focused in
+        guard presenter.selectedFilter == origin else { return }
+        presenter.confirmComposerFocus(focused, for: request)
+      },
+      onCancel: { presenter.collapseComposer() },
+      isShown: isExpanded, editingID: creationID,
+      activation: presenter.composerActivation, configurationAfterActivation: entryField)
+  }
+
   var body: some View {
     let origin = presentation.selectedFilter
     let request = presentation.focusRequest
+    let escapeAction: (() -> Void)? = isExpanded ? { collapseFromKeyboard() } : nil
     let focusChanged: (Bool) -> Void = { focused in
-      guard presentation.selectedFilter == origin, presentation.focusRequest == request,
-        presentation.isComposerExpanded
-      else { return }
-      presentation.composerFocused = focused
+      guard presentation.selectedFilter == origin else { return }
+      presentation.confirmComposerFocus(focused, for: request)
     }
     VStack(alignment: .leading, spacing: 6) {
-      HStack(spacing: 6) {
-        TaskEntryField(
-          text: draft.text, placeholder: PulseLocalization.format("Add to %@…", listName),
-          identifier: "localTaskTextField",
-          focusRequest: request, isEnabled: !isBusy, onSubmit: submit,
-          onFocusChanged: focusChanged,
-          onCancel: { presentation.collapseComposer() }
-        )
-        .frame(height: 26)
-        TaskWriteIndicator(isBusy: isBusy)
-        Button("Add", action: submit)
-          .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
-          .disabled(
-            isBusy
-              || presentation.quickDraft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                .isEmpty
-          )
-          .help("Add task (Return)").accessibilityLabel("Add task").accessibilityIdentifier(
-            "saveLocalTaskButton")
-        Button {
-          presentation.collapseComposer()
-        } label: {
-          Image(systemName: "xmark").font(.system(size: 11)).frame(width: 24, height: 26)
+      ZStack {
+        HStack(spacing: 6) {
+          entryField().frame(height: 26)
+            .accessibilityHidden(!isExpanded)
+          if isExpanded {
+            TaskWriteIndicator(isBusy: isBusy)
+            Button("Add", action: submit)
+              .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
+              .disabled(
+                isBusy
+                  || presentation.quickDraft.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty
+              )
+              .help("Add task (Return)").accessibilityLabel("Add task").accessibilityIdentifier(
+                "saveLocalTaskButton")
+            Button {
+              presentation.collapseComposer()
+            } label: {
+              Image(systemName: "xmark").font(.system(size: 11)).frame(width: 24, height: 26)
+            }
+            .buttonStyle(PulseIconButtonStyle()).help("Collapse input (Esc)")
+            .accessibilityLabel("Collapse input").accessibilityIdentifier("collapseLocalTaskButton")
+          }
         }
-        .buttonStyle(PulseIconButtonStyle()).help("Collapse input (Esc)")
-        .accessibilityLabel("Collapse input").accessibilityIdentifier("collapseLocalTaskButton")
+        if !isExpanded {
+          TaskPaperAddButton(identifier: "addLocalTaskButton", action: presentation.beginAddingTask)
+            .disabled(isBusy)
+            .transition(.identity)
+        }
       }
-      HStack {
-        Button {
-          presentation.quickDraft.optionsExpanded.toggle()
-        } label: {
-          Label("Options", systemImage: "slider.horizontal.3")
-        }
-        .buttonStyle(PulseActionButtonStyle()).disabled(isBusy)
-        .accessibilityLabel("Task options").accessibilityIdentifier("localTaskOptionsButton")
-        Spacer()
-        Button("Discard draft") {
-          let id = presentation.quickDraft.creationID
-          presentation.finishDraft(id: id)
-          presentation.collapseComposer()
-        }
-        .buttonStyle(PulseActionButtonStyle()).disabled(isBusy)
-        .accessibilityIdentifier("discardLocalTaskDraftButton")
-      }
-      Group {
+      .frame(minHeight: 32)
+      if isExpanded {
+        optionsBar
         if presentation.quickDraft.optionsExpanded {
           LocalTaskOptions(
             controller: controller, draft: draft,
@@ -1227,16 +1237,40 @@ private struct LocalTaskQuickComposer: View {
           .transition(.asymmetric(insertion: .opacity, removal: .identity))
         }
       }
-      .animation(
-        reduceMotion ? nil : PulseDesignTokens.composerAnimation,
-        value: presentation.quickDraft.optionsExpanded)
     }
-    .padding(.vertical, 9)
+    .animation(
+      reduceMotion ? nil : PulseDesignTokens.composerAnimation,
+      value: presentation.quickDraft.optionsExpanded)
     .accessibilityIdentifier("localTaskInlineComposer")
-    .onExitCommand { presentation.collapseComposer() }
+    .onExitCommand(perform: escapeAction)
+  }
+
+  private func collapseFromKeyboard() {
+    guard !presentation.composerActivation.isComposing else { return }
+    presentation.collapseComposer()
+  }
+
+  private var optionsBar: some View {
+    HStack {
+      Button {
+        presentation.quickDraft.optionsExpanded.toggle()
+      } label: {
+        Label("Options", systemImage: "slider.horizontal.3")
+      }
+      .buttonStyle(PulseActionButtonStyle()).disabled(isBusy)
+      .accessibilityLabel("Task options").accessibilityIdentifier("localTaskOptionsButton")
+      Spacer()
+      Button("Discard draft") {
+        let id = presentation.quickDraft.creationID
+        presentation.finishDraft(id: id)
+        presentation.collapseComposer()
+      }
+      .buttonStyle(PulseActionButtonStyle()).disabled(isBusy)
+      .accessibilityIdentifier("discardLocalTaskDraftButton")
+    }
   }
   private func submit() {
-    guard !isBusy else { return }
+    guard !isBusy, presentation.composerActivation.finishInput() else { return }
     presentation.quickDraft.acceptPendingTag(availableTags: controller.document?.tags ?? [])
     guard let submission = presentation.captureSubmission() else { return }
     Task {
@@ -1324,7 +1358,7 @@ private struct LocalTaskOptions: View {
             .disabled(draft.newTagText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityIdentifier("addDraftTagButton")
         }
-        .pulseStatusAppearance()
+        .transition(.identity)
       }
       HStack {
         Text("Repeat daily").foregroundStyle(.secondary)
@@ -1419,6 +1453,40 @@ private struct LocalTaskEditor: View {
 }
 
 @MainActor
+private struct LocalTaskRows: View, Equatable {
+  let tasks: [LocalTask]
+  let pendingIDs: Set<UUID>
+  let emptyMessage: String
+  let controller: LocalTaskController
+  let presentation: LocalTaskPresentation
+
+  nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.controller === rhs.controller && lhs.presentation === rhs.presentation
+      && lhs.tasks == rhs.tasks && lhs.pendingIDs == rhs.pendingIDs
+      && (!lhs.tasks.isEmpty || lhs.emptyMessage == rhs.emptyMessage)
+  }
+
+  var body: some View {
+    // Draft and focus updates keep the mounted list and drag surfaces stable.
+    LazyVStack(alignment: .leading, spacing: 2) {
+      if tasks.isEmpty {
+        Text(LocalizedStringKey(emptyMessage))
+          .font(.system(size: PulseDesignTokens.footnote))
+          .foregroundStyle(PulseDesignTokens.muted)
+          .padding(.vertical, 12)
+      }
+      ForEach(tasks) { task in
+        LocalTaskRow(
+          task: task, isPending: pendingIDs.contains(task.id),
+          onToggle: { controller.setCompleted(!task.completed, taskID: task.id) },
+          onEdit: { presentation.beginEditingTask(task) },
+          onDelete: { Task { _ = await controller.deleteTask(id: task.id) } })
+      }
+    }
+  }
+}
+
+@MainActor
 struct LocalTaskRow: View {
   let task: LocalTask
   let isPending: Bool
@@ -1499,6 +1567,18 @@ struct LocalTaskRow: View {
   }
 }
 
+/// Connects a deliberate Add action to the already mounted native field.
+@MainActor
+final class TaskEntryActivation {
+  weak var coordinator: TaskEntryField.Coordinator?
+
+  var isComposing: Bool {
+    (coordinator?.field?.window?.firstResponder as? NSTextView)?.hasMarkedText() == true
+  }
+  func configureField() { coordinator?.configureFromPresentation() }
+  func finishInput() -> Bool { coordinator?.finishInput() ?? true }
+}
+
 /// NSTextField delegates receive commands after the input manager has had its
 /// chance to confirm marked text. Never interpret a marked-text Return as save.
 @MainActor
@@ -1512,11 +1592,18 @@ struct TaskEntryField: NSViewRepresentable {
   let onSubmit: () -> Void
   let onFocusChanged: (Bool) -> Void
   var onCancel: (() -> Void)?
+  var isShown = true
+  var editingID: UUID?
+  var activation: TaskEntryActivation?
+  var configurationAfterActivation: (() -> Self)?
 
   func makeCoordinator() -> Coordinator { Coordinator(self) }
   func makeNSView(context: Context) -> FocusableTaskTextField {
     let field = FocusableTaskTextField()
-    field.delegate = context.coordinator
+    let coordinator = context.coordinator
+    coordinator.field = field
+    field.delegate = coordinator
+    field.didAcquireEditor = { [weak coordinator] in coordinator?.reportFocus(true) }
     field.font = .systemFont(ofSize: identifier == "localTaskTextField" ? 15 : 13)
     field.isBezeled = true
     field.bezelStyle = .roundedBezel
@@ -1526,38 +1613,92 @@ struct TaskEntryField: NSViewRepresentable {
     field.setContentHuggingPriority(.defaultLow, for: .horizontal)
     field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     field.setAccessibilityIdentifier(identifier)
-    field.setAccessibilityLabel(PulseLocalization.string(placeholder))
+    coordinator.configure(self, environmentEnabled: environmentEnabled)
     return field
   }
+
   func updateNSView(_ field: FocusableTaskTextField, context: Context) {
-    context.coordinator.parent = self
-    if field.stringValue != text { field.stringValue = text }
-    field.placeholderString = PulseLocalization.string(placeholder)
-    field.setAccessibilityLabel(PulseLocalization.string(placeholder))
-    field.isEnabled = isEnabled && environmentEnabled
-    if context.coordinator.lastFocusRequest != focusRequest {
-      context.coordinator.lastFocusRequest = focusRequest
-      field.needsRequestedFocus = focusRequest != nil
-      field.applyRequestedFocus()
-    }
+    context.coordinator.configure(
+      configurationAfterActivation?() ?? self, environmentEnabled: environmentEnabled)
   }
+
   static func dismantleNSView(_ field: FocusableTaskTextField, coordinator: Coordinator) {
-    coordinator.stopObservingEditorUndo()
-    field.delegate = nil
+    coordinator.dismantle()
   }
+
   @MainActor
   final class Coordinator: NSObject, NSTextFieldDelegate {
-    var parent: TaskEntryField
-    var lastFocusRequest: UUID?
+    private var parent: TaskEntryField
+    weak var field: FocusableTaskTextField?
+    private var environmentEnabled = true
     private weak var activeEditor: NSTextView?
-    init(_ parent: TaskEntryField) {
-      self.parent = parent
-      lastFocusRequest = nil
+    private var configuring = false
+    private var focusReport = 0
+    private var reportedFocus: Bool?
+
+    init(_ parent: TaskEntryField) { self.parent = parent }
+
+    func configureFromPresentation() {
+      guard let config = parent.configurationAfterActivation?() else { return }
+      configure(config, environmentEnabled: environmentEnabled)
     }
+
+    func finishInput() -> Bool {
+      guard let field, field.ownsEditor else { return true }
+      guard (field.currentEditor() as? NSTextView)?.hasMarkedText() != true else { return false }
+      updateText(from: field)
+      return true
+    }
+
+    func configure(_ config: TaskEntryField, environmentEnabled: Bool) {
+      guard let field else { return }
+      self.environmentEnabled = environmentEnabled
+      configuring = true
+      defer { configuring = false }
+
+      let isEnabled = config.isShown && config.isEnabled && environmentEnabled
+      let newSession = parent.editingID != config.editingID
+      if (newSession || !isEnabled), field.ownsEditor {
+        field.window?.makeFirstResponder(nil)
+        reportFocus(false)
+      }
+      if newSession {
+        focusReport += 1
+        reportedFocus = nil
+      }
+      parent = config
+      config.activation?.coordinator = self
+
+      // AppKit owns both the committed text and the marked text while editing.
+      // Echo only into an inactive field, such as after restoring a retained draft.
+      if field.currentEditor() == nil, field.stringValue != config.text {
+        field.stringValue = config.text
+      }
+      if field.isHidden == config.isShown { field.isHidden = !config.isShown }
+      if field.isEnabled != isEnabled { field.isEnabled = isEnabled }
+      let placeholder = PulseLocalization.string(config.placeholder)
+      if field.placeholderString != placeholder {
+        field.placeholderString = placeholder
+        field.setAccessibilityLabel(placeholder)
+      }
+      field.requestFocus(config.focusRequest)
+    }
+
+    func dismantle() {
+      focusReport += 1
+      stopObservingEditorUndo()
+      if parent.activation?.coordinator === self { parent.activation?.coordinator = nil }
+      field?.requestFocus(nil)
+      field?.didAcquireEditor = nil
+      field?.delegate = nil
+      field = nil
+    }
+
     func controlTextDidChange(_ notification: Notification) {
-      guard let field = notification.object as? NSTextField else { return }
-      parent.text = field.stringValue
+      guard !configuring, let field = notification.object as? NSTextField else { return }
+      updateText(from: field)
     }
+
     func controlTextDidBeginEditing(_ notification: Notification) {
       stopObservingEditorUndo()
       if let editor = (notification.object as? NSTextField)?.currentEditor() as? NSTextView,
@@ -1571,26 +1712,67 @@ struct TaskEntryField: NSViewRepresentable {
           self, selector: #selector(editorUndoDidChange(_:)),
           name: .NSUndoManagerDidRedoChange, object: manager)
       }
-      parent.onFocusChanged(true)
+      reportFocus(true)
     }
+
     func controlTextDidEndEditing(_ notification: Notification) {
-      if let field = notification.object as? NSTextField { parent.text = field.stringValue }
       stopObservingEditorUndo()
-      parent.onFocusChanged(false)
+      reportFocus(false)
+      guard !configuring, let field = notification.object as? NSTextField,
+        let value = committedText(from: field), parent.text != value
+      else { return }
+      let expected = focusReport
+      let binding = parent.$text
+      // Ending an editor can be part of a navigation update. Apply a final
+      // committed value only if a new editing session has not taken over.
+      DispatchQueue.main.async { [weak self] in
+        guard self?.focusReport == expected, binding.wrappedValue != value else { return }
+        binding.wrappedValue = value
+      }
     }
-    // AppKit's shared field editor does not send controlTextDidChange when
-    // undo/redo changes its string. Sync that native edit before a SwiftUI
-    // update can put the stale binding back into the field.
+
+    private func committedText(from field: NSTextField) -> String? {
+      let editor = field.currentEditor() as? NSTextView
+      guard editor?.hasMarkedText() != true else { return nil }
+      return editor?.string ?? field.stringValue
+    }
+
+    private func updateText(from field: NSTextField) {
+      if let value = committedText(from: field), parent.text != value { parent.text = value }
+    }
+
+    func reportFocus(_ focused: Bool) {
+      guard reportedFocus != focused else { return }
+      reportedFocus = focused
+      focusReport += 1
+      if field != nil {
+        // AppKit hands off synchronously, but SwiftUI publishers must wait
+        // until the representable is out of its update pass.
+        let expected = focusReport
+        let callback = parent.onFocusChanged
+        DispatchQueue.main.async { [weak self] in
+          guard self?.focusReport == expected else { return }
+          callback(focused)
+        }
+      } else {
+        parent.onFocusChanged(focused)
+      }
+    }
+
+    // The shared field editor can undo without sending controlTextDidChange.
     @objc private func editorUndoDidChange(_ notification: Notification) {
-      if let activeEditor { parent.text = activeEditor.string }
+      guard !configuring, let activeEditor, !activeEditor.hasMarkedText() else { return }
+      if parent.text != activeEditor.string { parent.text = activeEditor.string }
     }
-    func stopObservingEditorUndo() {
+
+    private func stopObservingEditorUndo() {
       NotificationCenter.default.removeObserver(
         self, name: .NSUndoManagerDidUndoChange, object: nil)
       NotificationCenter.default.removeObserver(
         self, name: .NSUndoManagerDidRedoChange, object: nil)
       activeEditor = nil
     }
+
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector)
       -> Bool
     {
@@ -1601,6 +1783,7 @@ struct TaskEntryField: NSViewRepresentable {
         return true
       }
       guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
+      if let field, control === field { updateText(from: field) }
       parent.onSubmit()
       return true
     }
@@ -1609,20 +1792,46 @@ struct TaskEntryField: NSViewRepresentable {
 
 @MainActor
 final class FocusableTaskTextField: NSTextField {
-  var needsRequestedFocus = false
+  private var requestedFocus: UUID?
+  private var pendingFocus: UUID?
+  var didAcquireEditor: (() -> Void)?
+
+  var ownsEditor: Bool {
+    guard let editor = currentEditor() else { return false }
+    return window?.firstResponder === editor
+  }
+
+  override func viewWillMove(toWindow newWindow: NSWindow?) {
+    NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: nil)
+    super.viewWillMove(toWindow: newWindow)
+    if let newWindow {
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(windowDidBecomeKey(_:)),
+        name: NSWindow.didBecomeKeyNotification, object: newWindow)
+    }
+  }
+
   override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
     applyRequestedFocus()
   }
-  func applyRequestedFocus() {
-    guard needsRequestedFocus, let window else { return }
-    needsRequestedFocus = false
-    // AppKit responder changes may invoke delegates. Defer beyond SwiftUI's
-    // update pass so focus reporting never publishes from updateNSView.
-    DispatchQueue.main.async { [weak self, weak window] in
-      guard let self, self.window === window else { return }
-      window?.makeFirstResponder(self)
+
+  func requestFocus(_ request: UUID?) {
+    if request != requestedFocus {
+      requestedFocus = request
+      pendingFocus = request
     }
+    applyRequestedFocus()
+  }
+
+  @objc private func windowDidBecomeKey(_ notification: Notification) { applyRequestedFocus() }
+
+  private func applyRequestedFocus() {
+    guard let request = pendingFocus, let window, isEnabled, !isHidden else { return }
+    if !ownsEditor { window.makeFirstResponder(self) }
+    guard ownsEditor, pendingFocus == request else { return }
+    pendingFocus = nil
+    didAcquireEditor?()
   }
 }
 

@@ -14,6 +14,8 @@ final class TodayTaskPresentation: ObservableObject {
   @Published private(set) var actionErrors: [URL: String] = [:]
   @Published private(set) var submittingDrafts = Set<UUID>()
   @Published private(set) var focusedVault: URL?
+  @Published private(set) var pendingFocusVault: URL?
+  let composerActivation = TaskEntryActivation()
 
   var hasUnsavedEdits: Bool {
     drafts.values.contains { !$0.title.isEmpty }
@@ -23,16 +25,23 @@ final class TodayTaskPresentation: ObservableObject {
 
   func isEditing(in vault: URL) -> Bool {
     guard let draft = drafts[vault], draft.focusRequest != nil else { return false }
-    return focusedVault == vault || !draft.title.isEmpty || submittingDrafts.contains(draft.id)
+    return pendingFocusVault == vault || focusedVault == vault || !draft.title.isEmpty
+      || submittingDrafts.contains(draft.id)
   }
 
   func setFocus(_ focused: Bool, in vault: URL, request: UUID? = nil) {
     if let request, drafts[vault]?.focusRequest != request { return }
     if focused {
-      focusedVault = vault
+      if focusedVault != vault { focusedVault = vault }
+      if pendingFocusVault == vault { pendingFocusVault = nil }
     } else if focusedVault == vault {
       focusedVault = nil
     }
+  }
+
+  func clearComposerFocus(in vault: URL) {
+    if pendingFocusVault == vault { pendingFocusVault = nil }
+    setFocus(false, in: vault)
   }
 
   func beginDraft(in vault: URL) {
@@ -42,11 +51,14 @@ final class TodayTaskPresentation: ObservableObject {
     } else {
       drafts[vault] = TodayTaskDraft()
     }
+    pendingFocusVault = vault
+    composerActivation.configureField()
   }
 
   func collapseDraft(in vault: URL) {
     drafts[vault]?.focusRequest = nil
-    setFocus(false, in: vault)
+    clearComposerFocus(in: vault)
+    composerActivation.configureField()
   }
 
   func setTitle(_ title: String, in vault: URL, request: UUID) {
@@ -59,13 +71,14 @@ final class TodayTaskPresentation: ObservableObject {
   func discardDraft(in vault: URL) {
     guard let draft = drafts[vault], !submittingDrafts.contains(draft.id) else { return }
     drafts.removeValue(forKey: vault)
-    setFocus(false, in: vault)
+    clearComposerFocus(in: vault)
   }
 
   func discardAllDrafts() {
     guard !hasPendingSubmission else { return }
     drafts.removeAll()
     focusedVault = nil
+    pendingFocusVault = nil
   }
 
   func clearError(in vault: URL) {
@@ -95,7 +108,7 @@ final class TodayTaskPresentation: ObservableObject {
         try await bridge.add(draft.title)
         if drafts[vault]?.id == draft.id {
           drafts.removeValue(forKey: vault)
-          setFocus(false, in: vault)
+          clearComposerFocus(in: vault)
         }
       } catch {
         actionErrors[vault] = error.localizedDescription
@@ -139,61 +152,70 @@ private struct TodayTasksView: View {
   @ObservedObject var presentation: TodayTaskPresentation
   let onEditingChanged: (Bool) -> Void
   let onHeight: (CGFloat?) -> Void
-  @Environment(\.pulseReduceMotion) private var reduceMotion
+  @State private var search = ""
+  @State private var rowHeight: CGFloat?
+  @State private var footerHeight: CGFloat?
+  @FocusState private var searchFocused: Bool
   private static let headingLabelHeight: CGFloat = 28
   private static let headingInset: CGFloat = 6
   private static let bottomInset: CGFloat = 8
+  private static let searchSpacing: CGFloat = 6
   private static var headingHeight: CGFloat {
     headingLabelHeight + 2 * headingInset
   }
 
-  private var isEditing: Bool { presentation.isEditing(in: vault) }
+  private var isEditing: Bool { presentation.isEditing(in: vault) || searchFocused }
   private var canQueue: Bool {
     bridge.connection != .protocolMismatch && bridge.connection != .storageUnavailable
   }
   private var canMeasureCompactHeight: Bool { bridge.tasks.count + bridge.failures.count < 12 }
+  private var compactHeight: CGFloat? {
+    guard canMeasureCompactHeight, let rowHeight, let footerHeight else { return nil }
+    return Self.headingHeight + TaskListSearch.height + Self.searchSpacing + rowHeight
+      + footerHeight + TaskPaper.contentInset * 2 + Self.bottomInset
+  }
 
   var body: some View {
+    let measuresRows = canMeasureCompactHeight
     VStack(spacing: 0) {
       heading
-      ScrollViewReader { proxy in
+      TaskListSearch(text: $search, isFocused: $searchFocused, identifier: "searchTodayTasksField")
+        .padding(.horizontal, PulseDesignTokens.contentInset)
+        .padding(.bottom, Self.searchSpacing)
+      VStack(spacing: 0) {
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 3) { rows }
-            .padding(TaskPaper.contentInset)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-              // The measurement policy can change while the rows and the live
-              // composer stay in the same scroll view and layout hierarchy.
-              GeometryReader { geometry in
-                let height = geometry.size.height
-                let measurement =
-                  canMeasureCompactHeight && height > 0
-                  ? Self.headingHeight + height + Self.bottomInset : nil
-                Color.clear
-                  .onAppear { onHeight(measurement) }
-                  .onChange(of: measurement, perform: onHeight)
-              }
+            .onGeometryChange(for: CGFloat?.self) { geometry in
+              measuresRows ? ceil(geometry.size.height) : nil
+            } action: { height in
+              rowHeight = height
             }
         }
-        .task(id: presentation.drafts[vault]?.focusRequest) {
-          guard let request = presentation.drafts[vault]?.focusRequest else { return }
-          await Task.yield()
-          guard !Task.isCancelled, presentation.drafts[vault]?.focusRequest == request else {
-            return
+        .accessibilityIdentifier("obsidianTodayTaskList")
+        .frame(maxHeight: measuresRows ? rowHeight : nil)
+        composer
+          .onGeometryChange(for: CGFloat?.self) { geometry in
+            measuresRows ? ceil(geometry.size.height) : nil
+          } action: { height in
+            footerHeight = height
           }
-          proxy.scrollTo("todayComposer", anchor: .bottom)
-        }
       }
-      .accessibilityIdentifier("obsidianTodayTaskList")
+      .padding(TaskPaper.contentInset)
       .modifier(TaskPaper(folded: true))
       .padding(.horizontal, PulseDesignTokens.contentInset)
       .padding(.bottom, Self.bottomInset)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .onAppear { onEditingChanged(isEditing) }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .onAppear {
+      onEditingChanged(isEditing)
+      onHeight(compactHeight)
+    }
+    .onChange(of: compactHeight, perform: onHeight)
     .onChange(of: isEditing) { onEditingChanged($0) }
+    .onChange(of: canQueue) { if !$0 { presentation.clearComposerFocus(in: vault) } }
     .onDisappear {
-      presentation.setFocus(false, in: vault)
+      presentation.clearComposerFocus(in: vault)
       onEditingChanged(false)
     }
   }
@@ -209,7 +231,8 @@ private struct TodayTasksView: View {
       Spacer(minLength: 4)
       HStack(spacing: 4) {
         Text("Completed")
-        Text(verbatim: "\(completed)/\(bridge.tasks.count)").monospacedDigit()
+        let progress = "\(completed)/\(bridge.tasks.count)"
+        Text(verbatim: progress).monospacedDigit().pulseContentFeedback(progress)
       }
       .font(.system(size: PulseDesignTokens.caption, weight: .medium))
       .foregroundStyle(PulseDesignTokens.muted)
@@ -221,6 +244,10 @@ private struct TodayTasksView: View {
   }
 
   @ViewBuilder private var rows: some View {
+    let query = TaskListSearch.query(search)
+    let allTasks = bridge.tasks
+    let tasks =
+      query.isEmpty ? allTasks : allTasks.filter { TaskListSearch.matches($0.title, query: query) }
     syncStatus
     if let message = presentation.actionErrors[vault] {
       PulseErrorBanner(message: message, accessibilityIdentifier: "todayTasksActionError") {
@@ -239,11 +266,12 @@ private struct TodayTasksView: View {
       }
       .accessibilityIdentifier("todayTaskFailure.\(failure.id)")
     }
-    if bridge.connection == .connected && bridge.tasks.isEmpty {
-      Text("No tasks yet").font(.system(size: PulseDesignTokens.footnote))
+    if tasks.isEmpty && (bridge.connection == .connected || !query.isEmpty) {
+      Text(LocalizedStringKey(query.isEmpty ? "No tasks yet" : "No matching tasks"))
+        .font(.system(size: PulseDesignTokens.footnote))
         .foregroundStyle(PulseDesignTokens.muted).padding(.vertical, 12)
     }
-    ForEach(bridge.tasks) { task in
+    ForEach(tasks) { task in
       TodayTaskRow(
         task: task, canQueue: canQueue,
         onToggle: {
@@ -251,12 +279,6 @@ private struct TodayTasksView: View {
         },
         onDelete: { perform { try await bridge.delete(taskID: task.id) } })
     }
-    Group { composer }
-      .animation(
-        reduceMotion ? nil : PulseDesignTokens.composerAnimation,
-        value: presentation.drafts[vault]?.focusRequest != nil
-      )
-      .id("todayComposer")
   }
 
   @ViewBuilder private var syncStatus: some View {
@@ -264,73 +286,99 @@ private struct TodayTasksView: View {
       VStack(alignment: .leading, spacing: 3) {
         if bridge.connection != .connected {
           Text(bridge.connection.todayTaskMessage)
+            .pulseContentFeedback(bridge.connection)
         }
         if bridge.pendingCount > 0 {
           Text(bridge.pendingStatus)
+            .pulseContentFeedback(bridge.pendingStatus)
         }
       }
       .font(.system(size: PulseDesignTokens.caption))
       .foregroundStyle(PulseDesignTokens.muted)
       .padding(.vertical, 5)
-      .pulseStatusAppearance()
+      .transition(.identity)
       .accessibilityIdentifier("todayTasksSyncStatus")
     }
   }
 
-  @ViewBuilder private var composer: some View {
-    if let draft = presentation.drafts[vault], let request = draft.focusRequest {
-      let busy = presentation.submittingDrafts.contains(draft.id)
-      let enabled = canQueue && !busy
-      VStack(alignment: .trailing, spacing: 4) {
+  private func entryField() -> TaskEntryField {
+    let request = bridge.vaultURL == vault ? presentation.drafts[vault]?.focusRequest : nil
+    let presenter = presentation
+    return TaskEntryField(
+      text: Binding(
+        get: { presenter.drafts[vault]?.title ?? "" },
+        set: {
+          guard let request, bridge.vaultURL == vault else { return }
+          presenter.setTitle($0, in: vault, request: request)
+        }),
+      placeholder: "Add to Today…", identifier: "todayTaskTextField",
+      focusRequest: presentation.pendingFocusVault == vault ? request : nil,
+      isEnabled: canQueue && !isBusy, onSubmit: submit,
+      onFocusChanged: { if let request { presenter.setFocus($0, in: vault, request: request) } },
+      onCancel: { presenter.collapseDraft(in: vault) },
+      isShown: request != nil, editingID: request,
+      activation: presenter.composerActivation, configurationAfterActivation: entryField)
+  }
+
+  private var isBusy: Bool {
+    guard let draft = presentation.drafts[vault] else { return false }
+    return presentation.submittingDrafts.contains(draft.id)
+  }
+
+  private var composer: some View {
+    let draft = presentation.drafts[vault]
+    let isExpanded = draft?.focusRequest != nil
+    let escapeAction: (() -> Void)? = isExpanded ? { collapseFromKeyboard() } : nil
+    return VStack(alignment: .trailing, spacing: 4) {
+      ZStack {
         HStack(spacing: 6) {
-          TaskEntryField(
-            text: Binding(
-              get: { presentation.drafts[vault]?.title ?? "" },
-              set: { presentation.setTitle($0, in: vault, request: request) }),
-            placeholder: "Add to Today…", identifier: "todayTaskTextField",
-            focusRequest: request, isEnabled: enabled, onSubmit: submit,
-            onFocusChanged: { presentation.setFocus($0, in: vault, request: request) },
-            onCancel: { presentation.collapseDraft(in: vault) }
-          )
-          .frame(height: 26)
-          TaskWriteIndicator(isBusy: busy)
-          Button("Add", action: submit)
-            .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
-            .disabled(
-              !enabled || draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            )
-            .help("Add task (Return)")
-            .accessibilityLabel("Add task").accessibilityIdentifier("saveTodayTaskButton")
-          Button {
-            presentation.collapseDraft(in: vault)
-          } label: {
-            Image(systemName: "xmark").font(.system(size: 11))
+          entryField().frame(height: 26)
+            .accessibilityHidden(!isExpanded)
+          if isExpanded {
+            TaskWriteIndicator(isBusy: isBusy)
+            Button("Add", action: submit)
+              .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
+              .disabled(
+                !canQueue || isBusy
+                  || draft?.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+              )
+              .help("Add task (Return)")
+              .accessibilityLabel("Add task").accessibilityIdentifier("saveTodayTaskButton")
+            Button {
+              presentation.collapseDraft(in: vault)
+            } label: {
+              Image(systemName: "xmark").font(.system(size: 11))
+            }
+            .buttonStyle(PulseIconButtonStyle())
+            .help("Collapse input (Esc)").accessibilityLabel("Collapse input")
+            .accessibilityIdentifier("collapseTodayTaskButton")
           }
-          .buttonStyle(PulseIconButtonStyle())
-          .help("Collapse input (Esc)").accessibilityLabel("Collapse input")
-          .accessibilityIdentifier("collapseTodayTaskButton")
         }
-        if !draft.title.isEmpty {
-          Button("Discard draft") { presentation.discardDraft(in: vault) }
-            .buttonStyle(.borderless).font(.system(size: PulseDesignTokens.caption))
-            .disabled(busy)
+        if !isExpanded {
+          TaskPaperAddButton(identifier: "addTodayTaskButton") {
+            presentation.beginDraft(in: vault)
+          }
+          .disabled(!canQueue || isBusy)
+          .transition(.identity)
         }
       }
-      .padding(.vertical, 6)
-      .onExitCommand { presentation.collapseDraft(in: vault) }
-      // Remove the AppKit editor immediately even if a new one opens mid-fade.
-      .transition(.asymmetric(insertion: .opacity, removal: .identity))
-    } else {
-      TaskPaperAddButton(identifier: "addTodayTaskButton") {
-        presentation.beginDraft(in: vault)
+      .frame(minHeight: 32)
+      if isExpanded, draft?.title.isEmpty == false {
+        Button("Discard draft") { presentation.discardDraft(in: vault) }
+          .buttonStyle(.borderless).font(.system(size: PulseDesignTokens.caption))
+          .disabled(isBusy)
       }
-      .disabled(!canQueue)
-      .transition(.identity)
     }
+    .onExitCommand(perform: escapeAction)
+  }
+
+  private func collapseFromKeyboard() {
+    guard !presentation.composerActivation.isComposing else { return }
+    presentation.collapseDraft(in: vault)
   }
 
   private func submit() {
-    guard canQueue else { return }
+    guard canQueue, presentation.composerActivation.finishInput() else { return }
     presentation.submitDraft(in: vault, bridge: bridge)
   }
 
@@ -420,7 +468,6 @@ struct TaskPaper: ViewModifier {
     let outline = TaskPaperOutline(folded: folded)
     content
       .background(PulseDesignTokens.taskPaper.opacity(paperOpacity), in: outline)
-      .clipShape(outline)
       .overlay(alignment: .topTrailing) {
         if folded {
           TaskPaperCorner()
@@ -476,6 +523,51 @@ private struct TaskPaperCorner: Shape {
       path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
       path.closeSubpath()
     }
+  }
+}
+
+struct TaskListSearch: View {
+  static let height: CGFloat = 28
+  @Binding var text: String
+  @FocusState.Binding var isFocused: Bool
+  let identifier: String
+
+  static func query(_ text: String) -> String {
+    text.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  static func matches(_ title: String, query: String) -> Bool {
+    query.isEmpty || title.localizedStandardContains(query)
+  }
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Image(systemName: "magnifyingglass")
+        .font(.system(size: PulseDesignTokens.caption))
+        .foregroundStyle(PulseDesignTokens.muted)
+        .accessibilityHidden(true)
+      TextField("Search tasks", text: $text)
+        .textFieldStyle(.plain)
+        .font(.system(size: PulseDesignTokens.footnote))
+        .focused($isFocused)
+        .accessibilityIdentifier(identifier)
+      Button {
+        text = ""
+        isFocused = true
+      } label: {
+        Image(systemName: "xmark.circle.fill")
+          .font(.system(size: PulseDesignTokens.caption))
+          .foregroundStyle(PulseDesignTokens.muted)
+      }
+      .buttonStyle(.borderless)
+      .help("Clear search").accessibilityLabel("Clear search")
+      .opacity(text.isEmpty ? 0 : 1)
+      .disabled(text.isEmpty)
+      .accessibilityHidden(text.isEmpty)
+    }
+    .padding(.horizontal, 9)
+    .frame(height: Self.height)
+    .pulsePaper(PulseDesignTokens.secondarySurface)
   }
 }
 

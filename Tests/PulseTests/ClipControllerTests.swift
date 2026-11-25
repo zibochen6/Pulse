@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import XCTest
 
 @testable import Pulse
@@ -93,6 +94,26 @@ final class ClipControllerTests: XCTestCase {
     XCTAssertNotNil(clips.snapshot.folderURL)
     XCTAssertFalse(clips.snapshot.phase.isActive)
     XCTAssertTrue(clips.snapshot.detail?.contains("19") == true)
+  }
+
+  func testStoppedWorkerPublishesFailureAndItsExplanationTogether() throws {
+    let data = try Fixture()
+    defer { data.clean() }
+    try FileManager.default.createDirectory(at: data.support, withIntermediateDirectories: true)
+    let running = ClipSnapshot(phase: .running, source: "rec_101.mp4")
+    try JSONEncoder().encode(running).write(to: data.support.appendingPathComponent("latest.json"))
+
+    let clips = data.controller()
+    var failures: [ClipSnapshot] = []
+    let changes = clips.$snapshot.sink {
+      if $0.phase == .failed { failures.append($0) }
+    }
+    clips.restore()
+
+    withExtendedLifetime(changes) {
+      XCTAssertEqual(failures, [clips.snapshot])
+      XCTAssertFalse(failures.first?.detail?.isEmpty ?? true)
+    }
   }
 
   func testDoneHidesOnlyTheSelectedResultAndSurvivesRestart() throws {

@@ -47,6 +47,7 @@ enum PopoverPage: Equatable {
   case clipTask
   case usage(ProviderID)
   case tagManagement
+  case quickCopy
 }
 
 /// Only the quick panel navigates here. Settings has its own window/session.
@@ -55,6 +56,7 @@ final class PopoverPageController: ObservableObject {
   @Published private(set) var page: PopoverPage = .home
   func showUsage(_ provider: ProviderID = .codex) { navigate(to: .usage(provider)) }
   func showTagManagement() { navigate(to: .tagManagement) }
+  func showQuickCopy() { navigate(to: .quickCopy) }
   func showClipTask() { navigate(to: .clipTask) }
   func showHome() { navigate(to: .home) }
   func reset() { showHome() }

@@ -10,11 +10,6 @@ extension View {
   func pulseContentFeedback<Value: Equatable>(_ value: Value) -> some View {
     modifier(PulseContentFeedback(value: value))
   }
-
-  /// Keep new status text and actions usable on arrival, with immediate teardown.
-  func pulseStatusAppearance() -> some View {
-    modifier(PulseStatusAppearance())
-  }
 }
 
 private struct PulsePointerFeedback: ViewModifier {
@@ -38,23 +33,6 @@ private struct PulseContentFeedback<Value: Equatable>: ViewModifier {
     content
       .contentTransition(reduceMotion ? .identity : .opacity)
       .animation(reduceMotion ? nil : PulseDesignTokens.feedbackAnimation, value: value)
-  }
-}
-
-private struct PulseStatusAppearance: ViewModifier {
-  @Environment(\.pulseReduceMotion) private var reduceMotion
-  @State private var appeared = false
-
-  func body(content: Content) -> some View {
-    content
-      .opacity(reduceMotion || appeared ? 1 : 0.9)
-      .animation(reduceMotion ? nil : PulseDesignTokens.feedbackAnimation, value: appeared)
-      .transition(.identity)
-      .task {
-        await Task.yield()
-        guard !Task.isCancelled else { return }
-        appeared = true
-      }
   }
 }
 
@@ -148,7 +126,6 @@ struct PulseErrorBanner<Actions: View>: View {
       in: RoundedRectangle(cornerRadius: PulseDesignTokens.cornerSmall)
     )
     .modifier(PulseAccessibilityIdentifier(identifier: accessibilityIdentifier))
-    .pulseStatusAppearance()
   }
 }
 
@@ -445,6 +422,5 @@ struct PulseUpdateBanner: View {
     .padding(.horizontal, PulseDesignTokens.contentInset)
     .padding(.vertical, 6)
     .accessibilityIdentifier("updateReadyBanner")
-    .pulseStatusAppearance()
   }
 }

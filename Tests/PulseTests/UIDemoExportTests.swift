@@ -18,9 +18,9 @@ final class UIDemoExportTests: XCTestCase {
     let language = environment["PULSE_UI_DEMO_LANGUAGE"] ?? "en"
     let output = URL(fileURLWithPath: outputPath, isDirectory: true)
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-    let fixture = try await DemoFixture(language: language)
-    defer { fixture.cleanUp() }
     let dashboardStillsOnly = environment["PULSE_UI_DASHBOARD_STILLS_ONLY"] == "1"
+    let fixture = try await DemoFixture(language: language, snippetCount: dashboardStillsOnly ? 8 : 0)
+    defer { fixture.cleanUp() }
 
     for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
       fixture.pages.showHome()
@@ -33,6 +33,10 @@ final class UIDemoExportTests: XCTestCase {
         appearance: appearance,
         destination: output.appendingPathComponent("settings-\(language)-\(name).png"))
       if dashboardStillsOnly {
+        fixture.pages.showQuickCopy()
+        try await exportStill(
+          fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
+          destination: output.appendingPathComponent("quick-copy-\(language)-\(name).png"))
         for page in ProviderID.allCases {
           fixture.pages.showUsage(page)
           try await exportStill(
@@ -93,7 +97,7 @@ final class UIDemoExportTests: XCTestCase {
       throw XCTSkip("Opt-in interactive preview")
     }
     let language = environment["PULSE_UI_DEMO_LANGUAGE"] ?? "en"
-    let fixture = try await DemoFixture(language: language)
+    let fixture = try await DemoFixture(language: language, snippetCount: 8)
     let sentinel = URL(
       fileURLWithPath: environment["PULSE_UI_PREVIEW_SENTINEL"] ?? "/tmp/PulseUIDemo-preview.keep")
     try Data("Remove this file to finish the isolated Pulse preview.\n".utf8).write(to: sentinel)
@@ -205,6 +209,8 @@ private final class DemoFixture: ObservableObject {
   let tasks: LocalTaskController
   let updates: UpdateController
   let clips: ClipController
+  let quickCopy: QuickCopyController?
+  private let previewClipboard: NSPasteboard?
   let pages = PopoverPageController()
   let popoverFocus = PulsePopoverFocus()
   let taskPresentation = LocalTaskPresentation()
@@ -222,7 +228,7 @@ private final class DemoFixture: ObservableObject {
     isChinese ? "演示数据 · 本地示例账户与任务" : "Demo data · Local sample accounts and tasks"
   }
 
-  init(language: String) async throws {
+  init(language: String, snippetCount: Int = 0) async throws {
     self.language = language
     suite = "Pulse.UIDemo.\(UUID().uuidString)"
     directory = FileManager.default.temporaryDirectory.appendingPathComponent(
@@ -241,6 +247,27 @@ private final class DemoFixture: ObservableObject {
     clips = ClipController(
       defaults: defaults, support: directory.appendingPathComponent("Clips"),
       downloads: directory.appendingPathComponent("Downloads"), live: false)
+    if snippetCount > 0 {
+      let clipboard = NSPasteboard.withUniqueName()
+      let file = directory.appendingPathComponent("quick-copy.json")
+      let entries = (1...snippetCount).map { index in
+        [
+          "id": UUID().uuidString,
+          "name": Self.snippetName(index, chinese: language == "zh-Hans"),
+          "text": "Snippet \(index)\n\nReview the draft. Check names, numbers and dates.\n保留原始 Markdown。",
+        ]
+      }
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      try JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "entries": entries])
+        .write(to: file)
+      quickCopy = QuickCopyController(fileURL: file) { QuickCopyController.write($0, to: clipboard) }
+      previewClipboard = clipboard
+      await quickCopy?.loadIfNeeded()
+      XCTAssertEqual(quickCopy?.entries.count, snippetCount)
+    } else {
+      quickCopy = nil
+      previewClipboard = nil
+    }
     vipConfiguration.refresh()
     deepSeekConfiguration.refresh()
     await usage.refresh()
@@ -301,7 +328,7 @@ private final class DemoFixture: ObservableObject {
         self.showsSettings = true
         self.interactiveSettings?.open()
       }, clips: recording, antigravityUsage: antigravityUsage,
-      todayBridge: todayBridge,
+      todayBridge: todayBridge, quickCopy: quickCopy,
       onPopoverLayoutChanged: onSize.map { callback in { callback($0.size) } }
     )
     .environment(\.pulsePopoverFocus, popoverFocus)
@@ -391,8 +418,17 @@ private final class DemoFixture: ObservableObject {
   }
 
   func cleanUp() {
+    previewClipboard?.releaseGlobally()
     UserDefaults.standard.removePersistentDomain(forName: suite)
     try? FileManager.default.removeItem(at: directory)
+  }
+
+  private static func snippetName(_ index: Int, chinese: Bool) -> String {
+    let names = chinese
+      ? ["审核稿件", "整理访谈", "写发布说明", "检查 Markdown 和中英文混排中的名称、编号、日期和标点"]
+      : ["Review draft", "Summarize interview", "Write release notes",
+         "Check product names, dates and numbers in the release notes"]
+    return "\(names[(index - 1) % names.count]) · \(index)"
   }
 }
 
@@ -499,7 +535,8 @@ extension UIDemoExportTests {
     let screenIndex = Int(environment["PULSE_MOTION_SCREEN"] ?? "0") ?? 0
     let screen = try XCTUnwrap(
       NSScreen.screens.indices.contains(screenIndex) ? NSScreen.screens[screenIndex] : nil)
-    let fixture = try await DemoFixture(language: environment["PULSE_UI_DEMO_LANGUAGE"] ?? "en")
+    let fixture = try await DemoFixture(
+      language: environment["PULSE_UI_DEMO_LANGUAGE"] ?? "en", snippetCount: 60)
     defer { fixture.cleanUp() }
     let frame = screen.visibleFrame
     let anchorWindow = NSWindow(
@@ -520,7 +557,7 @@ extension UIDemoExportTests {
         recording: fixture.clips, todayBridge: tables.bridge,
         onSize: { [weak popover] size in
           DispatchQueue.main.async {
-            if let popover, popover.contentSize != size { popover.contentSize = size }
+            popover?.applyPulseContentSize(size)
           }
         }
       )
@@ -608,6 +645,7 @@ extension UIDemoExportTests {
             switch page {
             case .home: fixture.pages.showHome()
             case .tagManagement: fixture.pages.showTagManagement()
+            case .quickCopy: fixture.pages.showQuickCopy()
             case .usage(let provider): fixture.pages.showUsage(provider)
             case .clipTask: fixture.pages.showClipTask()
             }
@@ -665,6 +703,27 @@ extension UIDemoExportTests {
           try await Task.sleep(for: .milliseconds(180))
           return intervals
         })
+
+      intervals.append(
+        await MotionInterval.measure("quick-copy-scroll-and-feedback", trial: trial) {
+          let controller = try XCTUnwrap(fixture.quickCopy)
+          fixture.pages.showQuickCopy()
+          defer { fixture.pages.showHome() }
+          try await Task.sleep(for: .milliseconds(240))
+          let list = try XCTUnwrap(
+            host.view.motionDescendants(NSScrollView.self)
+              .max(by: {
+                ($0.documentView?.frame.height ?? 0) < ($1.documentView?.frame.height ?? 0)
+              }))
+          let frames = try await scroll(list, horizontally: false, distance: 950)
+          for entry in controller.entries.prefix(4) {
+            XCTAssertTrue(controller.copy(entry.id))
+            XCTAssertEqual(controller.copiedEntryID, entry.id)
+            try await Task.sleep(for: .milliseconds(90))
+          }
+          return frames
+        })
+      try await Task.sleep(for: .milliseconds(220))
     }
     try JSONEncoder().encode(intervals).write(
       to: sessionURL.appendingPathComponent("intervals.json"))

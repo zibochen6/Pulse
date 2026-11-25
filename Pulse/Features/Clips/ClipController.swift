@@ -242,8 +242,10 @@ final class ClipController: ObservableObject {
   }
 
   private func fail(_ message: String) {
-    snapshot.phase = .failed
-    snapshot.detail = PulseLocalization.string(message)
+    var failed = snapshot
+    failed.phase = .failed
+    failed.detail = PulseLocalization.string(message)
+    snapshot = failed
   }
 
   private func readSnapshot() -> ClipSnapshot? {

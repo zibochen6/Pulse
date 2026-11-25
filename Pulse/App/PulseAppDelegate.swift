@@ -59,6 +59,17 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
     live: Self.runtimeServices.permitsLiveAccess)
   private lazy var clipNotifications = ClipNotifications()
   private let todayPresentation = TodayTaskPresentation()
+  private lazy var quickCopy: QuickCopyController = {
+    let live = Self.runtimeServices.permitsLiveAccess
+    let directory = live
+      ? LocalTaskStore.defaultFileURL.deletingLastPathComponent()
+      : FileManager.default.temporaryDirectory.appendingPathComponent(
+        "PulseTestHost-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
+    let pasteboard = live ? NSPasteboard.general : NSPasteboard.withUniqueName()
+    return QuickCopyController(fileURL: directory.appendingPathComponent("quick-copy.json")) {
+      QuickCopyController.write($0, to: pasteboard)
+    }
+  }()
   private let settingsPresentation = SettingsPresentation()
   private var settingsController: SettingsWindowController?
   private let interactionHolds = PopoverInteractionHolds()
@@ -72,6 +83,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       self.localPresentation.discardAllDrafts()
       self.todayPresentation.discardAllDrafts()
       self.settingsPresentation.discardAllDrafts()
+      self.quickCopy.discardDraft()
     },
     perform: { [unowned self] action in
       self.approvedTermination = true
@@ -294,6 +306,11 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         clips: clips, focusTimer: focusTimer,
         antigravityUsage: antigravityUsage,
         todayBridge: todayBridge, todayPresentation: todayPresentation,
+        quickCopy: quickCopy,
+        onQuickCopyEditingChanged: { [weak self] active in
+          guard let self else { return }
+          self.interactionHolds.set(.quickCopyEditor, active: active && self.pages.page == .quickCopy)
+        },
         onPopoverLayoutChanged: { [weak self] layout in self?.reportPopoverLayout(layout) }
       )
       .environment(\.pulsePopoverFocus, popoverFocus)
@@ -335,7 +352,7 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   }
 
   private func setPopoverSize(_ size: NSSize) {
-    if popover.contentSize != size { popover.contentSize = size }
+    popover.applyPulseContentSize(size)
   }
 
   private var exitPolicy: PulseExitPolicy {
@@ -343,10 +360,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       popoverOpen: popover.isShown || reopenIntent.isScheduled,
       settingsOpen: settingsController?.isOpen == true,
       hasUnsavedEdits: localPresentation.hasUnsavedEdits || todayPresentation.hasUnsavedEdits
-        || settingsPresentation.hasUnsavedEdits,
+        || settingsPresentation.hasUnsavedEdits || quickCopy.hasUnsavedEdits,
       hasPendingWrites: localTasks.isSaving || localTasks.isUndoing
         || localPresentation.hasPendingSubmissions || todayPresentation.hasPendingSubmission
-        || todayBridge.hasPendingWrite,
+        || todayBridge.hasPendingWrite || quickCopy.hasPendingWrite,
       focusSessionActive: focusTimer.isRunning, clipJobActive: clips.snapshot.phase.isActive)
   }
 
@@ -517,6 +534,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       setPopoverSize(HomeView.popoverSize)
     }
     hoverController.beginOpening()
+    // Keyboard users can open and navigate with the cursor elsewhere.
+    interactionHolds.set(.keyboardNavigation, active: viaKeyboard)
     let taskEditorActive: Bool
     if let vault = todayBridge.vaultURL {
       taskEditorActive = todayPresentation.isEditing(in: vault)
@@ -582,6 +601,8 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
           event.window === window
         else { return }
         self.popoverFocus.handleInput(event)
+        self.interactionHolds.set(
+          .keyboardNavigation, active: self.popoverFocus.showsKeyboardFocus)
       }
       return event
     }
@@ -639,6 +660,18 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       guard let self, let source = self.reopenIntent.consumeScheduledOpen() else { return }
       self.showPopover(from: source)
     }
+  }
+}
+
+extension NSPopover {
+  /// Apply one layout target without restarting a native window animation.
+  /// Keep AppKit's own show and close transitions.
+  func applyPulseContentSize(_ size: NSSize) {
+    guard contentSize != size else { return }
+    let animatePresentation = animates
+    animates = false
+    contentSize = size
+    animates = animatePresentation
   }
 }
 

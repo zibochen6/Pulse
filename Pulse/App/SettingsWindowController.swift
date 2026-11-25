@@ -88,22 +88,26 @@ private struct SettingsWindowBackdrop: View {
   @ObservedObject var config: AppConfig
 
   var body: some View {
-    if config.effectiveWindowTransparencyPercent > 0 {
-      SettingsVisualEffect()
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
-    }
+    SettingsVisualEffect(isVisible: config.effectiveWindowTransparencyPercent > 0)
+      .equatable()
+      .accessibilityHidden(true)
+      .allowsHitTesting(false)
   }
 }
 
-private struct SettingsVisualEffect: NSViewRepresentable {
+private struct SettingsVisualEffect: NSViewRepresentable, Equatable {
+  let isVisible: Bool
+
   func makeNSView(context: Context) -> NSVisualEffectView {
     let view = NSVisualEffectView()
     view.material = .sidebar
     view.blendingMode = .behindWindow
     view.state = .followsWindowActiveState
+    view.isHidden = !isVisible
     return view
   }
 
-  func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+  func updateNSView(_ view: NSVisualEffectView, context: Context) {
+    if view.isHidden == isVisible { view.isHidden = !isVisible }
+  }
 }

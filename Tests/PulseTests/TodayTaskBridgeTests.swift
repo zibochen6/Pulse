@@ -319,7 +319,6 @@ final class TodayTaskBridgeTests: XCTestCase {
     try fixture.publish(vault, tasks: longList)
     await bridge.refresh()
     window.setContentSize(size)
-    presentation.beginDraft(in: vault.url)
     func descendant<T: NSView>(_ type: T.Type, in root: NSView, matching: (T) -> Bool) -> T? {
       if let root = root as? T, matching(root) { return root }
       for child in root.subviews {
@@ -342,16 +341,34 @@ final class TodayTaskBridgeTests: XCTestCase {
       }
       return try XCTUnwrap(nil as NSTextField?, "The native Today task field must receive focus.")
     }
-    let field = try await focusedComposer()
-    XCTAssertTrue(measurements.contains { $0 == nil }, "Long lists request the full viewport")
+    host.layoutSubtreeIfNeeded()
+    let field = try XCTUnwrap(descendant(NSTextField.self, in: host) {
+      $0.accessibilityIdentifier() == "todayTaskTextField"
+    })
+    XCTAssertTrue(field.isHidden)
+    XCTAssertFalse(field.isEnabled)
+    presentation.beginDraft(in: vault.url)
     let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+    XCTAssertTrue(window.firstResponder === editor)
+    let firstKey = try XCTUnwrap(NSEvent.keyEvent(
+      with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+      windowNumber: window.windowNumber, context: nil, characters: "a",
+      charactersIgnoringModifiers: "a", isARepeat: false, keyCode: 0))
+    window.sendEvent(firstKey)
+    XCTAssertEqual(editor.string, "a")
+    XCTAssertEqual(presentation.drafts[vault.url]?.title, "a")
+
+    let activeField = try await focusedComposer()
+    XCTAssertTrue(activeField === field)
+    XCTAssertTrue(measurements.contains { $0 == nil }, "Long lists request the full viewport")
     let scroll = try XCTUnwrap(
       descendant(NSScrollView.self, in: host) { ($0.documentView?.frame.height ?? 0) > size.height }
     )
-    XCTAssertTrue(
-      scroll.documentVisibleRect.intersects(field.convert(field.bounds, to: scroll.documentView)))
-    editor.insertText("临时任务", replacementRange: NSRange(location: 0, length: 0))
-    XCTAssertEqual(presentation.drafts[vault.url]?.title, "临时任务")
+    XCTAssertFalse(field.isDescendant(of: scroll))
+    XCTAssertTrue(host.bounds.intersects(field.convert(field.bounds, to: host)))
+    editor.setMarkedText("lin", selectedRange: NSRange(location: 3, length: 0),
+      replacementRange: NSRange(location: 1, length: 0))
+    XCTAssertTrue(editor.hasMarkedText())
 
     // Crossing the compact measurement threshold must keep the real field
     // editor and its pending input mounted, including the return to a tall list.
@@ -372,16 +389,23 @@ final class TodayTaskBridgeTests: XCTestCase {
       }
       let activeField = try await focusedComposer()
       XCTAssertTrue(activeField === field)
-      XCTAssertEqual((activeField.currentEditor() as? NSTextView)?.string, "临时任务")
+      XCTAssertTrue(activeField.currentEditor() === editor)
+      XCTAssertTrue(editor.hasMarkedText())
+      XCTAssertEqual(editor.string, "alin")
+      XCTAssertEqual(presentation.drafts[vault.url]?.title, "a")
     }
+    editor.insertText("临时任务", replacementRange: NSRange(location: 0, length: 4))
+    XCTAssertEqual(presentation.drafts[vault.url]?.title, "临时任务")
 
     presentation.collapseDraft(in: vault.url)
     host.layoutSubtreeIfNeeded()
     XCTAssertEqual(presentation.drafts[vault.url]?.title, "临时任务")
     XCTAssertNil(presentation.drafts[vault.url]?.focusRequest)
+    XCTAssertTrue(field.isHidden)
 
     presentation.beginDraft(in: vault.url)
     let reopened = try await focusedComposer()
+    XCTAssertTrue(reopened === field)
     let reopenedEditor = try XCTUnwrap(reopened.currentEditor() as? NSTextView)
     XCTAssertEqual(reopenedEditor.string, "临时任务")
     reopenedEditor.doCommand(by: #selector(NSResponder.insertNewline(_:)))

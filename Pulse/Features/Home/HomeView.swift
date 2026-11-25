@@ -38,6 +38,8 @@ struct HomeView: View {
   var antigravityUsage = UsageController(provider: InactiveSettingsProvider())
   var todayBridge: TodayTaskBridge?
   var todayPresentation = TodayTaskPresentation()
+  var quickCopy: QuickCopyController?
+  var onQuickCopyEditingChanged: (Bool) -> Void = { _ in }
   var onPopoverLayoutChanged: ((PopoverLayout) -> Void)?
   @State private var hidesUpdateBanner = false
   @State private var homeHeaderHeight: CGFloat = 0
@@ -65,27 +67,27 @@ struct HomeView: View {
 
   var body: some View {
     let layout = popoverLayout
+    let measureHeader = pages.page == .home && onPopoverLayoutChanged != nil
     let paperOpacity = PulseDesignTokens.paperOpacity(
       transparencyPercent: hasNativeBackdrop ? config.effectiveWindowTransparencyPercent : 0)
     VStack(spacing: 0) {
       VStack(spacing: 0) {
         toolbar
         if pages.page == .home, let clips { ClipResultLink(clips: clips) { pages.showClipTask() } }
-        HomeProviderStrip(
-          config: config, usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
-          antigravityUsage: antigravityUsage, deepSeekConfiguration: deepSeekConfiguration,
-          vipConfiguration: vipConfiguration, onOpenUsage: { pages.showUsage($0) },
-          onOpenSettings: { onOpenSettings(.providers, $0) }
-        )
-      }
-      .background {
-        if pages.page == .home, onPopoverLayoutChanged != nil {
-          GeometryReader { geometry in
-            Color.clear
-              .onAppear { homeHeaderHeight = geometry.size.height }
-              .onChange(of: geometry.size.height) { homeHeaderHeight = $0 }
-          }
+        if pages.page != .quickCopy {
+          HomeProviderStrip(
+            config: config, usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
+            antigravityUsage: antigravityUsage, deepSeekConfiguration: deepSeekConfiguration,
+            vipConfiguration: vipConfiguration, onOpenUsage: { pages.showUsage($0) },
+            onOpenSettings: { onOpenSettings(.providers, $0) }
+          )
         }
+        if pages.page == .home, quickCopy != nil { quickCopyShortcut }
+      }
+      .onGeometryChange(for: CGFloat?.self) { geometry in
+        measureHeader ? ceil(geometry.size.height) : nil
+      } action: { height in
+        if let height { homeHeaderHeight = height }
       }
       PopoverContentTransition(page: pages.page) {
         Group {
@@ -95,6 +97,10 @@ struct HomeView: View {
           case .home: homeContent
           case .usage(let provider): usageContent(provider)
           case .tagManagement: tagManagement
+          case .quickCopy:
+            if let quickCopy {
+              QuickCopyView(controller: quickCopy, onEditingChanged: onQuickCopyEditingChanged)
+            }
           }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -118,7 +124,7 @@ struct HomeView: View {
   private var toolbar: some View {
     HStack(alignment: .center, spacing: 6) {
       if pages.page == .home {
-        homeTitle.pulseStatusAppearance()
+        homeTitle
       } else {
         Button {
           pages.showHome()
@@ -131,7 +137,6 @@ struct HomeView: View {
         Text(pageTitle)
           .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .bold))
           .pulseContentFeedback(pageTitle)
-          .pulseStatusAppearance()
           .accessibilityAddTraits(.isHeader)
       }
       Spacer(minLength: 0)
@@ -176,12 +181,28 @@ struct HomeView: View {
     }
   }
 
+  private var quickCopyShortcut: some View {
+    Button { pages.showQuickCopy() } label: {
+      Label("Quick Copy", systemImage: "doc.on.doc")
+        .font(.system(size: PulseDesignTokens.caption, weight: .medium))
+        .padding(.horizontal, 10)
+        .frame(height: 26)
+        .contentShape(Capsule())
+    }
+    .buttonStyle(PulseProviderStatusStyle(paper: PulseDesignTokens.secondarySurface, radius: 13))
+    .accessibilityIdentifier("openQuickCopyButton")
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal, PulseDesignTokens.contentInset)
+    .padding(.bottom, 6)
+  }
+
   private var pageTitle: String {
     switch pages.page {
     case .clipTask: PulseLocalization.string("Recording edits")
     case .home: "Pulse"
     case .usage(let provider): provider.name
     case .tagManagement: PulseLocalization.string("All tags")
+    case .quickCopy: PulseLocalization.string("Quick Copy")
     }
   }
 

@@ -52,7 +52,8 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
 - Shared adaptive tokens own color, spacing and motion. Press and keyboard
   focus update immediately. Scope release and hover animation to the fill, and
   use a 140 ms opacity transition for semantic changes. Use zero-bounce
-  settling for local geometry. Animated layout skips persistent data refreshes.
+  settling for local options and reorder feedback. Geometry from background
+  updates and the inline input's first focus take effect immediately.
 - Share the 150 ms busy glyph for ongoing activity. Reserve the slot and update
   the true state and action availability immediately. An operation ending
   before the threshold keeps its previous glyph. Unmounting cancels pending
@@ -76,6 +77,10 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
   square completion glyph and circular Add task button. Paired Today adds a
   corner fold and completion count, and includes the perimeter's insets in
   the short-list height reported to the popover.
+- Keep search scoped to the current task list and preserve its order and
+  draft. Keep the composer outside the scrolling rows. Quick Copy rows show
+  saved names and reserve the trailing confirmation slot so the copy label
+  can change without shifting the row or its actions.
 - English/zh-Hans resources follow system language. Localize computed strings
   as well as SwiftUI literal labels. Keep user data, provider IDs, currency codes,
   storage keys and accessibility identifiers invariant. Todo is a reserved name.
@@ -127,8 +132,8 @@ or assume a SwiftUI identifier is copied onto a bridged NSTextField. Keep
 geometry assertions independent from native input/focus assertions.
 
 The opt-in `UIDemoExportTests` export accepts
-`TEST_RUNNER_PULSE_UI_DASHBOARD_STILLS_ONLY=1` to render Home, Settings, all
-provider details, tags and recording edits in both appearances without
+`TEST_RUNNER_PULSE_UI_DASHBOARD_STILLS_ONLY=1` to render Home, Settings, Quick
+Copy, all provider details, tags and recording edits in both appearances without
 recording motion frames. Pass `-testLanguage` and `-testRegion` alongside the
 fixture language to localize system-formatted dates and static SwiftUI text.
 

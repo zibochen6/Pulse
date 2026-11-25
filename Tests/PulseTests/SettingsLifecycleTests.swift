@@ -100,6 +100,48 @@ final class SettingsLifecycleTests: XCTestCase {
     XCTAssertFalse(presentation.hasUnsavedEdits)
   }
 
+  func testRouteReplacementEndsOnlyTheOutgoingPageEditor() throws {
+    let window = NSWindow(
+      contentRect: NSRect(x: -16_000, y: -16_000, width: 480, height: 200),
+      styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    defer { window.close() }
+    let field = NSTextField()
+    let fieldContent = AnyView(RouteTestNativeView(view: field).frame(width: 200, height: 24))
+    let multiline = NSTextView()
+    let multilineContent = AnyView(RouteTestNativeView(view: multiline).frame(width: 200, height: 60))
+    let content = PopoverContentTransition<SettingsDestination, Text>.Container(
+      rootView: fieldContent, page: .providers)
+    content.frame = NSRect(x: 110, y: 0, width: 370, height: 200)
+    let surface = try XCTUnwrap(window.contentView)
+    surface.addSubview(content)
+    content.layoutSubtreeIfNeeded()
+
+    XCTAssertTrue(window.makeFirstResponder(field))
+    let fieldEditor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+    fieldEditor.insertText("Keep the draft", replacementRange: NSRange(location: 0, length: 0))
+
+    content.update(rootView: fieldContent, page: .providers, reduceMotion: false)
+    XCTAssertTrue(window.firstResponder === fieldEditor)
+    XCTAssertEqual(fieldEditor.string, "Keep the draft")
+    content.update(rootView: multilineContent, page: .general, reduceMotion: true)
+    XCTAssertNil(field.currentEditor())
+    XCTAssertEqual(field.stringValue, "Keep the draft")
+
+    content.layoutSubtreeIfNeeded()
+    XCTAssertTrue(window.makeFirstResponder(multiline))
+    XCTAssertTrue(window.firstResponder === multiline)
+    content.update(rootView: AnyView(Text("Tasks")), page: .tasks, reduceMotion: true)
+    XCTAssertFalse(window.firstResponder === multiline)
+
+    let sidebar = NSTextField(frame: NSRect(x: 0, y: 100, width: 100, height: 24))
+    surface.addSubview(sidebar)
+    XCTAssertTrue(window.makeFirstResponder(sidebar))
+    let sidebarEditor = try XCTUnwrap(sidebar.currentEditor())
+    content.update(rootView: AnyView(Text("Updates")), page: .updates, reduceMotion: true)
+    XCTAssertTrue(window.firstResponder === sidebarEditor)
+  }
+
   func testTodayDraftBelongsToOriginalVaultAndRejectsRetiredField() throws {
     let presentation = TodayTaskPresentation()
     let firstVault = URL(fileURLWithPath: "/fixture/first", isDirectory: true)
@@ -267,6 +309,13 @@ final class SettingsLifecycleTests: XCTestCase {
     await coordinator.request(.restart)
     XCTAssertEqual(events, ["write finished", "confirm", "discard", "install"])
   }
+}
+
+private struct RouteTestNativeView: NSViewRepresentable {
+  let view: NSView
+
+  func makeNSView(context: Context) -> NSView { view }
+  func updateNSView(_ view: NSView, context: Context) {}
 }
 
 private struct PausedCredentialRead: SecretStoring {

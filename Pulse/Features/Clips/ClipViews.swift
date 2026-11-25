@@ -137,7 +137,6 @@ struct ClipDetailView: View {
           if let detail = state.detail, !detail.isEmpty {
             Text(PulseLocalization.string(detail)).font(.callout).textSelection(.enabled)
               .pulseContentFeedback(detail)
-              .pulseStatusAppearance()
           }
         }
         ForEach(state.platforms, id: \.platform) { draft in

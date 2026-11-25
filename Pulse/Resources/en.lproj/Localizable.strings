@@ -399,3 +399,22 @@
 "Background transparency" = "Background transparency";
 "Your Mac is reducing transparency." = "Your Mac is reducing transparency.";
 "Applies to the menu bar panel and Settings." = "Applies to the menu bar panel and Settings.";
+
+"Quick Copy" = "Quick Copy";
+"Search by name" = "Search by name";
+"New entry" = "New entry";
+"No saved entries yet" = "No saved entries yet";
+"No matching entries" = "No matching entries";
+"Loading entries" = "Loading entries";
+"Edit entry" = "Edit entry";
+"Name" = "Name";
+"Text to copy" = "Text to copy";
+"Copied" = "Copied";
+"Delete entry" = "Delete entry";
+"Couldn't load saved entries." = "Couldn't load saved entries.";
+"Couldn't save the entry." = "Couldn't save the entry.";
+"Couldn't delete the entry." = "Couldn't delete the entry.";
+"Couldn't copy the text." = "Couldn't copy the text.";
+"Search tasks" = "Search tasks";
+"No matching tasks" = "No matching tasks";
+"Clear search" = "Clear search";

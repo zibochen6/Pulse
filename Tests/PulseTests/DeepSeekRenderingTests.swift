@@ -370,6 +370,7 @@ final class DeepSeekRenderingTests: XCTestCase {
           case .usage(let provider): pages.showUsage(provider)
           case .clipTask: pages.showClipTask()
           case .tagManagement: pages.showTagManagement()
+          case .quickCopy: pages.showQuickCopy()
           }
           let host = NSHostingView(
             rootView: home(
@@ -461,6 +462,7 @@ final class DeepSeekRenderingTests: XCTestCase {
     case .usage: "usage"
     case .clipTask: "clip"
     case .tagManagement: "tags"
+    case .quickCopy: "quick copy"
     }
   }
 

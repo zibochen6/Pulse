@@ -21,6 +21,7 @@ struct ProviderCredentialForm<Icon: View>: View {
   private var isExpanded: Bool { presentation.expandedProviders.contains(provider) }
 
   var body: some View {
+    let symbol = statusSymbol
     VStack(alignment: .leading, spacing: 16) {
       HStack(spacing: 12) {
         icon().frame(width: 28, height: 28)
@@ -31,7 +32,8 @@ struct ProviderCredentialForm<Icon: View>: View {
               .pulseContentFeedback(connection)
           } icon: {
             PulseBusyGlyph(isBusy: usage.isRefreshing, startedAt: usage.refreshStartedAt) {
-              Image(systemName: statusSymbol)
+              Image(systemName: symbol)
+                .pulseContentFeedback(symbol)
             }
             .frame(width: 14, height: 14)
             .accessibilityHidden(true)
@@ -62,13 +64,12 @@ struct ProviderCredentialForm<Icon: View>: View {
               .buttonStyle(PulseActionButtonStyle()).disabled(usage.isRefreshing)
           }
         }
-        .pulseStatusAppearance()
       }
       Toggle("Show balance in Pulse", isOn: showBalance)
         .toggleStyle(.switch)
         .accessibilityIdentifier("balanceUsageToggle.\(provider.rawValue)")
       if isExpanded {
-        editor.pulseStatusAppearance()
+        editor
       }
     }
     .padding(16)
