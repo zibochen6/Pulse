@@ -471,12 +471,10 @@ struct LocalTasksView: View {
   var onManageTags: () -> Void = {}
   @State private var tagScrollButtons = TagScrollMetrics.Buttons()
   @State private var dropCoordinator = TagBarDropCoordinator()
-  @State private var search = ""
   @State private var rowHeight: CGFloat?
-  @FocusState private var searchFocused: Bool
   @Environment(\.pulseReduceMotion) private var reduceMotion
 
-  private var isInteracting: Bool { presentation.isInteractionActive || searchFocused }
+  private var isInteracting: Bool { presentation.isInteractionActive }
 
   var body: some View {
     VStack(spacing: 0) {
@@ -531,9 +529,6 @@ struct LocalTasksView: View {
           LocalTagEntry(controller: controller, presentation: presentation)
         }
         errorBanner.padding(.horizontal, PulseDesignTokens.contentInset)
-        TaskListSearch(text: $search, isFocused: $searchFocused, identifier: "searchLocalTasksField")
-          .padding(.horizontal, PulseDesignTokens.contentInset)
-          .padding(.top, 4)
         taskScrollView
       case .loading:
         initialTaskContent {
@@ -570,12 +565,9 @@ struct LocalTasksView: View {
 
   private var taskScrollView: some View {
     let filter = presentation.selectedFilter
-    let query = TaskListSearch.query(search)
-    let list = controller.tasks(matching: filter)
-    let tasks = query.isEmpty ? list : list.filter { TaskListSearch.matches($0.text, query: query) }
-    let measuresRows = list.count < 12
-    let emptyMessage = query.isEmpty
-      ? (filter == .untagged ? "No tasks yet" : "No tasks in this tag") : "No matching tasks"
+    let tasks = controller.tasks(matching: filter)
+    let measuresRows = tasks.count < 12
+    let emptyMessage = filter == .untagged ? "No tasks yet" : "No tasks in this tag"
     return VStack(spacing: 2) {
       ScrollViewReader { proxy in
         ScrollView {
@@ -593,9 +585,8 @@ struct LocalTasksView: View {
         }
         .frame(maxHeight: measuresRows ? rowHeight : nil)
         .accessibilityIdentifier("localTaskList")
-        .onAppear { prepareToRevealTask(using: proxy) }
-        .onChange(of: presentation.revealRequest) { _ in prepareToRevealTask(using: proxy) }
-        .onChange(of: filter) { _ in search = "" }
+        .onAppear { scrollToRevealedTask(using: proxy) }
+        .onChange(of: presentation.revealRequest) { _ in scrollToRevealedTask(using: proxy) }
       }
       LocalTaskQuickComposer(controller: controller, presentation: presentation)
     }
@@ -604,17 +595,6 @@ struct LocalTasksView: View {
     .padding(.horizontal, PulseDesignTokens.contentInset)
     .padding(.vertical, 8)
     .frame(maxHeight: .infinity, alignment: .top)
-  }
-
-  private func prepareToRevealTask(using proxy: ScrollViewProxy) {
-    guard let id = presentation.revealedTaskID else { return }
-    // A save or Undo must be able to show the affected row even with a query active.
-    if let task = controller.document?.tasks.first(where: { $0.id == id }),
-      !TaskListSearch.matches(task.text, query: TaskListSearch.query(search))
-    {
-      search = ""
-    }
-    scrollToRevealedTask(using: proxy)
   }
 
   private func scrollToRevealedTask(using proxy: ScrollViewProxy) {

@@ -779,24 +779,6 @@ final class LocalTasksRenderingTests: XCTestCase {
     XCTAssertTrue(fields(host).contains { $0 === field })
   }
 
-  func testTaskTitleSearchPreservesListOrderAndScope() async throws {
-    let controller = try await controller()
-    let tag = TaskTag(name: "Work")
-    _ = await controller.createTag(id: tag.id, name: tag.name)
-    _ = await controller.saveTask(id: nil, text: "Café notes", tagIDs: [tag.id], newTagNames: [])
-    _ = await controller.saveTask(id: nil, text: "未整理 café", tagIDs: [tag.id], newTagNames: [])
-    _ = await controller.saveTask(id: nil, text: "Cafe reminder", tagIDs: [], newTagNames: [])
-    _ = await controller.saveTask(id: nil, text: "Another task", tagIDs: [tag.id], newTagNames: [])
-    let list = controller.tasks(matching: .tag(tag.id))
-    let query = TaskListSearch.query("  CAFE\n")
-    let matching = list.filter { TaskListSearch.matches($0.text, query: query) }
-    XCTAssertEqual(Set(matching.map(\.text)), ["Café notes", "未整理 café"])
-    XCTAssertEqual(matching.map(\.id), list.filter { $0.text.contains("afé") }.map(\.id))
-    XCTAssertEqual(list.filter { TaskListSearch.matches($0.text, query: "整理") }.map(\.text), ["未整理 café"])
-    XCTAssertTrue(list.filter { TaskListSearch.matches($0.text, query: "missing") }.isEmpty)
-    XCTAssertEqual(list.filter { TaskListSearch.matches($0.text, query: "") }, list)
-  }
-
   func testChangingRenameTargetUpdatesTheSameNativeField() async throws {
     let controller = try await controller()
     let presentation = LocalTaskPresentation()

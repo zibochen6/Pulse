@@ -152,26 +152,23 @@ private struct TodayTasksView: View {
   @ObservedObject var presentation: TodayTaskPresentation
   let onEditingChanged: (Bool) -> Void
   let onHeight: (CGFloat?) -> Void
-  @State private var search = ""
   @State private var rowHeight: CGFloat?
   @State private var footerHeight: CGFloat?
-  @FocusState private var searchFocused: Bool
   private static let headingLabelHeight: CGFloat = 28
   private static let headingInset: CGFloat = 6
   private static let bottomInset: CGFloat = 8
-  private static let searchSpacing: CGFloat = 6
   private static var headingHeight: CGFloat {
     headingLabelHeight + 2 * headingInset
   }
 
-  private var isEditing: Bool { presentation.isEditing(in: vault) || searchFocused }
+  private var isEditing: Bool { presentation.isEditing(in: vault) }
   private var canQueue: Bool {
     bridge.connection != .protocolMismatch && bridge.connection != .storageUnavailable
   }
   private var canMeasureCompactHeight: Bool { bridge.tasks.count + bridge.failures.count < 12 }
   private var compactHeight: CGFloat? {
     guard canMeasureCompactHeight, let rowHeight, let footerHeight else { return nil }
-    return Self.headingHeight + TaskListSearch.height + Self.searchSpacing + rowHeight
+    return Self.headingHeight + rowHeight
       + footerHeight + TaskPaper.contentInset * 2 + Self.bottomInset
   }
 
@@ -179,9 +176,6 @@ private struct TodayTasksView: View {
     let measuresRows = canMeasureCompactHeight
     VStack(spacing: 0) {
       heading
-      TaskListSearch(text: $search, isFocused: $searchFocused, identifier: "searchTodayTasksField")
-        .padding(.horizontal, PulseDesignTokens.contentInset)
-        .padding(.bottom, Self.searchSpacing)
       VStack(spacing: 0) {
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 3) { rows }
@@ -244,10 +238,7 @@ private struct TodayTasksView: View {
   }
 
   @ViewBuilder private var rows: some View {
-    let query = TaskListSearch.query(search)
-    let allTasks = bridge.tasks
-    let tasks =
-      query.isEmpty ? allTasks : allTasks.filter { TaskListSearch.matches($0.title, query: query) }
+    let tasks = bridge.tasks
     syncStatus
     if let message = presentation.actionErrors[vault] {
       PulseErrorBanner(message: message, accessibilityIdentifier: "todayTasksActionError") {
@@ -266,8 +257,8 @@ private struct TodayTasksView: View {
       }
       .accessibilityIdentifier("todayTaskFailure.\(failure.id)")
     }
-    if tasks.isEmpty && (bridge.connection == .connected || !query.isEmpty) {
-      Text(LocalizedStringKey(query.isEmpty ? "No tasks yet" : "No matching tasks"))
+    if tasks.isEmpty && bridge.connection == .connected {
+      Text("No tasks yet")
         .font(.system(size: PulseDesignTokens.footnote))
         .foregroundStyle(PulseDesignTokens.muted).padding(.vertical, 12)
     }
@@ -523,51 +514,6 @@ private struct TaskPaperCorner: Shape {
       path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
       path.closeSubpath()
     }
-  }
-}
-
-struct TaskListSearch: View {
-  static let height: CGFloat = 28
-  @Binding var text: String
-  @FocusState.Binding var isFocused: Bool
-  let identifier: String
-
-  static func query(_ text: String) -> String {
-    text.trimmingCharacters(in: .whitespacesAndNewlines)
-  }
-
-  static func matches(_ title: String, query: String) -> Bool {
-    query.isEmpty || title.localizedStandardContains(query)
-  }
-
-  var body: some View {
-    HStack(spacing: 6) {
-      Image(systemName: "magnifyingglass")
-        .font(.system(size: PulseDesignTokens.caption))
-        .foregroundStyle(PulseDesignTokens.muted)
-        .accessibilityHidden(true)
-      TextField("Search tasks", text: $text)
-        .textFieldStyle(.plain)
-        .font(.system(size: PulseDesignTokens.footnote))
-        .focused($isFocused)
-        .accessibilityIdentifier(identifier)
-      Button {
-        text = ""
-        isFocused = true
-      } label: {
-        Image(systemName: "xmark.circle.fill")
-          .font(.system(size: PulseDesignTokens.caption))
-          .foregroundStyle(PulseDesignTokens.muted)
-      }
-      .buttonStyle(.borderless)
-      .help("Clear search").accessibilityLabel("Clear search")
-      .opacity(text.isEmpty ? 0 : 1)
-      .disabled(text.isEmpty)
-      .accessibilityHidden(text.isEmpty)
-    }
-    .padding(.horizontal, 9)
-    .frame(height: Self.height)
-    .pulsePaper(PulseDesignTokens.secondarySurface)
   }
 }
 

@@ -82,7 +82,6 @@ struct HomeView: View {
             onOpenSettings: { onOpenSettings(.providers, $0) }
           )
         }
-        if pages.page == .home, quickCopy != nil { quickCopyShortcut }
       }
       .onGeometryChange(for: CGFloat?.self) { geometry in
         measureHeader ? ceil(geometry.size.height) : nil
@@ -147,6 +146,7 @@ struct HomeView: View {
             configure: { onOpenSettings(.clips, nil) })
         }
         HomeFocusButton(timer: focusTimer)
+        if quickCopy != nil { quickCopyShortcut }
       }
       Button {
         onOpenSettings(nil, nil)
@@ -183,17 +183,14 @@ struct HomeView: View {
 
   private var quickCopyShortcut: some View {
     Button { pages.showQuickCopy() } label: {
-      Label("Quick Copy", systemImage: "doc.on.doc")
-        .font(.system(size: PulseDesignTokens.caption, weight: .medium))
-        .padding(.horizontal, 10)
-        .frame(height: 26)
-        .contentShape(Capsule())
+      Image(systemName: "doc.on.doc")
+        .font(.system(size: 15, weight: .medium))
+        .frame(width: 32, height: 32)
     }
-    .buttonStyle(PulseProviderStatusStyle(paper: PulseDesignTokens.secondarySurface, radius: 13))
+    .buttonStyle(PulseIconButtonStyle(circular: true))
+    .help("Quick Copy")
+    .accessibilityLabel("Quick Copy")
     .accessibilityIdentifier("openQuickCopyButton")
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, PulseDesignTokens.contentInset)
-    .padding(.bottom, 6)
   }
 
   private var pageTitle: String {

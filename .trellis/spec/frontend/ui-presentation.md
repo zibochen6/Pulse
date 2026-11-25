@@ -77,8 +77,8 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
   square completion glyph and circular Add task button. Paired Today adds a
   corner fold and completion count, and includes the perimeter's insets in
   the short-list height reported to the popover.
-- Keep search scoped to the current task list and preserve its order and
-  draft. Keep the composer outside the scrolling rows. Quick Copy rows show
+- Preserve task list order and drafts. Keep the composer outside the scrolling
+  rows. Quick Copy rows show
   saved names and reserve the trailing confirmation slot so the copy label
   can change without shifting the row or its actions.
 - English/zh-Hans resources follow system language. Localize computed strings
