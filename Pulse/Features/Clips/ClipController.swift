@@ -92,11 +92,13 @@ final class ClipController: ObservableObject {
   static let defaultModel = "gpt-6.2-sol"
   static let efforts = ["low", "medium", "high", "xhigh", "max", "ultra"]
   static let skill = ".agents/skills/talking-head-autoclip/SKILL.md"
+  private static let doneResultKey = "clipDoneResultID"
 
   @Published var workspace: String { didSet { defaults.set(workspace, forKey: "clipWorkspace") } }
   @Published var model: String { didSet { defaults.set(model, forKey: "clipModel") } }
   @Published var effort: String { didSet { defaults.set(effort, forKey: "clipEffort") } }
   @Published private(set) var snapshot = ClipSnapshot()
+  @Published private var doneResultID: String?
   private(set) var previousResult: ClipSnapshot?
   private let defaults: UserDefaults
   private let support: URL
@@ -125,6 +127,7 @@ final class ClipController: ObservableObject {
     workspace = defaults.string(forKey: "clipWorkspace") ?? ""
     model = defaults.string(forKey: "clipModel") ?? Self.defaultModel
     effort = defaults.string(forKey: "clipEffort") ?? "low"
+    doneResultID = defaults.string(forKey: Self.doneResultKey)
   }
 
   static func production(defaults: UserDefaults, live: Bool) -> ClipController {
@@ -139,6 +142,18 @@ final class ClipController: ObservableObject {
     !workspace.isEmpty
       && FileManager.default.fileExists(
         atPath: URL(fileURLWithPath: workspace).appendingPathComponent(Self.skill).path)
+  }
+
+  var canMarkResultDone: Bool {
+    snapshot.phase == .completed || snapshot.phase == .attention
+  }
+
+  var isResultDone: Bool { canMarkResultDone && snapshot.id == doneResultID }
+
+  func markResultDone(id: String) {
+    guard canMarkResultDone, snapshot.id == id, !isResultDone else { return }
+    defaults.set(id, forKey: Self.doneResultKey)
+    doneResultID = id
   }
 
   func restore() {

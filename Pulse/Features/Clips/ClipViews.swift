@@ -56,22 +56,39 @@ struct ClipResultLink: View {
         .padding(8)
         .pulsePaper(PulseDesignTokens.butterPaper)
         .padding(.horizontal, PulseDesignTokens.contentInset).padding(.bottom, 8)
-    } else if state.phase != .idle && (state.phase != .starting || !state.source.isEmpty) {
-      Button(action: open) {
-        HStack(spacing: 6) {
-          Text(
-            state.phase.isActive
-              ? PulseLocalization.string("clip." + (state.activity ?? "launch"))
-              : state.phase.title)
-          Spacer()
-          Text(verbatim: state.source).lineLimit(1).truncationMode(.middle)
-          Image(systemName: "chevron.right")
+    } else if !clips.isResultDone, state.phase != .idle,
+      state.phase != .starting || !state.source.isEmpty
+    {
+      HStack(spacing: 8) {
+        Button(action: open) {
+          HStack(spacing: 6) {
+            Text(
+              state.phase.isActive
+                ? PulseLocalization.string("clip." + (state.activity ?? "launch"))
+                : state.phase.title
+            )
+            .lineLimit(1)
+            .layoutPriority(1)
+            Spacer(minLength: 6)
+            Text(verbatim: state.source).lineLimit(1).truncationMode(.middle)
+            Image(systemName: "chevron.right").accessibilityHidden(true)
+          }
+          .frame(maxWidth: .infinity)
+          .contentShape(Rectangle())
         }
-        .font(.caption)
-        .padding(8)
-        .pulsePaper(PulseDesignTokens.butterPaper)
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("openClipResultButton")
+        if clips.canMarkResultDone {
+          Button("Done") { clips.markResultDone(id: state.id) }
+            .buttonStyle(PulseActionButtonStyle(emphasis: .primary))
+            .fixedSize()
+            .accessibilityIdentifier("markClipResultDoneButton")
+        }
       }
-      .buttonStyle(.plain)
+      .font(.caption)
+      .padding(.horizontal, 8)
+      .padding(.vertical, clips.canMarkResultDone ? 4 : 8)
+      .pulsePaper(PulseDesignTokens.butterPaper)
       .padding(.horizontal, PulseDesignTokens.contentInset).padding(.bottom, 8)
     }
   }

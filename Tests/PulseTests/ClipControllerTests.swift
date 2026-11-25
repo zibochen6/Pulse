@@ -57,6 +57,8 @@ final class ClipControllerTests: XCTestCase {
     try await until { clips.snapshot.phase == .running }
     XCTAssertEqual(clips.snapshot.model, "gpt-6.2-sol")
     XCTAssertEqual(clips.snapshot.effort, "low")
+    XCTAssertFalse(clips.canMarkResultDone)
+    clips.markResultDone(id: id)
     let reopened = data.controller()
     reopened.restore()
     reopened.start()
@@ -65,6 +67,8 @@ final class ClipControllerTests: XCTestCase {
     XCTAssertEqual(reopened.model, "next-model")
     try data.signal("finish")
     try await until { clips.snapshot.phase == .attention && reopened.snapshot.phase == .attention }
+    XCTAssertTrue(clips.canMarkResultDone)
+    XCTAssertFalse(clips.isResultDone)
     XCTAssertEqual(clips.snapshot.platforms.count, 4)
     XCTAssertEqual(clips.snapshot.platforms.first?.status, "needs_login")
     XCTAssertEqual(clips.snapshot.platforms.last?.status, "page_only")
@@ -89,6 +93,46 @@ final class ClipControllerTests: XCTestCase {
     XCTAssertNotNil(clips.snapshot.folderURL)
     XCTAssertFalse(clips.snapshot.phase.isActive)
     XCTAssertTrue(clips.snapshot.detail?.contains("19") == true)
+  }
+
+  func testDoneHidesOnlyTheSelectedResultAndSurvivesRestart() throws {
+    let data = try Fixture()
+    defer { data.clean() }
+    try FileManager.default.createDirectory(at: data.support, withIntermediateDirectories: true)
+    let review = data.root.appendingPathComponent("review.html")
+    try Data("Review".utf8).write(to: review)
+    let latest = data.support.appendingPathComponent("latest.json")
+    let result = ClipSnapshot(
+      phase: .attention, source: "rec_101.mp4", folder: data.root.path, review: review.path)
+    let original = try JSONEncoder().encode(result)
+    try original.write(to: latest)
+
+    let clips = data.controller()
+    clips.restore()
+    XCTAssertTrue(clips.canMarkResultDone)
+    clips.markResultDone(id: "old-result")
+    XCTAssertFalse(clips.isResultDone)
+    clips.markResultDone(id: result.id)
+    XCTAssertTrue(clips.isResultDone)
+    XCTAssertEqual(try Data(contentsOf: latest), original)
+
+    let reopened = data.controller()
+    reopened.restore()
+    XCTAssertTrue(reopened.isResultDone)
+    XCTAssertEqual(reopened.snapshot, result)
+    XCTAssertEqual(reopened.previousResult, result)
+    XCTAssertEqual(reopened.snapshot.reviewURL, review.resolvingSymlinksInPath())
+
+    // A different run of the same recording gets its own Home status.
+    let next = ClipSnapshot(phase: .completed, source: result.source)
+    try JSONEncoder().encode(next).write(to: latest)
+    reopened.restore()
+    XCTAssertEqual(reopened.snapshot.id, next.id)
+    XCTAssertTrue(reopened.canMarkResultDone)
+    reopened.markResultDone(id: result.id)
+    XCTAssertFalse(reopened.isResultDone)
+    reopened.markResultDone(id: next.id)
+    XCTAssertTrue(reopened.isResultDone)
   }
 
   private func until(_ predicate: @MainActor () -> Bool) async throws {
