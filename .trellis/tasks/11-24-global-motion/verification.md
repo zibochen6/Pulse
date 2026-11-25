@@ -66,6 +66,6 @@ and a 144 Hz external display still require acceptance. This Mac had the ABC
 input source enabled and reported only the built-in display. AppKit marked
 text in the tests validates the editor's composition lifecycle.
 
-The production app and GitHub Release are still at 0.1.26. The installed app's
-signature passed verification. Keep the task active until the remaining motion
-and physical input checks pass.
+The installed 0.1.26 app's signature passed verification at the end of this
+comparison. The project owner subsequently requested publication of 0.1.27.
+Keep the task active for the remaining motion and physical input checks.
