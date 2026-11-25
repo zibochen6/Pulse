@@ -123,7 +123,7 @@ struct HomeView: View {
   private var toolbar: some View {
     HStack(alignment: .center, spacing: 6) {
       if pages.page == .home {
-        homeTitle
+        homeDate
       } else {
         Button {
           pages.showHome()
@@ -137,8 +137,8 @@ struct HomeView: View {
           .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .bold))
           .pulseContentFeedback(pageTitle)
           .accessibilityAddTraits(.isHeader)
+        Spacer(minLength: 0)
       }
-      Spacer(minLength: 0)
       if pages.page == .home {
         if let clips {
           ClipHomeButton(
@@ -160,37 +160,37 @@ struct HomeView: View {
         ["openSettingsButton": $0]
       }
     }
-    .frame(minHeight: 48)
+    .frame(minHeight: pages.page == .home ? 36 : 48)
     .padding(.horizontal, PulseDesignTokens.contentInset)
     .padding(.vertical, 4)
   }
 
-  private var homeTitle: some View {
-    VStack(alignment: .leading, spacing: 1) {
-      TimelineView(.everyMinute) { timeline in
-        Text(timeline.date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-          .font(.system(size: 11, weight: .medium))
-          .foregroundStyle(PulseDesignTokens.muted)
-          .lineLimit(1)
-      }
-      HStack(spacing: 6) {
-        PulseBrandMark(size: 24)
-        PulseMarkedTitle(title: "Pulse")
-      }
-      .fixedSize()
+  private var homeDate: some View {
+    TimelineView(.everyMinute) { timeline in
+      Text(timeline.date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(PulseDesignTokens.muted)
+        .fixedSize(horizontal: true, vertical: false)
     }
+    .fixedSize(horizontal: true, vertical: false)
   }
 
   private var quickCopyShortcut: some View {
     Button { pages.showQuickCopy() } label: {
-      Image(systemName: "doc.on.doc")
-        .font(.system(size: 15, weight: .medium))
-        .frame(width: 32, height: 32)
+      HStack(spacing: 5) {
+        Image(systemName: "doc.on.doc")
+          .frame(width: 14)
+          .accessibilityHidden(true)
+        Text("Copy")
+      }
     }
-    .buttonStyle(PulseIconButtonStyle(circular: true))
+    .buttonStyle(PulseActionButtonStyle(emphasis: .toolbar()))
     .help("Quick Copy")
     .accessibilityLabel("Quick Copy")
     .accessibilityIdentifier("openQuickCopyButton")
+    .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
+      ["openQuickCopyButton": $0]
+    }
   }
 
   private var pageTitle: String {
@@ -283,7 +283,7 @@ private struct HomeFocusButton: View {
         timer.start()
       }
     } label: {
-      HStack(spacing: 6) {
+      HStack(spacing: 5) {
         Image(systemName: indicator.symbol)
           .frame(width: 14)
           .foregroundStyle(indicator.color)
@@ -310,7 +310,7 @@ private struct HomeFocusButton: View {
         .fixedSize(horizontal: true, vertical: false)
       }
     }
-    .buttonStyle(PulseActionButtonStyle(emphasis: .focusTimer(isRunning: timer.isRunning)))
+    .buttonStyle(PulseActionButtonStyle(emphasis: .toolbar(isActive: timer.isRunning)))
     .help(timer.isRunning ? PulseLocalization.string("Cancel") : startTitle)
     .accessibilityIdentifier("focusTimerButton")
     .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {

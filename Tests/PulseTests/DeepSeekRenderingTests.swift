@@ -148,7 +148,7 @@ final class DeepSeekRenderingTests: XCTestCase {
         let bitmap = try render(host, appearance: appearance)
         let ids = [
           "openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton", "openSettingsButton",
-          "focusTimerButton", "editRecordingButton",
+          "focusTimerButton", "editRecordingButton", "openQuickCopyButton",
         ]
         XCTAssertEqual(Set(capture.frames.keys), Set(ids + ["providerDivider"]))
         for id in ids {
@@ -169,19 +169,17 @@ final class DeepSeekRenderingTests: XCTestCase {
         let settings = try XCTUnwrap(capture.frames["openSettingsButton"])
         let focusTimer = try XCTUnwrap(capture.frames["focusTimerButton"])
         let clip = try XCTUnwrap(capture.frames["editRecordingButton"])
+        let copy = try XCTUnwrap(capture.frames["openQuickCopyButton"])
         XCTAssertLessThanOrEqual(clip.maxX, focusTimer.minX)
-        let clipLabelWidth = (PulseLocalization.string("Edit recording") as NSString)
-          .size(withAttributes: [
-            .font: NSFont.systemFont(ofSize: PulseDesignTokens.footnote, weight: .medium)
-          ]).width
-        XCTAssertGreaterThanOrEqual(
-          clip.width + 1, clipLabelWidth + 14 + 5 + 16,
-          "The complete recording action label fits alongside the title and timer")
-        XCTAssertLessThanOrEqual(focusTimer.maxX, settings.minX)
+        XCTAssertLessThanOrEqual(focusTimer.maxX, copy.minX)
+        XCTAssertLessThanOrEqual(copy.maxX, settings.minX)
+        for frame in [clip, copy] {
+          XCTAssertEqual(frame.width, focusTimer.width, accuracy: 1)
+          XCTAssertEqual(frame.height, focusTimer.height, accuracy: 0.5)
+          XCTAssertEqual(frame.midY, focusTimer.midY, accuracy: 0.5)
+        }
         XCTAssertEqual(focusTimer.midY, settings.midY, accuracy: 0.5)
-        // The gear shares the toolbar with the brand and the quota strip is its
-        // own band underneath, so the header's height no longer depends on how
-        // long the amounts happen to be.
+        // Quota cards stay below the toolbar even when their amounts are long.
         XCTAssertGreaterThan(
           codex.minY, settings.maxY, "The quota strip sits below the toolbar")
         XCTAssertEqual(
@@ -437,7 +435,10 @@ final class DeepSeekRenderingTests: XCTestCase {
       onQuit: {},
       clips: ClipController.production(defaults: defaults, live: false),
       focusTimer: focusTimer ?? FocusTimerController(),
-      antigravityUsage: antigravityUsage ?? UsageController(provider: InactiveSettingsProvider()))
+      antigravityUsage: antigravityUsage ?? UsageController(provider: InactiveSettingsProvider()),
+      quickCopy: QuickCopyController(
+        fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("PulseToolbarTest.json"),
+        writeToClipboard: { _ in false }))
   }
 
   private func render<Content: View>(

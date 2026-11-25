@@ -25,18 +25,12 @@ struct ClipHomeButton: View {
         }
         .frame(width: 14, height: 14)
         .accessibilityHidden(true)
-        ZStack(alignment: .leading) {
-          // Reserve the longest localized caption while the job changes phase.
-          ForEach([ClipPhase.idle, .starting, .running, .checking], id: \.self) { phase in
-            Text(toolbarCaption(phase)).hidden().accessibilityHidden(true)
-          }
-          Text(caption).pulseContentFeedback(caption)
-        }
-        .lineLimit(1)
-        .fixedSize(horizontal: true, vertical: false)
+        Text(caption)
+          .minimumScaleFactor(0.82)
+          .pulseContentFeedback(caption)
       }
     }
-    .buttonStyle(PulseActionButtonStyle(emphasis: .focusTimer(isRunning: phase.isActive)))
+    .buttonStyle(PulseActionButtonStyle(emphasis: .toolbar(isActive: phase.isActive)))
     .help("Edit the latest recording in Downloads")
     .accessibilityLabel(buttonPhase.title)
     .accessibilityIdentifier("editRecordingButton")
@@ -47,7 +41,11 @@ struct ClipHomeButton: View {
   }
 
   private func toolbarCaption(_ phase: ClipPhase) -> String {
-    phase == .checking ? PulseLocalization.string("Checking…") : phase.title
+    switch phase {
+    case .idle: PulseLocalization.string("Clip recording shortcut")
+    case .checking: PulseLocalization.string("Checking…")
+    default: phase.title
+    }
   }
 }
 

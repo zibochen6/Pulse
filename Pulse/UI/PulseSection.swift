@@ -65,23 +65,3 @@ struct PulseBrandMark: View {
       .accessibilityHidden(true)
   }
 }
-
-struct PulseMarkedTitle: View {
-  let title: String
-
-  var body: some View {
-    Text(title)
-      .font(.system(size: PulseDesignTokens.displayTitle, weight: .bold))
-      .tracking(-0.8)
-      .foregroundStyle(PulseDesignTokens.ink)
-      .background(alignment: .bottom) {
-        Capsule()
-          .fill(PulseDesignTokens.marker)
-          .frame(height: 5)
-          .rotationEffect(.degrees(-3))
-          .offset(y: -3)
-          .accessibilityHidden(true)
-      }
-      .accessibilityAddTraits(.isHeader)
-  }
-}

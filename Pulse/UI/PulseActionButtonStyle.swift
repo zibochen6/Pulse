@@ -5,7 +5,7 @@ struct PulseActionButtonStyle: ButtonStyle {
   enum Emphasis {
     case primary
     case secondary
-    case focusTimer(isRunning: Bool)
+    case toolbar(isActive: Bool = false)
   }
   var emphasis: Emphasis = .secondary
 
@@ -29,21 +29,20 @@ struct PulseActionButtonStyle: ButtonStyle {
       if case .primary = emphasis { return !isDestructive }
       return false
     }
-    private var timerIsRunning: Bool? {
-      if case .focusTimer(let isRunning) = emphasis { return isRunning }
+    private var toolbarIsActive: Bool? {
+      if case .toolbar(let isActive) = emphasis { return isActive }
       return nil
     }
     private var border: Color {
-      if isPrimary || timerIsRunning != nil { return .clear }
+      if isPrimary { return .clear }
+      if let toolbarIsActive {
+        return toolbarIsActive ? tint.opacity(0.22) : PulseDesignTokens.border
+      }
       return isDestructive ? tint.opacity(0.25) : PulseDesignTokens.border.opacity(0.7)
     }
 
     var body: some View {
-      configuration.label
-        .font(.system(size: PulseDesignTokens.footnote, weight: .medium))
-        .padding(.horizontal, timerIsRunning == nil ? 12 : 8)
-        .padding(.vertical, 7)
-        .frame(minHeight: 32)
+      label
         .foregroundStyle(
           isPrimary ? PulseDesignTokens.actionInk : (isDestructive ? tint : PulseDesignTokens.ink)
         )
@@ -67,11 +66,29 @@ struct PulseActionButtonStyle: ButtonStyle {
         .onHover { isHovered = $0 }
     }
 
+    @ViewBuilder
+    private var label: some View {
+      if toolbarIsActive != nil {
+        configuration.label
+          .font(.system(size: PulseDesignTokens.caption, weight: .medium))
+          .lineLimit(1)
+          .padding(.horizontal, 6)
+          .frame(maxWidth: .infinity)
+          .frame(height: 32)
+      } else {
+        configuration.label
+          .font(.system(size: PulseDesignTokens.footnote, weight: .medium))
+          .padding(.horizontal, 12)
+          .padding(.vertical, 7)
+          .frame(minHeight: 32)
+      }
+    }
+
     private var background: Color {
-      if let timerIsRunning {
+      if let toolbarIsActive {
         if isPressed { return PulseDesignTokens.pressedFill }
-        if isHovered && isEnabled { return tint.opacity(timerIsRunning ? 0.18 : 0.10) }
-        return timerIsRunning ? PulseDesignTokens.selectedFill : PulseDesignTokens.secondarySurface
+        if isHovered && isEnabled { return tint.opacity(toolbarIsActive ? 0.18 : 0.10) }
+        return toolbarIsActive ? PulseDesignTokens.selectedFill : PulseDesignTokens.secondarySurface
       }
       if isPrimary {
         if isPressed { return PulseDesignTokens.primaryActionPressed }

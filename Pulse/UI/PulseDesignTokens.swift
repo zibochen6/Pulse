@@ -72,7 +72,6 @@ enum PulseDesignTokens {
   static let skyPaper = adaptive(light: 0xD9EFF9, dark: 0x293E49)
   static let mintPaper = adaptive(light: 0xE0EFCF, dark: 0x343F30)
   static let butterPaper = adaptive(light: 0xFFF3CB, dark: 0x443D2B)
-  static let marker = adaptive(light: 0xFFDA65, dark: 0x997921)
 
   static let primaryActionFill = adaptive(light: 0xCCEAA0, dark: 0xC6E69B)
   static let primaryActionHover = adaptive(light: 0xC2E490, dark: 0xD1EEAD)
