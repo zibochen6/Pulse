@@ -66,7 +66,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
       : FileManager.default.temporaryDirectory.appendingPathComponent(
         "PulseTestHost-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
     let pasteboard = live ? NSPasteboard.general : NSPasteboard.withUniqueName()
-    return QuickCopyController(fileURL: directory.appendingPathComponent("quick-copy.json")) {
+    return QuickCopyController(
+      fileURL: directory.appendingPathComponent("quick-copy.json"),
+      usageDefaults: Self.runtimeDefaults
+    ) {
       QuickCopyController.write($0, to: pasteboard)
     }
   }()

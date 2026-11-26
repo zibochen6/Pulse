@@ -148,7 +148,11 @@ interaction-hold and update preflight contracts.
   and use the editing identity to reject callbacks from retired sessions.
 - Quick Copy uses a local, atomic document. Only a successful write to the
   pasteboard can start the confirmation. A newer copy replaces the displayed
-  entry and cancels the old expiry. Closing the page clears only feedback.
+  entry and cancels the old expiry. Count successful copies over the last
+  30 days in local preferences keyed by entry ID. Recompute the visible
+  ranking when opening the page, using last copy time to break count ties
+  and saved order for the remaining ties. Keep the ranking stable while
+  copying, and remove history when an entry is deleted.
 - Begin opening before refreshing credentials or task data. Read credential
   presence off the main thread and reject results superseded by a later read,
   save or removal. Keep ready task content visible across background loads.

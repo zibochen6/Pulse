@@ -199,6 +199,54 @@ final class QuickCopyTests: XCTestCase {
     XCTAssertNil(controller.copiedEntryID)
   }
 
+  func testRecentCopyRankingUpdatesOnReopenAndSurvivesRestart() async throws {
+    let directory = try makeDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let file = directory.appendingPathComponent("quick-copy.json")
+    let suite = "PulseQuickCopyRanking.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let day: TimeInterval = 24 * 60 * 60
+    var now = Date(timeIntervalSince1970: 1_700_000_000)
+    let controller = QuickCopyController(fileURL: file, usageDefaults: defaults, now: { now }) {
+      $0 != "clipboard unavailable"
+    }
+    await controller.loadIfNeeded()
+    let unused = try await add("Other", text: "clipboard unavailable", to: controller)
+    let stale = try await add("Old note", text: "old", to: controller)
+    let earlier = try await add("Earlier note", text: "earlier", to: controller)
+    let recent = try await add("Recent note", text: "recent", to: controller)
+    let frequent = try await add("Frequent note", text: "frequent", to: controller)
+    let savedOrder = [unused, stale, earlier, recent, frequent]
+
+    for _ in 0..<3 { XCTAssertTrue(controller.copy(stale)) }
+    now.addTimeInterval(30 * day)
+    XCTAssertTrue(controller.copy(earlier))
+    XCTAssertTrue(controller.copy(frequent))
+    XCTAssertTrue(controller.copy(frequent))
+    now.addTimeInterval(day)
+    XCTAssertTrue(controller.copy(recent))
+    XCTAssertFalse(controller.copy(unused))
+    XCTAssertEqual(controller.filteredEntries(matching: "").map(\.id), savedOrder)
+
+    controller.refreshRanking()
+    let rankedOrder = [frequent, recent, earlier, unused, stale]
+    XCTAssertEqual(controller.filteredEntries(matching: "").map(\.id), rankedOrder)
+    XCTAssertEqual(controller.filteredEntries(matching: "note").map(\.id),
+      [frequent, recent, earlier, stale])
+    XCTAssertEqual(controller.entries.map(\.id), savedOrder)
+
+    let relaunched = QuickCopyController(
+      fileURL: file, usageDefaults: UserDefaults(suiteName: suite), now: { now }
+    ) { _ in true }
+    await relaunched.loadIfNeeded()
+    XCTAssertEqual(relaunched.filteredEntries(matching: "").map(\.id), rankedOrder)
+
+    now.addTimeInterval(31 * day)
+    relaunched.refreshRanking()
+    XCTAssertEqual(relaunched.filteredEntries(matching: "").map(\.id), savedOrder)
+  }
+
   private func makeDirectory() throws -> URL {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "PulseQuickCopyTests-\(UUID().uuidString)", isDirectory: true)

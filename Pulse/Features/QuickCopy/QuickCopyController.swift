@@ -39,14 +39,26 @@ final class QuickCopyController: ObservableObject {
   @Published private(set) var draft: QuickCopyEntry?
   @Published private(set) var issue: Issue?
   @Published private(set) var copiedEntryID: UUID?
+  @Published private var ranks: [UUID: Int] = [:]
 
+  private static let usageKey = "quickCopy.recentCopies"
+  private static let usageWindow: TimeInterval = 30 * 24 * 60 * 60
   private let store: QuickCopyStore
+  private let usageDefaults: UserDefaults?
+  private let now: () -> Date
   private let writeToClipboard: (String) -> Bool
+  private var recentCopies: [String: [TimeInterval]]
   private var copyFeedbackTask: Task<Void, Never>?
 
-  init(fileURL: URL, writeToClipboard: @escaping (String) -> Bool) {
+  init(
+    fileURL: URL, usageDefaults: UserDefaults? = nil, now: @escaping () -> Date = Date.init,
+    writeToClipboard: @escaping (String) -> Bool
+  ) {
     store = QuickCopyStore(fileURL: fileURL)
+    self.usageDefaults = usageDefaults
+    self.now = now
     self.writeToClipboard = writeToClipboard
+    recentCopies = usageDefaults?.dictionary(forKey: Self.usageKey) as? [String: [TimeInterval]] ?? [:]
   }
 
   var hasLoaded: Bool { document != nil }
@@ -71,7 +83,33 @@ final class QuickCopyController: ObservableObject {
 
   func filteredEntries(matching search: String) -> [QuickCopyEntry] {
     let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-    return query.isEmpty ? entries : entries.filter { $0.name.localizedStandardContains(query) }
+    let matches = query.isEmpty ? entries : entries.filter { $0.name.localizedStandardContains(query) }
+    // Stable sorting keeps the saved order for items with no recent copies.
+    return matches.sorted { ranks[$0.id, default: .max] < ranks[$1.id, default: .max] }
+  }
+
+  func refreshRanking() {
+    guard hasLoaded else { return }
+    let cutoff = now().timeIntervalSince1970 - Self.usageWindow
+    var activeCopies: [String: [TimeInterval]] = [:]
+    let usage = entries.compactMap { entry -> (id: UUID, count: Int, lastCopy: TimeInterval)? in
+      let key = entry.id.uuidString
+      let copies = recentCopies[key, default: []].filter { $0 >= cutoff }
+      guard let last = copies.max() else { return nil }
+      activeCopies[key] = copies
+      return (entry.id, copies.count, last)
+    }
+    let ordered = usage.sorted {
+      $0.count == $1.count ? $0.lastCopy > $1.lastCopy : $0.count > $1.count
+    }
+    let updatedRanks = Dictionary(uniqueKeysWithValues: ordered.enumerated().map {
+      ($0.element.id, $0.offset)
+    })
+    if ranks != updatedRanks { ranks = updatedRanks }
+    if recentCopies != activeCopies {
+      recentCopies = activeCopies
+      saveUsage()
+    }
   }
 
   func loadIfNeeded() async {
@@ -81,6 +119,7 @@ final class QuickCopyController: ObservableObject {
     defer { isLoading = false }
     do {
       document = try await store.load()
+      refreshRanking()
     } catch {
       issue = .load
     }
@@ -138,6 +177,8 @@ final class QuickCopyController: ObservableObject {
     var updated = entries
     updated.remove(at: index)
     return await persist(updated, failure: .delete(id)) {
+      if recentCopies.removeValue(forKey: id.uuidString) != nil { saveUsage() }
+      ranks.removeValue(forKey: id)
       if copiedEntryID == id { clearCopyFeedback() }
     }
   }
@@ -155,6 +196,11 @@ final class QuickCopyController: ObservableObject {
       issue = .copy(id)
       return false
     }
+    let timestamp = now().timeIntervalSince1970
+    let key = id.uuidString
+    recentCopies[key, default: []].removeAll { $0 < timestamp - Self.usageWindow }
+    recentCopies[key, default: []].append(timestamp)
+    saveUsage()
     if case .copy = issue { issue = nil }
     if copiedEntryID != id { copiedEntryID = id }
     copyFeedbackTask = Task { [weak self] in
@@ -180,6 +226,10 @@ final class QuickCopyController: ObservableObject {
     guard item.setString(text, forType: .string) else { return false }
     pasteboard.clearContents()
     return pasteboard.writeObjects([item])
+  }
+
+  private func saveUsage() {
+    usageDefaults?.set(recentCopies, forKey: Self.usageKey)
   }
 
   private func persist(

@@ -24,7 +24,10 @@ struct QuickCopyView: View {
     .foregroundStyle(PulseDesignTokens.ink)
     .padding(.horizontal, PulseDesignTokens.contentInset)
     .padding(.bottom, PulseDesignTokens.contentInset)
-    .onAppear { onEditingChanged(isEditing) }
+    .onAppear {
+      controller.refreshRanking()
+      onEditingChanged(isEditing)
+    }
     .onChange(of: isEditing) { onEditingChanged($0) }
     .onDisappear {
       onEditingChanged(false)
