@@ -4,7 +4,7 @@ Pulse is an early-stage, local-first macOS menu bar assistant for people who use
 
 **Pulse 0.1.30** brings frequently copied entries to the top of Quick Copy.
 
-The menu bar remains Codex-only. Select a provider to inspect its own usage, or connect an optional service from its status card. Tasks support independent tag lists, quick entry, daily repeat and deletion undo. Everything stays local; API keys are stored in macOS Keychain. See [UI and interaction](docs/ui-layout-refactor.md) and [motion](docs/popover-motion.md) for the current behavior.
+The menu bar shows Codex's quota. Home puts today's work first and offers an AI services overview below the list. Tasks support independent tag lists, quick entry, daily repeat and deletion undo. Everything stays local. Pulse stores API keys in macOS Keychain. See [UI and interaction](docs/ui-layout-refactor.md) and [motion](docs/popover-motion.md) for the current behavior.
 
 [View the earlier interface and 18-second demo](docs/media/ui-redesign/README.md) in English or Simplified Chinese. All preview values and tasks are clearly labelled sample data.
 
@@ -67,7 +67,7 @@ Requirements: macOS 13 or newer and Xcode 26.6 or a compatible Xcode version.
 
 1. Open `Pulse.xcodeproj` in Xcode.
 2. Select the `Pulse` scheme and **My Mac**, then Run.
-3. Sign in to Codex if needed, then click the Codex icon in the menu bar. The Home popover shows Tasks first; click its compact Codex status for quota details, or the gear for Settings. Usage returns to Home; Settings opens in its own window and is also available with **⌘,**. Click the menu bar item again or click outside to dismiss the popover. Pointer departure from both it and the menu bar item starts a 180 ms grace interval; returning cancels the close. Opening and dismissal use native macOS animation, with a short 300 ms opening guard that also waits for presentation to finish. System **Reduce Motion** disables panel and custom transitions and uses static busy indicators. Choose **Quit Pulse** in Settings to exit. Pulse has no Dock icon.
+3. Sign in to Codex if needed, then click the Codex icon in the menu bar. The popover opens on Tasks. Click **AI services** below the list, then select a provider to inspect its details. The gear or **⌘,** opens Settings in a separate window. Click the menu bar item again or click outside to dismiss the popover. Pointer departure from both it and the menu bar item starts a 180 ms grace interval. Returning cancels the close. Opening and dismissal use the native macOS animation. System **Reduce Motion** makes those transitions immediate and uses static busy indicators. Choose **Quit Pulse** in Settings to exit.
 
 Command-line build:
 
@@ -199,9 +199,9 @@ See [UI layout and interaction](docs/ui-layout-refactor.md), [Codex integration]
 
 ## 中文简介
 
-Pulse 是本地优先的 macOS 菜单栏工具，将 AI 服务状态和每日待办放在一起。0.1.30 会把最近常用的条目排在快速复制列表前面。可从上方链接下载新版本。
+Pulse 是本地优先的 macOS 菜单栏工具。打开后先看到待办，可以直接勾选、新增、专注或复制常用内容。已完成项默认收起，Obsidian 待同步的条目继续显示。
 
-- **AI 状态**：Codex 额度、88VIP USD 余额和 DeepSeek 原币种余额。点击哪个服务，就查看哪个服务；未配置、验证中、连接成功和失败分别表达，保存密钥不冒充连接成功。
+- **AI 状态**。从待办下方的「AI 服务」打开概览，查看 Codex 和 Gemini 的额度窗口，以及 88VIP 和 DeepSeek 的原币种余额。详情显示重置或更新时间，并提供重试和连接设置。
 - **标签即列表**：Todo 固定保留，自定义标签可通过可见的省略号菜单编辑、删除和排序；全部标签入口支持搜索，没有人为数量上限。删除标签会一并删除列表任务，一次撤销可恢复整组；最多保留当前运行内最近 20 次删除，并保护未提交草稿。
 - **日常操作**：列表下方添加任务，支持每日重复；完成任务原地显示，删除任务可以撤销。跨标签、页面和窗口保留草稿；中文输入法确认候选词不会误提交。
 - **快速复制**：从首页打开「快速复制」，给常用提示词或指令命名。点击名称即可复制全文，条目上会短暂显示「已复制」。

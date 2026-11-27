@@ -74,11 +74,13 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
 - The dashboard palette uses ink, pastel paper for provider
   cards, green selection, and separate semantic and keyboard focus colors.
   Apply the common paper perimeter through `pulsePaper`. Task lists share the
-  square completion glyph and circular Add task button. Paired Today adds a
-  corner fold and completion count, and includes the perimeter's insets in
-  the short-list height reported to the popover.
-- Preserve task list order and drafts. Keep the composer outside the scrolling
-  rows. Quick Copy rows show
+  square completion glyph, circular Add task button and a completion disclosure
+  that starts folded. Paired Today adds a corner fold. The short-list height
+  includes the heading, peripheral status and card insets.
+- Preserve task order within each visible group. Rows waiting to sync stay
+  above the completed disclosure. Keep the composer outside the scrolling
+  rows and retain its native field through disclosure, refresh and layout changes.
+  Quick Copy rows show
   saved names and reserve the trailing confirmation slot so the copy label
   can change without shifting the row or its actions.
 - English/zh-Hans resources follow system language. Localize computed strings
@@ -91,7 +93,8 @@ aggregates editor/menu/drag sources and issues identity-checked leases.
   just individual test fixtures. With `PULSE_DISABLE_LIVE_USAGE=1`, credential,
   usage, login-item and updater dependencies are inert. Manual refresh, opening
   the popover or clicking a test-host control must not escape that boundary.
-  Select dependencies before constructing live clients.
+  The test host installs the application menu and leaves the real status bar and
+  windows alone. Rendering and layout fixtures use isolated native views.
 - Reorder completion must reconcile `pendingTagOrder` against stored tags in
   the operation completion path, independently of mounted views. Navigating
   away before success must not leave a permanent pending-write/quit blocker.

@@ -22,6 +22,9 @@ final class PulseLocalizationTests: XCTestCase {
     XCTAssertEqual(
       PulseLocalization.format("Connect %@", "DeepSeek", bundle: chinese), "连接 DeepSeek")
     XCTAssertEqual(
+      PulseLocalization.format("%@ left in %@", "24%", "5 小时额度", bundle: chinese),
+      "5 小时额度余 24%")
+    XCTAssertEqual(
       PulseLocalization.format("Edit task: %@", "原样保留 100% 🚀", bundle: chinese),
       "编辑任务：原样保留 100% 🚀")
     XCTAssertEqual(

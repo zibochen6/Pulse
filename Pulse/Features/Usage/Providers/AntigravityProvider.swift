@@ -31,12 +31,12 @@ struct AntigravityProvider: UsageProviding {
       guard let kind = AntigravityQuotaBucket(rawValue: bucket.id), bucket.disabled != true
       else { continue }
       let percent = bucket.remainingFraction.flatMap {
-        $0.isFinite && (0...1).contains($0) ? Int(($0 * 100).rounded()) : nil
+        $0.isFinite && (0...1).contains($0) ? $0 * 100 : nil
       }
       let reset = bucket.resetTime.flatMap(Self.resetDate)
       guard percent != nil || reset != nil else { continue }
       let window = QuotaWindow(
-        durationMinutes: kind.durationMinutes, remainingPercent: percent, resetsAt: reset,
+        durationMinutes: kind.durationMinutes, measuredRemainingPercent: percent, resetsAt: reset,
         bucketID: kind.rawValue, displayNameKey: kind.displayNameKey)
       // A duplicate with a measured percentage takes precedence over reset-only data.
       if windows[kind]?.remainingPercent == nil { windows[kind] = window }
@@ -154,6 +154,14 @@ enum AntigravityUsageError: UsageFailureDescribing, Equatable {
     switch self {
     case .binaryNotFound, .unsupportedCLI, .signInRequired, .notEligible, .noQuota: true
     default: false
+    }
+  }
+
+  var failureKind: UsageFailureKind {
+    switch self {
+    case .signInRequired: .notConnected
+    case .noQuota: .missingData
+    default: isUnavailable ? .unavailable : .requestFailed
     }
   }
 

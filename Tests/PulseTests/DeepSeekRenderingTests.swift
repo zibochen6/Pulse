@@ -49,36 +49,22 @@ final class DeepSeekRenderingTests: XCTestCase {
     XCTAssertTrue(showsStaticMark, "Reduce Motion still presents a visible busy indicator")
   }
 
-  func testBalanceVisibilityPersistsAndEachCardCanBeHiddenIndependently() throws {
+  func testBalanceVisibilityPersistsForEachServiceIndependently() throws {
     let suite = "PulseBalanceVisibility.\(UUID())"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
     let config = AppConfig(defaults: defaults, loginItemService: RenderLoginItems())
-    XCTAssertTrue(config.vipBalanceEnabled)
-    XCTAssertTrue(config.deepSeekBalanceEnabled)
-    let usage = UsageController(provider: InactiveSettingsProvider())
-    let localTasks = LocalTaskController(
-      store: LocalTaskStore(
-        fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("\(suite).json")))
+    XCTAssertEqual(config.enabledUsageProviders, [.codex, .vip, .deepSeek])
 
+    config.setAntigravityEnabled(true)
     for (showVIP, showDeepSeek) in [(false, true), (true, false), (false, false), (true, true)] {
       config.setVIPBalanceEnabled(showVIP)
       config.setDeepSeekBalanceEnabled(showDeepSeek)
-      let capture = HeaderFrameCapture()
-      let root = home(
-        defaults: defaults, localTasks: localTasks, usage: usage, vipUsage: usage,
-        deepSeekUsage: usage, pages: PopoverPageController(), antigravityUsage: usage
-      ).overlayPreferenceValue(ProviderHeaderBoundsKey.self) { anchors in
-        GeometryReader { proxy in
-          HeaderFrameCaptureView(frames: anchors.mapValues { proxy[$0] }, capture: capture)
-        }
-        .allowsHitTesting(false)
-      }
-      _ = try render(NSHostingView(rootView: root), appearance: .aqua)
-      XCTAssertEqual(capture.frames["openVIPUsageButton"] != nil, showVIP)
-      XCTAssertEqual(capture.frames["openDeepSeekUsageButton"] != nil, showDeepSeek)
-      XCTAssertNotNil(capture.frames["openUsageButton"])
-      XCTAssertNotNil(capture.frames["openAntigravityUsageButton"])
+      let restored = AppConfig(defaults: defaults, loginItemService: RenderLoginItems())
+      XCTAssertEqual(restored.enabledUsageProviders.contains(.vip), showVIP)
+      XCTAssertEqual(restored.enabledUsageProviders.contains(.deepSeek), showDeepSeek)
+      XCTAssertTrue(restored.enabledUsageProviders.contains(.codex))
+      XCTAssertTrue(restored.enabledUsageProviders.contains(.antigravity))
     }
   }
 
@@ -101,7 +87,7 @@ final class DeepSeekRenderingTests: XCTestCase {
     XCTAssertGreaterThan(colored, 45, "A white tile or monochrome fallback is insufficient")
   }
 
-  func testActualHeaderFramesAndRepresentativeRendersInBothAppearances() async throws {
+  func testTaskRegionStartsUnderToolbarAndAboveAIInBothAppearances() async throws {
     let suite = "PulseDeepSeekRender.\(UUID())"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -147,17 +133,15 @@ final class DeepSeekRenderingTests: XCTestCase {
         let host = NSHostingView(rootView: root)
         let bitmap = try render(host, appearance: appearance)
         let ids = [
-          "openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton", "openSettingsButton",
+          "openAIOverviewButton", "openSettingsButton",
           "focusTimerButton", "editRecordingButton", "openQuickCopyButton",
         ]
-        XCTAssertEqual(Set(capture.frames.keys), Set(ids + ["providerDivider"]))
+        XCTAssertEqual(Set(capture.frames.keys), Set(ids + ["tasksRegion"]))
         for id in ids {
           let frame = try XCTUnwrap(capture.frames[id], id)
           XCTAssertGreaterThanOrEqual(frame.minX, PulseDesignTokens.contentInset - 0.5, id)
-          if count <= 1 {
-            XCTAssertLessThanOrEqual(
-              frame.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset + 0.5, id)
-          }
+          XCTAssertLessThanOrEqual(
+            frame.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset + 0.5, id)
           XCTAssertGreaterThan(frame.height, 20, id)
           for other in ids where other != id {
             let otherFrame = try XCTUnwrap(capture.frames[other])
@@ -165,7 +149,6 @@ final class DeepSeekRenderingTests: XCTestCase {
               frame.insetBy(dx: 0.1, dy: 0.1).intersects(otherFrame), "\(id) overlaps \(other)")
           }
         }
-        let codex = try XCTUnwrap(capture.frames["openUsageButton"])
         let settings = try XCTUnwrap(capture.frames["openSettingsButton"])
         let focusTimer = try XCTUnwrap(capture.frames["focusTimerButton"])
         let clip = try XCTUnwrap(capture.frames["editRecordingButton"])
@@ -179,34 +162,15 @@ final class DeepSeekRenderingTests: XCTestCase {
           XCTAssertEqual(frame.midY, focusTimer.midY, accuracy: 0.5)
         }
         XCTAssertEqual(focusTimer.midY, settings.midY, accuracy: 0.5)
-        // Quota cards stay below the toolbar even when their amounts are long.
-        XCTAssertGreaterThan(
-          codex.minY, settings.maxY, "The quota strip sits below the toolbar")
-        XCTAssertEqual(
-          codex.minX, PulseDesignTokens.contentInset, accuracy: 0.5,
-          "Indicators start at the leading inset")
-        XCTAssertLessThan(codex.minX, 140, "The first indicator stays at the leading edge")
-        let vip = try XCTUnwrap(capture.frames["openVIPUsageButton"])
-        let deepSeek = try XCTUnwrap(capture.frames["openDeepSeekUsageButton"])
-        for (frame, title) in [
-          (vip, VIPUsageFormatter.title(for: vipUsage.state)),
-          (deepSeek, DeepSeekUsageFormatter.title(for: deepSeekUsage.state)),
-        ] {
-          let textWidth = (title as NSString).size(withAttributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
-          ]).width
-          XCTAssertGreaterThanOrEqual(frame.width, textWidth + 30, "Every amount digit fits")
-        }
-        if count <= 1 {
-          XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
-          XCTAssertEqual(codex.minY, deepSeek.minY, accuracy: 0.5)
-          // An even split of 368 pt minus two 8 pt gaps rounds to 117/118 pt.
-          XCTAssertEqual(codex.width, vip.width, accuracy: 1)
-          XCTAssertEqual(codex.width, deepSeek.width, accuracy: 1)
-        }
-        XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
-        XCTAssertEqual(codex.minY, deepSeek.minY, accuracy: 0.5)
-        XCTAssertEqual(codex.height, 32, accuracy: 0.5)
+        let tasks = try XCTUnwrap(capture.frames["tasksRegion"])
+        let ai = try XCTUnwrap(capture.frames["openAIOverviewButton"])
+        XCTAssertGreaterThanOrEqual(tasks.minY, settings.maxY)
+        XCTAssertLessThan(tasks.minY, 55, "The task region starts directly below the toolbar")
+        XCTAssertGreaterThan(tasks.height, 400, "Tasks get most of the available vertical space")
+        XCTAssertGreaterThanOrEqual(ai.minY + 0.5, tasks.maxY)
+        XCTAssertEqual(ai.minX, PulseDesignTokens.contentInset, accuracy: 0.5)
+        XCTAssertEqual(ai.height, 34, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(ai.maxY, HomeView.popoverSize.height - 7.5)
         let name = "\(appearance.rawValue)-home-\(count)-windows"
         try save(bitmap, to: directory.appendingPathComponent("\(name).png"))
         let frames = capture.frames.mapValues { NSStringFromRect($0) }
@@ -253,7 +217,7 @@ final class DeepSeekRenderingTests: XCTestCase {
     }
   #endif
 
-  func testEnabledGeminiCardFitsAndItsDetailsRenderInBothAppearances() async throws {
+  func testOverviewPlacesEachProviderOnItsOwnRowAndGeminiDetailsRender() async throws {
     let suite = "PulseGeminiRender.\(UUID())"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -279,41 +243,45 @@ final class DeepSeekRenderingTests: XCTestCase {
           })))
     for controller in [usage, vip, deepSeek, gemini] { await controller.refresh() }
 
+    let providers = [
+      ProviderUsagePresentation(provider: .codex, usage: usage),
+      ProviderUsagePresentation(provider: .vip, usage: vip),
+      ProviderUsagePresentation(provider: .deepSeek, usage: deepSeek),
+      ProviderUsagePresentation(provider: .antigravity, usage: gemini),
+    ]
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+      let capture = HeaderFrameCapture()
+      let overview = AIUsageOverviewView(
+        providers: providers, onOpenProvider: { _ in }, onConfigureProvider: { _ in },
+        onManage: {}
+      )
+      .padding(.horizontal, PulseDesignTokens.contentInset)
+      .overlayPreferenceValue(ProviderHeaderBoundsKey.self) { anchors in
+        GeometryReader { proxy in
+          HeaderFrameCaptureView(frames: anchors.mapValues { proxy[$0] }, capture: capture)
+        }
+        .allowsHitTesting(false)
+      }
+      _ = try render(NSHostingView(rootView: overview), appearance: appearance)
+      var lastBottom: CGFloat?
+      for id in [
+        "openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton",
+        "openAntigravityUsageButton",
+      ] {
+        let row = try XCTUnwrap(capture.frames[id], id)
+        XCTAssertGreaterThanOrEqual(row.minX, PulseDesignTokens.contentInset - 0.5)
+        XCTAssertLessThanOrEqual(
+          row.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset + 0.5)
+        XCTAssertGreaterThan(row.height, 32, id)
+        if let lastBottom { XCTAssertGreaterThanOrEqual(row.minY, lastBottom, id) }
+        lastBottom = row.maxY
+      }
+
       let pages = PopoverPageController()
+      pages.showUsage(.antigravity)
       let root = home(
         defaults: defaults, localTasks: localTasks, usage: usage, vipUsage: vip,
         deepSeekUsage: deepSeek, pages: pages, antigravityUsage: gemini)
-      let capture = HeaderFrameCapture()
-      let host = NSHostingView(
-        rootView: root.overlayPreferenceValue(ProviderHeaderBoundsKey.self) { anchors in
-          GeometryReader { proxy in
-            HeaderFrameCaptureView(frames: anchors.mapValues { proxy[$0] }, capture: capture)
-          }
-          .allowsHitTesting(false)
-        })
-      _ = try render(host, appearance: appearance)
-      let card = try XCTUnwrap(capture.frames["openAntigravityUsageButton"])
-      let codex = try XCTUnwrap(capture.frames["openUsageButton"])
-      let vip = try XCTUnwrap(capture.frames["openVIPUsageButton"])
-      let deepSeek = try XCTUnwrap(capture.frames["openDeepSeekUsageButton"])
-      XCTAssertEqual(codex.minY, vip.minY, accuracy: 0.5)
-      XCTAssertEqual(codex.minY, deepSeek.minY, accuracy: 0.5)
-      XCTAssertEqual(codex.minY, card.minY, accuracy: 0.5)
-      XCTAssertGreaterThanOrEqual(vip.width, codex.width)
-      let divider = try XCTUnwrap(capture.frames["providerDivider"])
-      XCTAssertGreaterThan(divider.maxY, card.maxY)
-      XCTAssertLessThanOrEqual(divider.maxY, 100)
-      XCTAssertGreaterThanOrEqual(card.minX, PulseDesignTokens.contentInset - 0.5)
-      XCTAssertLessThanOrEqual(
-        card.maxX, HomeView.popoverSize.width - PulseDesignTokens.contentInset)
-      XCTAssertEqual(card.height, 32, accuracy: 0.5)
-      XCTAssertNotNil(Bundle.main.url(forResource: "AntigravityColorIcon", withExtension: "png"))
-      for id in ["openUsageButton", "openVIPUsageButton", "openDeepSeekUsageButton"] {
-        let other = try XCTUnwrap(capture.frames[id])
-        XCTAssertFalse(card.intersects(other), id)
-      }
-      pages.showUsage(.antigravity)
       let bitmap = try render(NSHostingView(rootView: root), appearance: appearance)
       XCTAssertGreaterThan(bitmap.pixelsHigh, 0)
     }
@@ -361,10 +329,11 @@ final class DeepSeekRenderingTests: XCTestCase {
     for (name, controller) in states where name != "loading" { await controller.refresh() }
     for appearance in [NSAppearance.Name.aqua, .darkAqua] {
       for (name, controller) in states {
-        for page in [PopoverPage.home, .usage(.deepSeek), .tagManagement] {
+        for page in [PopoverPage.home, .aiOverview, .usage(.deepSeek), .tagManagement] {
           let pages = PopoverPageController()
           switch page {
           case .home: break
+          case .aiOverview: pages.showAIOverview()
           case .usage(let provider): pages.showUsage(provider)
           case .clipTask: pages.showClipTask()
           case .tagManagement: pages.showTagManagement()
@@ -460,6 +429,7 @@ final class DeepSeekRenderingTests: XCTestCase {
   private func pageName(_ page: PopoverPage) -> String {
     switch page {
     case .home: "home"
+    case .aiOverview: "ai-overview"
     case .usage: "usage"
     case .clipTask: "clip"
     case .tagManagement: "tags"

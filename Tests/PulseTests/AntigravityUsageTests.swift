@@ -28,7 +28,10 @@ final class AntigravityUsageTests: XCTestCase {
     XCTAssertEqual(
       snapshot.quotaWindows.first?.resetsAt, Date(timeIntervalSince1970: 1_795_416_045))
     XCTAssertTrue(snapshot.quotaWindows.allSatisfy { $0.resetsAt != nil })
-    XCTAssertEqual(AntigravityStatusSummary.title(for: .success(snapshot)), "0%")
+    let presentation = ProviderUsagePresentation(provider: .antigravity, state: .success(snapshot))
+    let fiveHour = try XCTUnwrap(presentation.primaryQuota)
+    XCTAssertEqual(fiveHour.percentageText, "0%")
+    XCTAssertEqual(presentation.status, .exhausted(fiveHour))
   }
 
   func testUnknownOrDisabledFiveHourDoesNotSubstituteWeekly() throws {
@@ -44,7 +47,9 @@ final class AntigravityUsageTests: XCTestCase {
           {"id":"gemini-weekly","remaining_fraction":0.92},
           {"id":"gemini-argon-wtu-weekly","remaining_fraction":0.88}
           """))
-      XCTAssertEqual(AntigravityStatusSummary.title(for: .success(snapshot)), "--")
+      let presentation = ProviderUsagePresentation(
+        provider: .antigravity, state: .success(snapshot))
+      XCTAssertNil(presentation.primaryQuota)
       XCTAssertEqual(snapshot.quotaWindows.suffix(2).map(\.remainingPercent), [92, 88])
     }
   }

@@ -45,6 +45,10 @@ derived from the dashboard task key, `title`, `completed`, and `source`
   a fresh snapshot is unavailable. Preserve failed actions with a separate
   explanation. An explicit conflict retry uses a new operation ID and a
   recently read row that still matches the original identity and title.
+- The Today list keeps queued completions and removals visible above its folded
+  confirmed completions. A queued removal uses the prior title and source until
+  the operation receives its acknowledgment. Do not change the wire format used
+  by the dashboard to produce this projected state.
 - Do not collapse same-title tasks. Durable operation IDs allow replay after
   interruption and distinguish identical captures. Offline queues are scoped
   to one vault and can resume on reconnect.

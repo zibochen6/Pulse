@@ -1,6 +1,6 @@
 # Motion and response
 
-The native 400-point menu-bar popover fits a short paired Today list and caps
+The native 400-point menu-bar popover fits short local and paired lists and caps
 its content at 520 points. Settings uses a separate 720 × 560 window. Each
 window keeps one live surface over its native backdrop.
 
@@ -55,6 +55,13 @@ navigation, status and error changes, and tag edge scrolling and cancellation.
 Inspect both appearances, both languages, Reduce Motion and Reduce
 Transparency. Screenshots and XCTest establish geometry and state, while
 visible input checks establish interaction.
+
+`UIDemoExportTests.testProfileOffscreenLayout` compares native layout and drawing
+with an unordered test window. Run in Release with `ENABLE_TESTABILITY=YES` and
+`TEST_RUNNER_PULSE_MOTION_OFFSCREEN_OUTPUT` pointing to an output directory. The
+JSON records mount, local scrolling, native input and page-switch durations.
+Trial zero warms caches. These timings measure CPU-side work; compositor hitch
+time requires a visible display.
 
 `UIDemoExportTests.testProfileVisibleMotion` is an opt-in native profiling test.
 Build `Pulse` for testing in Release with `ENABLE_TESTABILITY=YES`. Run only this

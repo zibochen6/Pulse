@@ -6,7 +6,8 @@ import SwiftUI
 final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
   private static let runtimeServices = PulseRuntimeServices()
   private static let antigravityRefreshSeconds: TimeInterval = 600
-  private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+  private lazy var statusItem = NSStatusBar.system.statusItem(
+    withLength: NSStatusItem.variableLength)
   // The XCTest host must not migrate the real user's source preference or use
   // their local task file. Production always uses the normal preferences.
   private static let runtimeDefaults: UserDefaults = {
@@ -165,17 +166,19 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.mainMenu = PulseApplicationMenu.makeMainMenu(target: self)
     NSApp.setActivationPolicy(.accessory)
+    // The XCTest host uses explicit fixtures and leaves the desktop alone.
+    guard Self.shouldStartLiveUsage(environment: ProcessInfo.processInfo.environment) else {
+      return
+    }
     vipConfiguration.refresh()
     deepSeekConfiguration.refresh()
-    if Self.runtimeServices.permitsLiveAccess {
-      clipNotifications.register()
-      clips.requestNotifications = { [weak self] in self?.clipNotifications.requestPermission() }
-      clips.onFinish = { [weak self] result in
-        if result.phase != .noClip { self?.clipNotifications.deliver(result) }
-        self?.updates.scheduleAutomaticInstallWhenIdle()
-      }
-      clips.restore()
+    clipNotifications.register()
+    clips.requestNotifications = { [weak self] in self?.clipNotifications.requestPermission() }
+    clips.onFinish = { [weak self] result in
+      if result.phase != .noClip { self?.clipNotifications.deliver(result) }
+      self?.updates.scheduleAutomaticInstallWhenIdle()
     }
+    clips.restore()
     configureStatusItem()
     configurePopover()
     observeMenuInteractions()
@@ -208,16 +211,13 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
         guard let self else { return }
         self.updateStatusButton(showName: self.config.showMenuBarLabel, usageState: state)
       }
-    // The unit test host launches this app; its synthetic tests must not query a real account.
-    if Self.shouldStartLiveUsage(environment: ProcessInfo.processInfo.environment) {
-      usage.start()
-      usageTrackingSubscriptions = [
-        trackUsage(config.$vipBalanceEnabled, with: vipUsage),
-        trackUsage(config.$deepSeekBalanceEnabled, with: deepSeekUsage),
-        trackUsage(config.$antigravityEnabled, with: antigravityUsage, resetOnStop: true),
-      ]
-      updates.start()
-    }
+    usage.start()
+    usageTrackingSubscriptions = [
+      trackUsage(config.$vipBalanceEnabled, with: vipUsage),
+      trackUsage(config.$deepSeekBalanceEnabled, with: deepSeekUsage),
+      trackUsage(config.$antigravityEnabled, with: antigravityUsage, resetOnStop: true),
+    ]
+    updates.start()
   }
 
   private func trackUsage(
@@ -492,8 +492,10 @@ final class PulseAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate
   private func updateStatusButton(showName: Bool, usageState: UsageRefreshState) {
     guard let button = statusItem.button else { return }
     let name = showName || button.image == nil ? "Pulse " : ""
+    let presentation = ProviderUsagePresentation(
+      provider: .codex, state: usageState, failureKind: usage.failureKind)
     button.attributedTitle = NSAttributedString(
-      string: " \(name)\(UsageMenuFormatter.title(for: usageState))",
+      string: " \(name)\(presentation.menuBarTitle)",
       attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)]
     )
     switch usageState {

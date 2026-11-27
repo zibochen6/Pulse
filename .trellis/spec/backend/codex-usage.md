@@ -22,15 +22,15 @@ struct UsageSnapshot: Sendable {
 }
 ```
 
-`CodexProvider` maps the app-server response into a provider-neutral `UsageSnapshot`. `UsageController` owns `@Published state` on the main actor and prevents overlapping refreshes. `UsageMenuFormatter` maps that same state to the status item title; `UsageView` renders it in the popover.
+`CodexProvider` maps the app-server response into a provider-neutral `UsageSnapshot`. `UsageController` owns `@Published state` on the main actor and prevents overlapping refreshes. `ProviderUsagePresentation` maps the same snapshot to the status item, Home, the AI overview and the service detail.
 
 ## 3. Contracts
 
 - Launch `codex app-server --listen stdio://`; send newline-delimited `initialize` with `clientInfo` and id 1, await a successful result, then send `initialized` and `account/rateLimits/read` with id 2. Match responses by id. The process is bounded by a timeout and terminated after the response.
 - CLI discovery checks `CODEX_BIN` exclusively if set, then known ChatGPT.app / Codex.app bundle layouts, common install paths, and `PATH`. A bad override is an error.
 - Accept `result.rateLimitsByLimitId.codex` or a legacy `result.rateLimits` whose `limitId` is `codex` or absent. Never use another limit ID as Codex quota.
-- Windows come from `primary` and `secondary`; `usedPercent` is optional. Compute `remainingPercent = round(100 - clamp(usedPercent, 0...100))`; missing or non-finite values remain unknown. Preserve valid `windowDurationMins` and `resetsAt` (Unix seconds). Use reported windows, not `planType`, for display.
-- One reported window displays only its percentage; multiple windows display short duration labels. An unknown percentage displays `--`, never zero. Quota is distinct from balance/cost metric kinds.
+- Windows come from `primary` and `secondary`. Compute measured remaining quota as `100 - clamp(usedPercent, 0...100)` and preserve its precision. Missing or non-finite values remain unknown. Preserve valid `windowDurationMins` and `resetsAt` (Unix seconds). Use the reported windows for display.
+- The menu bar shows one percentage by itself and several percentages with short duration labels. An unknown percentage displays `--`. A positive measured value below one percent displays `<1%`. Only zero is exhausted. The detail renders one bar per known quota value, with its own reset. Monetary figures keep their native currencies and Decimal precision.
 - Refresh at launch and every 60 seconds while running. While a refresh is in flight, keep the prior success state visible and expose `isRefreshing` for the refresh control; do not publish `.loading` over a known quota. A refresh failure replaces the prior success state so stale numbers are not shown as current. The app reads no authentication files and logs no raw responses or account identifiers.
 - The shared controller owns one active refresh task. Cancellation cleanup must run even if cancellation occurs before the fetch begins; place generation-aware cleanup before an early cancellation return. Invalidating credentials or stopping advances the generation, so an older fetch cannot publish state or clear a newer fetch's busy flag. Keep normal Codex periodic/manual requests single-flight.
 - XcodeGen's `Pulse` test scheme sets `PULSE_DISABLE_LIVE_USAGE=1` for the app test host. `PulseAppDelegate` must check it before calling `UsageController.start()`. Unit tests assert the marker is present, so they cannot accidentally query a real Codex account when XCTest launches the host app.

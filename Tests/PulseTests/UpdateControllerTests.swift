@@ -144,6 +144,8 @@ final class UpdateControllerTests: XCTestCase {
     window.ignoresMouseEvents = true
     window.contentView = host
     window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
+    window.ignoresMouseEvents = true
+    window.alphaValue = 0
     window.orderFront(nil)
     defer { window.close() }
     host.layoutSubtreeIfNeeded()

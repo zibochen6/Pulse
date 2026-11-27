@@ -45,6 +45,7 @@ enum SettingsDestination: String, CaseIterable, Hashable, Identifiable {
 enum PopoverPage: Equatable {
   case home
   case clipTask
+  case aiOverview
   case usage(ProviderID)
   case tagManagement
   case quickCopy
@@ -54,12 +55,21 @@ enum PopoverPage: Equatable {
 @MainActor
 final class PopoverPageController: ObservableObject {
   @Published private(set) var page: PopoverPage = .home
+  func showAIOverview() { navigate(to: .aiOverview) }
   func showUsage(_ provider: ProviderID = .codex) { navigate(to: .usage(provider)) }
   func showTagManagement() { navigate(to: .tagManagement) }
   func showQuickCopy() { navigate(to: .quickCopy) }
   func showClipTask() { navigate(to: .clipTask) }
   func showHome() { navigate(to: .home) }
   func reset() { showHome() }
+
+  func goBack() {
+    if case .usage = page {
+      showAIOverview()
+    } else {
+      showHome()
+    }
+  }
 
   private func navigate(to destination: PopoverPage) {
     guard page != destination else { return }

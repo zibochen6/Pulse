@@ -122,3 +122,14 @@ enum PulseDesignTokens {
   static var tabSwitchAnimation: Animation { composerAnimation }
   static var reorderAnimation: Animation { composerAnimation }
 }
+
+extension ProviderID {
+  var dashboardPaper: Color {
+    switch self {
+    case .codex: PulseDesignTokens.taskPaper
+    case .vip: PulseDesignTokens.rosePaper
+    case .deepSeek: PulseDesignTokens.skyPaper
+    case .antigravity: PulseDesignTokens.mintPaper
+    }
+  }
+}

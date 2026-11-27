@@ -7,6 +7,8 @@ final class UsageController: ObservableObject {
   @Published private(set) var isRefreshing = false
   /// Updated before isRefreshing publishes so observers see the current request.
   private(set) var refreshStartedAt: ContinuousClock.Instant?
+  /// Published with the corresponding state, preserving the typed recovery path.
+  private(set) var failureKind: UsageFailureKind?
 
   private let provider: any UsageProviding
   private let refreshInterval: Duration
@@ -44,7 +46,10 @@ final class UsageController: ObservableObject {
     activeRefresh = nil
     refreshStartedAt = nil
     isRefreshing = false
-    if reset { state = .loading }
+    if reset {
+      failureKind = nil
+      state = .loading
+    }
   }
 
   @discardableResult
@@ -81,6 +86,7 @@ final class UsageController: ObservableObject {
     activeRefresh = nil
     refreshStartedAt = nil
     isRefreshing = false
+    failureKind = nil
     state = .loading
     return requestRefresh()
   }
@@ -110,11 +116,16 @@ final class UsageController: ObservableObject {
     guard !Task.isCancelled, currentGeneration == generation else { return }
     // Keep a visible quota steady during a background refresh. A failed fetch
     // still replaces it with an error, so an old value is never shown as current.
-    if case .success = state {} else { state = .loading }
+    if case .success = state {
+    } else {
+      failureKind = nil
+      state = .loading
+    }
 
     do {
       let snapshot = try await provider.fetch()
       guard !Task.isCancelled, currentGeneration == generation else { return }
+      failureKind = snapshot.metrics.isEmpty ? .missingData : nil
       state =
         snapshot.metrics.isEmpty
         ? .unavailable(PulseLocalization.string("No usage data is available for this provider."))
@@ -123,12 +134,14 @@ final class UsageController: ObservableObject {
       return
     } catch let error as UsageFailureDescribing {
       guard !Task.isCancelled, currentGeneration == generation else { return }
+      failureKind = error.failureKind
       state =
         error.isUnavailable
         ? .unavailable(error.userMessage)
         : .failure(error.userMessage)
     } catch {
       guard !Task.isCancelled, currentGeneration == generation else { return }
+      failureKind = .requestFailed
       state = .failure(PulseLocalization.string("Could not refresh usage. Try again."))
     }
   }

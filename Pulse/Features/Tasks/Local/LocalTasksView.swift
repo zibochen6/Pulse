@@ -469,14 +469,33 @@ struct LocalTasksView: View {
   @ObservedObject var presentation: LocalTaskPresentation
   let onEditingChanged: (Bool) -> Void
   var onManageTags: () -> Void = {}
+  var onContentHeight: (CGFloat?) -> Void = { _ in }
   @State private var tagScrollButtons = TagScrollMetrics.Buttons()
   @State private var dropCoordinator = TagBarDropCoordinator()
+  @State private var expandedCompletionFilters = Set<LocalTaskFilter>()
+  @State private var headerHeight: CGFloat?
   @State private var rowHeight: CGFloat?
+  @State private var composerHeight: CGFloat?
+  @State private var initialContentHeight: CGFloat?
+  @State private var undoHeight: CGFloat?
   @Environment(\.pulseReduceMotion) private var reduceMotion
 
+  private static let cardSpacing: CGFloat = 2
+  private static let cardMargin: CGFloat = 8
   private var isInteracting: Bool { presentation.isInteractionActive }
 
   var body: some View {
+    let filter = presentation.selectedFilter
+    let sections = TaskListSections(controller.tasks(matching: filter), completed: \.completed)
+    let completedExpanded = expandedCompletionFilters.contains(filter)
+    let failure = controller.completionFailures.values.min {
+      $0.taskID.uuidString < $1.taskID.uuidString
+    }
+    let measuresRows =
+      sections.visibleRowCount(expanded: completedExpanded)
+      + (failure == nil ? 0 : 1) + (controller.errorMessage == nil ? 0 : 1)
+      < TaskListSections<LocalTask>.compactRowLimit
+    let desiredHeight = compactHeight(measuresRows: measuresRows)
     VStack(spacing: 0) {
       if let draft = presentation.editDraft {
         LocalTaskEditor(
@@ -490,17 +509,31 @@ struct LocalTasksView: View {
         )
         .transition(.identity)
       } else {
-        taskList
+        taskList(
+          sections: sections, filter: filter, completedExpanded: completedExpanded,
+          failure: failure, measuresRows: measuresRows)
       }
-      LocalDeletionUndoBar(controller: controller, presentation: presentation)
+      if !controller.deletionHistory.isEmpty {
+        LocalDeletionUndoBar(controller: controller, presentation: presentation)
+          .onGeometryChange(for: CGFloat.self) {
+            ceil($0.size.height)
+          } action: {
+            undoHeight = $0
+          }
+          .layoutPriority(1)
+      }
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     .onAppear {
       if let tags = controller.document?.tags {
         presentation.reconcileTags(tags)
         presentation.reconcileTagOrder(tags)
       }
       onEditingChanged(isInteracting)
+      onContentHeight(desiredHeight)
     }
+    .onChange(of: desiredHeight, perform: onContentHeight)
+    .onChange(of: measuresRows) { if !$0 { rowHeight = nil } }
     .task {
       if controller.document == nil { await controller.refresh() }
       await controller.resetRepeatingTasks()
@@ -519,17 +552,55 @@ struct LocalTasksView: View {
     }
   }
 
-  private var taskList: some View {
+  private func compactHeight(measuresRows: Bool) -> CGFloat? {
+    guard presentation.editDraft == nil, let headerHeight,
+      let undo = controller.deletionHistory.isEmpty ? 0 : undoHeight
+    else { return nil }
+    guard controller.initialLoadState == .loaded else {
+      return initialContentHeight.map { headerHeight + $0 + undo }
+    }
+    guard measuresRows, let rowHeight, let composerHeight else { return nil }
+    return headerHeight + rowHeight + composerHeight + undo + Self.cardSpacing
+      + 2 * (TaskPaper.contentInset + Self.cardMargin)
+  }
+
+  private func taskList(
+    sections: TaskListSections<LocalTask>, filter: LocalTaskFilter,
+    completedExpanded: Bool, failure: LocalTaskCompletionFailure?, measuresRows: Bool
+  ) -> some View {
     VStack(spacing: 0) {
-      tagBar(controller.document?.tags ?? [])
-        .disabled(controller.document == nil)
-      switch controller.initialLoadState {
-      case .loaded:
-        if presentation.tagIntent != nil {
+      VStack(spacing: 0) {
+        HStack(spacing: 8) {
+          Text("Tasks")
+            .font(.system(size: 18, weight: .bold))
+            .foregroundStyle(PulseDesignTokens.ink)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("localTasksHeading")
+          Spacer(minLength: 4)
+          if controller.initialLoadState == .loaded {
+            TaskCountSummary(toDo: sections.confirmedToDoCount, completed: sections.completed.count)
+          }
+        }
+        .frame(height: 28)
+        .padding(.horizontal, PulseDesignTokens.contentInset)
+        tagBar(controller.document?.tags ?? [])
+          .disabled(controller.document == nil)
+        if controller.initialLoadState == .loaded, presentation.tagIntent != nil {
           LocalTagEntry(controller: controller, presentation: presentation)
         }
-        errorBanner.padding(.horizontal, PulseDesignTokens.contentInset)
-        taskScrollView
+      }
+      .onGeometryChange(for: CGFloat.self) {
+        ceil($0.size.height)
+      } action: {
+        headerHeight = $0
+      }
+      .layoutPriority(1)
+
+      switch controller.initialLoadState {
+      case .loaded:
+        taskScrollView(
+          sections: sections, filter: filter, completedExpanded: completedExpanded,
+          failure: failure, measuresRows: measuresRows)
       case .loading:
         initialTaskContent {
           Label {
@@ -559,54 +630,74 @@ struct LocalTasksView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .modifier(TaskPaper())
       .padding(.horizontal, PulseDesignTokens.contentInset)
-      .padding(.vertical, 8)
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      .padding(.vertical, Self.cardMargin)
+      .onGeometryChange(for: CGFloat.self) {
+        ceil($0.size.height)
+      } action: {
+        initialContentHeight = $0
+      }
   }
 
-  private var taskScrollView: some View {
-    let filter = presentation.selectedFilter
-    let tasks = controller.tasks(matching: filter)
-    let measuresRows = tasks.count < 12
+  private func taskScrollView(
+    sections: TaskListSections<LocalTask>, filter: LocalTaskFilter,
+    completedExpanded: Bool, failure: LocalTaskCompletionFailure?, measuresRows: Bool
+  ) -> some View {
     let emptyMessage = filter == .untagged ? "No tasks yet" : "No tasks in this tag"
-    return VStack(spacing: 2) {
+    let rows = LocalTaskRows(
+      sections: sections, pendingIDs: controller.pendingTaskIDs, emptyMessage: emptyMessage,
+      completedExpanded: completedExpanded, controller: controller,
+      presentation: presentation, failure: failure,
+      errorMessage: controller.errorMessage, isReloading: controller.isLoading,
+      onToggleCompleted: {
+        if !expandedCompletionFilters.insert(filter).inserted {
+          expandedCompletionFilters.remove(filter)
+        }
+      })
+    return VStack(spacing: Self.cardSpacing) {
       ScrollViewReader { proxy in
         ScrollView {
-          LocalTaskRows(
-            tasks: tasks, pendingIDs: controller.pendingTaskIDs, emptyMessage: emptyMessage,
-            controller: controller, presentation: presentation
-          )
-          .equatable()
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .onGeometryChange(for: CGFloat?.self) { geometry in
-            measuresRows ? ceil(geometry.size.height) : nil
-          } action: { height in
-            rowHeight = height
-          }
+          rows.equatable().frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxHeight: measuresRows ? rowHeight : nil)
+        .background(alignment: .topLeading) {
+          if measuresRows {
+            rows.forMeasurement.equatable()
+              .reportIntrinsicTaskHeight { rowHeight = $0 }
+          }
+        }
         .accessibilityIdentifier("localTaskList")
         .onAppear { scrollToRevealedTask(using: proxy) }
         .onChange(of: presentation.revealRequest) { _ in scrollToRevealedTask(using: proxy) }
       }
       LocalTaskQuickComposer(controller: controller, presentation: presentation)
+        .onGeometryChange(for: CGFloat.self) {
+          ceil($0.size.height)
+        } action: {
+          composerHeight = $0
+        }
+        .layoutPriority(1)
     }
     .padding(TaskPaper.contentInset)
     .modifier(TaskPaper())
     .padding(.horizontal, PulseDesignTokens.contentInset)
-    .padding(.vertical, 8)
-    .frame(maxHeight: .infinity, alignment: .top)
+    .padding(.vertical, Self.cardMargin)
   }
 
   private func scrollToRevealedTask(using proxy: ScrollViewProxy) {
     guard let id = presentation.revealedTaskID else { return }
     let request = presentation.revealRequest
+    if controller.tasks(matching: presentation.selectedFilter).contains(where: {
+      $0.id == id && $0.completed
+    }) {
+      expandedCompletionFilters.insert(presentation.selectedFilter)
+    }
     // Editor saves replace the editor with a new reader. Wait for its rows to
     // mount, then consume this request exactly once across appearance/change.
     DispatchQueue.main.async {
       guard presentation.editDraft == nil,
         presentation.revealRequest == request, presentation.revealedTaskID == id
       else { return }
-      proxy.scrollTo(id, anchor: .center)
+      proxy.scrollTo(TaskListSections<LocalTask>.Row.ID.task(id), anchor: .center)
       presentation.revealedTaskID = nil
     }
   }
@@ -873,23 +964,6 @@ struct LocalTasksView: View {
     Task {
       let saved = await controller.moveTag(id: tag.id, toIndex: toIndex)
       presentation.finishTagMove(saved: saved, tags: controller.document?.tags ?? [])
-    }
-  }
-
-  @ViewBuilder private var errorBanner: some View {
-    if let failure = controller.completionFailures.values.sorted(by: {
-      $0.taskID.uuidString < $1.taskID.uuidString
-    }).first {
-      PulseErrorBanner(message: failure.message, accessibilityIdentifier: "localTaskError") {
-        Button("Try again") { controller.retryCompletion(failure) }
-        Button("Dismiss") { controller.dismissCompletionFailure(taskID: failure.taskID) }
-      }
-    }
-    if let message = controller.errorMessage {
-      PulseErrorBanner(message: message, accessibilityIdentifier: "localTaskSaveError") {
-        Button("Reload") { Task { await controller.refresh() } }.disabled(controller.isLoading)
-        Button("Dismiss") { controller.dismissError() }
-      }
     }
   }
 }
@@ -1434,33 +1508,81 @@ private struct LocalTaskEditor: View {
 
 @MainActor
 private struct LocalTaskRows: View, Equatable {
-  let tasks: [LocalTask]
+  let sections: TaskListSections<LocalTask>
   let pendingIDs: Set<UUID>
   let emptyMessage: String
+  let completedExpanded: Bool
   let controller: LocalTaskController
   let presentation: LocalTaskPresentation
+  let failure: LocalTaskCompletionFailure?
+  let errorMessage: String?
+  let isReloading: Bool
+  let onToggleCompleted: () -> Void
+  var isMeasuring = false
+
+  var forMeasurement: Self {
+    var copy = self
+    copy.isMeasuring = true
+    return copy
+  }
 
   nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.controller === rhs.controller && lhs.presentation === rhs.presentation
-      && lhs.tasks == rhs.tasks && lhs.pendingIDs == rhs.pendingIDs
-      && (!lhs.tasks.isEmpty || lhs.emptyMessage == rhs.emptyMessage)
+      && lhs.sections.active == rhs.sections.active
+      && lhs.sections.completed == rhs.sections.completed
+      && lhs.pendingIDs == rhs.pendingIDs && lhs.completedExpanded == rhs.completedExpanded
+      && lhs.failure == rhs.failure && lhs.errorMessage == rhs.errorMessage
+      && (lhs.errorMessage == nil || lhs.isReloading == rhs.isReloading)
+      && lhs.emptyMessage == rhs.emptyMessage
+      && lhs.isMeasuring == rhs.isMeasuring
   }
 
   var body: some View {
-    // Draft and focus updates keep the mounted list and drag surfaces stable.
-    LazyVStack(alignment: .leading, spacing: 2) {
-      if tasks.isEmpty {
+    TaskListStack(spacing: 2, isMeasuring: isMeasuring) {
+      errorBanner
+      if sections.isEmpty {
         Text(LocalizedStringKey(emptyMessage))
           .font(.system(size: PulseDesignTokens.footnote))
           .foregroundStyle(PulseDesignTokens.muted)
           .padding(.vertical, 12)
       }
-      ForEach(tasks) { task in
-        LocalTaskRow(
-          task: task, isPending: pendingIDs.contains(task.id),
-          onToggle: { controller.setCompleted(!task.completed, taskID: task.id) },
-          onEdit: { presentation.beginEditingTask(task) },
-          onDelete: { Task { _ = await controller.deleteTask(id: task.id) } })
+      ForEach(sections.rows(expanded: completedExpanded)) { entry in
+        switch entry {
+        case .task(let task):
+          LocalTaskRow(
+            task: task, isPending: pendingIDs.contains(task.id),
+            onToggle: { controller.setCompleted(!task.completed, taskID: task.id) },
+            onEdit: { presentation.beginEditingTask(task) },
+            onDelete: { Task { _ = await controller.deleteTask(id: task.id) } },
+            isMeasuring: isMeasuring)
+        case .disclosure:
+          CompletedTaskDisclosure(
+            count: sections.completed.count, expanded: completedExpanded,
+            identifier: "localCompletedTasksButton", action: onToggleCompleted,
+            isMeasuring: isMeasuring)
+        }
+      }
+    }
+  }
+
+  @ViewBuilder private var errorBanner: some View {
+    if let failure {
+      PulseErrorBanner(message: failure.message, accessibilityIdentifier: "localTaskError") {
+        TaskListErrorAction("Try again", isMeasuring: isMeasuring) {
+          controller.retryCompletion(failure)
+        }
+        TaskListErrorAction("Dismiss", isMeasuring: isMeasuring) {
+          controller.dismissCompletionFailure(taskID: failure.taskID)
+        }
+      }
+    }
+    if let errorMessage {
+      PulseErrorBanner(message: errorMessage, accessibilityIdentifier: "localTaskSaveError") {
+        TaskListErrorAction("Reload", isMeasuring: isMeasuring) {
+          Task { await controller.refresh() }
+        }
+        .disabled(isReloading)
+        TaskListErrorAction("Dismiss", isMeasuring: isMeasuring) { controller.dismissError() }
       }
     }
   }
@@ -1474,12 +1596,41 @@ struct LocalTaskRow: View {
   let onToggle: () -> Void
   let onEdit: () -> Void
   var onDelete: (() -> Void)?
+  var isMeasuring = false
   @State private var isHovered = false
   private enum Control: Hashable { case complete, edit, delete }
   @FocusState private var focusedControl: Control?
   @Environment(\.pulseReduceMotion) private var reduceMotion
 
   var body: some View {
+    if isMeasuring {
+      // Reserve the same checkbox, delete target and button padding as the live row.
+      title
+        .padding(.leading, 36)
+        .padding(.trailing, onDelete == nil ? 2 : 32)
+        .padding(.vertical, 3)
+    } else {
+      controls
+    }
+  }
+
+  private var title: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 4) {
+      Text(task.text).font(.system(size: 15))
+        .foregroundStyle(task.completed ? PulseDesignTokens.muted : PulseDesignTokens.ink)
+        .strikethrough(task.completed, color: PulseDesignTokens.muted)
+        .animation(
+          reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: task.completed)
+        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+      if task.repeatsDaily {
+        Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(.tertiary).accessibilityHidden(true)
+      }
+    }
+    .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
+  }
+
+  private var controls: some View {
     HStack(alignment: .top, spacing: 2) {
       Button(action: onToggle) {
         PulseBusyGlyph(isBusy: isPending) {
@@ -1501,20 +1652,7 @@ struct LocalTaskRow: View {
       )
       .accessibilityIdentifier("localTaskCheckbox.\(task.id.uuidString)")
       Button(action: onEdit) {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-          Text(task.text).font(.system(size: 15))
-            .foregroundStyle(task.completed ? PulseDesignTokens.muted : PulseDesignTokens.ink)
-            .strikethrough(task.completed, color: PulseDesignTokens.muted)
-            .animation(
-              reduceMotion ? nil : PulseDesignTokens.completionAnimation, value: task.completed
-            )
-            .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-          if task.repeatsDaily {
-            Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .semibold))
-              .foregroundStyle(.tertiary).accessibilityHidden(true)
-          }
-        }
-        .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading).contentShape(Rectangle())
+        title.contentShape(Rectangle())
       }
       .buttonStyle(PulseRowButtonStyle(isHovered: isHovered)).disabled(
         !isEditingEnabled || isPending
