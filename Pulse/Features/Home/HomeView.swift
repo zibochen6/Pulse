@@ -11,8 +11,8 @@ struct HomeView: View {
     let size: NSSize
   }
 
-  private struct TaskMeasurement: Equatable {
-    let vault: URL?
+  private struct TodayMeasurement: Equatable {
+    let vault: URL
     let height: CGFloat
   }
 
@@ -42,13 +42,12 @@ struct HomeView: View {
   var onQuickCopyEditingChanged: (Bool) -> Void = { _ in }
   var onPopoverLayoutChanged: ((PopoverLayout) -> Void)?
   @State private var hidesUpdateBanner = false
-  @State private var homeToolbarHeight: CGFloat = 0
-  @State private var homeFooterHeight: CGFloat = 0
-  @State private var taskMeasurement: TaskMeasurement?
+  @State private var homeHeaderHeight: CGFloat = 0
+  @State private var todayMeasurement: TodayMeasurement?
 
-  static func sizeForTasks(chrome: CGFloat, tasks: CGFloat?) -> NSSize {
-    guard chrome > 0, let tasks else { return popoverSize }
-    return NSSize(width: popoverSize.width, height: min(popoverSize.height, ceil(chrome + tasks)))
+  static func sizeForToday(header: CGFloat, tasks: CGFloat?) -> NSSize {
+    guard header > 0, let tasks else { return popoverSize }
+    return NSSize(width: popoverSize.width, height: min(popoverSize.height, ceil(header + tasks)))
   }
 
   private var popoverLayout: PopoverLayout {
@@ -57,11 +56,9 @@ struct HomeView: View {
     let size: NSSize
     if onPopoverLayoutChanged != nil,
       pages.page == .home, hidesUpdateBanner || stagedVersion == nil,
-      homeToolbarHeight > 0, homeFooterHeight > 0,
-      let measurement = taskMeasurement, measurement.vault == vault
+      let measurement = todayMeasurement, measurement.vault == vault
     {
-      size = Self.sizeForTasks(
-        chrome: homeToolbarHeight + homeFooterHeight, tasks: measurement.height)
+      size = Self.sizeForToday(header: homeHeaderHeight, tasks: measurement.height)
     } else {
       size = Self.popoverSize
     }
@@ -70,24 +67,33 @@ struct HomeView: View {
 
   var body: some View {
     let layout = popoverLayout
-    let isHome = pages.page == .home
-    let measureHome = isHome && onPopoverLayoutChanged != nil
+    let measureHeader = pages.page == .home && onPopoverLayoutChanged != nil
     let paperOpacity = PulseDesignTokens.paperOpacity(
       transparencyPercent: hasNativeBackdrop ? config.effectiveWindowTransparencyPercent : 0)
     VStack(spacing: 0) {
-      toolbar
-        .onGeometryChange(for: CGFloat?.self) { geometry in
-          measureHome ? ceil(geometry.size.height) : nil
-        } action: { height in
-          if let height { homeToolbarHeight = height }
+      VStack(spacing: 0) {
+        toolbar
+        if pages.page == .home, let clips { ClipResultLink(clips: clips) { pages.showClipTask() } }
+        if pages.page != .quickCopy {
+          HomeProviderStrip(
+            config: config, usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
+            antigravityUsage: antigravityUsage, deepSeekConfiguration: deepSeekConfiguration,
+            vipConfiguration: vipConfiguration, onOpenUsage: { pages.showUsage($0) },
+            onOpenSettings: { onOpenSettings(.providers, $0) }
+          )
         }
+      }
+      .onGeometryChange(for: CGFloat?.self) { geometry in
+        measureHeader ? ceil(geometry.size.height) : nil
+      } action: { height in
+        if let height { homeHeaderHeight = height }
+      }
       PopoverContentTransition(page: pages.page) {
         Group {
           switch pages.page {
           case .clipTask:
             if let clips { ClipDetailView(clips: clips) { onOpenSettings(.clips, nil) } }
           case .home: homeContent
-          case .aiOverview: aiSurface(.overview)
           case .usage(let provider): usageContent(provider)
           case .tagManagement: tagManagement
           case .quickCopy:
@@ -100,17 +106,6 @@ struct HomeView: View {
         .foregroundStyle(PulseDesignTokens.ink)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
-        isHome ? ["tasksRegion": $0] : [:]
-      }
-      if isHome {
-        homeFooter
-          .onGeometryChange(for: CGFloat.self) { geometry in
-            ceil(geometry.size.height)
-          } action: { height in
-            if measureHome { homeFooterHeight = height }
-          }
-      }
     }
     .frame(
       width: layout.size.width,
@@ -131,14 +126,13 @@ struct HomeView: View {
         homeDate
       } else {
         Button {
-          pages.goBack()
+          pages.showHome()
         } label: {
           Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
             .frame(width: 28, height: 28)
         }
-        .buttonStyle(PulseIconButtonStyle(circular: true)).help(backTitle)
-        .accessibilityLabel(backTitle)
-        .accessibilityIdentifier(backIdentifier)
+        .buttonStyle(PulseIconButtonStyle(circular: true)).help("Back to Home")
+        .accessibilityLabel("Back to Home").accessibilityIdentifier("backToHomeButton")
         Text(pageTitle)
           .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .bold))
           .pulseContentFeedback(pageTitle)
@@ -203,21 +197,10 @@ struct HomeView: View {
     switch pages.page {
     case .clipTask: PulseLocalization.string("Recording edits")
     case .home: "Pulse"
-    case .aiOverview: PulseLocalization.string("AI services")
     case .usage(let provider): provider.name
     case .tagManagement: PulseLocalization.string("All tags")
     case .quickCopy: PulseLocalization.string("Quick Copy")
     }
-  }
-
-  private var backTitle: String {
-    if case .usage = pages.page { return PulseLocalization.string("Back to AI services") }
-    return PulseLocalization.string("Back to Home")
-  }
-
-  private var backIdentifier: String {
-    if case .usage = pages.page { return "backToAIOverviewButton" }
-    return "backToHomeButton"
   }
 
   private var homeContent: some View {
@@ -233,12 +216,17 @@ struct HomeView: View {
             bridge: todayBridge, presentation: todayPresentation,
             localTasks: localTasks, localPresentation: localPresentation,
             onEditingChanged: onTaskEditingChanged, onManageTags: { pages.showTagManagement() },
-            onTodayHeight: measureTasks)
+            onTodayHeight: { vault, height in
+              guard vault == todayBridge.vaultURL else { return }
+              let measurement = vault.flatMap { source in
+                height.map { TodayMeasurement(vault: source, height: $0) }
+              }
+              if measurement != todayMeasurement { todayMeasurement = measurement }
+            })
         } else {
           LocalTasksView(
             controller: localTasks, presentation: localPresentation,
-            onEditingChanged: onTaskEditingChanged, onManageTags: { pages.showTagManagement() },
-            onContentHeight: { measureTasks(vault: nil, height: $0) })
+            onEditingChanged: onTaskEditingChanged, onManageTags: { pages.showTagManagement() })
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -247,53 +235,15 @@ struct HomeView: View {
     }
   }
 
-  private func measureTasks(vault: URL?, height: CGFloat?) {
-    guard onPopoverLayoutChanged != nil, vault == todayBridge?.vaultURL else { return }
-    let measurement = height.map { TaskMeasurement(vault: vault, height: $0) }
-    if measurement != taskMeasurement { taskMeasurement = measurement }
-  }
-
-  private var homeFooter: some View {
-    VStack(spacing: 0) {
-      if let clips {
-        ClipResultLink(clips: clips) { pages.showClipTask() }
-      }
-      aiSurface(.footer)
-    }
-  }
-
-  private func aiSurface(_ surface: HomeAIServiceSurface.Placement) -> some View {
-    HomeAIServiceSurface(
-      placement: surface, config: config, usage: usage, vipUsage: vipUsage,
-      deepSeekUsage: deepSeekUsage, antigravityUsage: antigravityUsage,
-      deepSeekConfiguration: deepSeekConfiguration, vipConfiguration: vipConfiguration,
-      onOpenOverview: { pages.showAIOverview() }, onOpenUsage: { pages.showUsage($0) },
-      onManageProviders: { onOpenSettings(.providers, $0) })
-  }
-
   private func usageContent(_ provider: ProviderID) -> some View {
-    let (controller, configuration): (UsageController, APIKeyConfiguration?) =
-      switch provider {
-      case .codex: (usage, nil)
-      case .antigravity: (antigravityUsage, nil)
-      case .vip: (vipUsage, vipConfiguration)
-      case .deepSeek: (deepSeekUsage, deepSeekConfiguration)
-      }
-    let configure = { onOpenSettings(.providers, provider) }
-    return ScrollView {
-      Group {
-        if let configuration {
-          CredentialUsageDetail(
-            provider: provider, usage: controller, configuration: configuration,
-            onAddProvider: configure)
-        } else {
-          UsageView(usage: controller, provider: provider, onAddProvider: configure)
-        }
-      }
-      .padding(.horizontal, PulseDesignTokens.contentInset)
-      .padding(.bottom, PulseDesignTokens.contentInset)
-    }
-    .accessibilityIdentifier("usageDetailRegion")
+    ScrollView {
+      UsageView(
+        usage: usage, vipUsage: vipUsage, deepSeekUsage: deepSeekUsage,
+        antigravityUsage: antigravityUsage,
+        onAddProvider: { onOpenSettings(.providers, provider) }, provider: provider
+      )
+      .padding(16)
+    }.accessibilityIdentifier("usageDetailRegion")
   }
 
   private var tagManagement: some View {
@@ -369,10 +319,7 @@ private struct HomeFocusButton: View {
   }
 }
 
-private struct HomeAIServiceSurface: View {
-  enum Placement { case footer, overview }
-
-  let placement: Placement
+private struct HomeProviderStrip: View {
   @ObservedObject var config: AppConfig
   @ObservedObject var usage: UsageController
   @ObservedObject var vipUsage: UsageController
@@ -380,91 +327,58 @@ private struct HomeAIServiceSurface: View {
   @ObservedObject var antigravityUsage: UsageController
   @ObservedObject var deepSeekConfiguration: DeepSeekConfiguration
   @ObservedObject var vipConfiguration: VIPConfiguration
-  let onOpenOverview: () -> Void
   let onOpenUsage: (ProviderID) -> Void
-  let onManageProviders: (ProviderID?) -> Void
+  let onOpenSettings: (ProviderID) -> Void
 
   var body: some View {
-    let providers = config.enabledUsageProviders.map(presentation(for:))
-    switch placement {
-    case .footer:
-      if let service = ProviderUsagePresentation.homeSummary(in: providers) { footer(service) }
-    case .overview:
-      ScrollView {
-        AIUsageOverviewView(
-          providers: providers, onOpenProvider: onOpenUsage,
-          onConfigureProvider: { onManageProviders($0) }, onManage: { onManageProviders(nil) }
-        )
-        .padding(.horizontal, PulseDesignTokens.contentInset)
-        .padding(.bottom, PulseDesignTokens.contentInset)
+    VStack(spacing: 0) {
+      ViewThatFits(in: .horizontal) {
+        providerRow
+        ScrollView(.horizontal) { providerRow }
       }
-      .accessibilityIdentifier("aiOverviewRegion")
-    }
-  }
-
-  private func presentation(for provider: ProviderID) -> ProviderUsagePresentation {
-    switch provider {
-    case .codex: display(.codex, usage)
-    case .vip: display(.vip, vipUsage, configuration: vipConfiguration)
-    case .deepSeek: display(.deepSeek, deepSeekUsage, configuration: deepSeekConfiguration)
-    case .antigravity: display(.antigravity, antigravityUsage)
-    }
-  }
-
-  private func display(
-    _ provider: ProviderID, _ controller: UsageController, configuration: APIKeyConfiguration? = nil
-  ) -> ProviderUsagePresentation {
-    ProviderUsagePresentation(
-      provider: provider, usage: controller, isConfigured: configuration?.hasAPIKey ?? true,
-      configurationError: configuration?.errorMessage)
-  }
-
-  private func footer(_ service: ProviderUsagePresentation) -> some View {
-    let attention = service.attentionPriority > 0
-    let paper = attention ? PulseDesignTokens.butterPaper : PulseDesignTokens.secondarySurface
-    let summary = service.compactText
-    return Button(action: onOpenOverview) {
-      HStack(spacing: 7) {
-        Text("AI services")
-          .foregroundStyle(PulseDesignTokens.muted)
-          .fixedSize()
-        Spacer(minLength: 4)
-        Text(summary)
-          .monospacedDigit()
-          .lineLimit(1)
-          .truncationMode(.tail)
-          .pulseContentFeedback(summary)
-        Image(systemName: "chevron.right")
-          .font(.system(size: 10, weight: .semibold))
-          .foregroundStyle(PulseDesignTokens.muted)
-          .accessibilityHidden(true)
-      }
-      .font(.system(size: PulseDesignTokens.caption, weight: .semibold))
-      .padding(.horizontal, 10)
-      .frame(height: 34)
-    }
-    .buttonStyle(PulseProviderStatusStyle(paper: paper))
-    .accessibilityLabel("AI services")
-    .accessibilityValue(summary)
-    .help(summary)
-    .accessibilityIdentifier("openAIOverviewButton")
-    .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
-      ["openAIOverviewButton": $0]
+      .frame(height: 32)
+      .padding(.bottom, 8)
+      Rectangle().fill(PulseDesignTokens.border).frame(height: 1)
+        .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
+          ["providerDivider": $0]
+        }
     }
     .padding(.horizontal, PulseDesignTokens.contentInset)
-    .padding(.bottom, 8)
   }
-}
 
-private struct CredentialUsageDetail: View {
-  let provider: ProviderID
-  let usage: UsageController
-  @ObservedObject var configuration: APIKeyConfiguration
-  let onAddProvider: () -> Void
-
-  var body: some View {
-    UsageView(
-      usage: usage, provider: provider, isConfigured: configuration.hasAPIKey,
-      configurationError: configuration.errorMessage, onAddProvider: onAddProvider)
+  private var providerRow: some View {
+    ProviderStatusLayout {
+      AIStatusSummary(state: usage.state) {
+        usage.requestRefresh()
+        onOpenUsage(.codex)
+      }
+      if config.vipBalanceEnabled {
+        VIPStatusSummary(state: vipUsage.state, isConfigured: vipConfiguration.hasAPIKey) {
+          if vipConfiguration.hasAPIKey {
+            vipUsage.requestRefresh()
+            onOpenUsage(.vip)
+          } else {
+            onOpenSettings(.vip)
+          }
+        }
+      }
+      if config.deepSeekBalanceEnabled {
+        DeepSeekStatusSummary(
+          state: deepSeekUsage.state, isConfigured: deepSeekConfiguration.hasAPIKey
+        ) {
+          if deepSeekConfiguration.hasAPIKey {
+            deepSeekUsage.requestRefresh()
+            onOpenUsage(.deepSeek)
+          } else {
+            onOpenSettings(.deepSeek)
+          }
+        }
+      }
+      if config.antigravityEnabled {
+        AntigravityStatusSummary(state: antigravityUsage.state) {
+          onOpenUsage(.antigravity)
+        }
+      }
+    }
   }
 }

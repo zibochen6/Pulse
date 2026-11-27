@@ -19,86 +19,12 @@ final class HomeViewRenderingTests: XCTestCase {
     UsageController(provider: PreviewVIPUsageProvider())
   }
 
-  func testHomePopoverUsesMeasuredContentWithAHeightCap() {
+  func testTodayPopoverUsesMeasuredContentWithAHeightCap() {
     XCTAssertEqual(HomeView.popoverSize, NSSize(width: 400, height: 520))
-    XCTAssertEqual(HomeView.sizeForTasks(chrome: 97, tasks: 220.2), NSSize(width: 400, height: 318))
-    XCTAssertEqual(HomeView.sizeForTasks(chrome: 97, tasks: 600), HomeView.popoverSize)
-    XCTAssertEqual(HomeView.sizeForTasks(chrome: 97, tasks: nil), HomeView.popoverSize)
-    XCTAssertEqual(HomeView.sizeForTasks(chrome: 0, tasks: 220), HomeView.popoverSize)
-  }
-
-  func testUsageRefreshKeepsTheTaskEditorAndScrollPosition() async throws {
-    let suite = "PulseHomeRefresh.\(UUID())"
-    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-    defer { defaults.removePersistentDomain(forName: suite) }
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let localTasks = LocalTaskController(
-      store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
-    await localTasks.refresh()
-    for index in 0..<32 {
-      _ = await localTasks.saveTask(
-        id: nil, text: "Test task \(index)", tagIDs: [], newTagNames: [])
-    }
-    let presentation = LocalTaskPresentation()
-    let usage = UsageController(provider: PreviewUsageProvider())
-    let inactive = inactiveDeepSeekUsage()
-    let host = NSHostingView(
-      rootView: HomeView(
-        config: AppConfig(defaults: defaults, loginItemService: PreviewLoginItemService()),
-        usage: usage, vipUsage: inactive, deepSeekUsage: inactive,
-        deepSeekConfiguration: DeepSeekConfiguration(secretStore: PreviewSecretStore()),
-        vipConfiguration: VIPConfiguration(secretStore: PreviewSecretStore()),
-        localTasks: localTasks, updates: makeInactiveUpdateController(defaults: defaults),
-        pages: PopoverPageController(), onDeepSeekCredentialsChanged: {},
-        onVIPCredentialsChanged: {}, onQuit: {}, localPresentation: presentation))
-    let window = NSWindow(
-      contentRect: NSRect(origin: .zero, size: HomeView.popoverSize),
-      styleMask: [.borderless], backing: .buffered, defer: false)
-    window.isReleasedWhenClosed = false
-    window.contentView = host
-    defer { window.close() }
-    host.layoutSubtreeIfNeeded()
-
-    func descendants<ViewType: NSView>(_ view: NSView, of type: ViewType.Type) -> [ViewType] {
-      (view as? ViewType).map { [$0] } ?? view.subviews.flatMap { descendants($0, of: type) }
-    }
-
-    let field = try XCTUnwrap(
-      descendants(host, of: NSTextField.self).first {
-        $0.accessibilityIdentifier() == "localTaskTextField"
-      })
-    presentation.beginAddingTask()
-    let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
-    editor.setMarkedText(
-      "qing", selectedRange: NSRange(location: 4, length: 0),
-      replacementRange: editor.selectedRange())
-    XCTAssertTrue(editor.hasMarkedText())
-    host.layoutSubtreeIfNeeded()
-
-    let scroller = try XCTUnwrap(
-      descendants(host, of: NSScrollView.self).first {
-        ($0.documentView?.frame.height ?? 0) > HomeView.popoverSize.height
-      })
-    scroller.contentView.scroll(to: NSPoint(x: 0, y: 240))
-    scroller.reflectScrolledClipView(scroller.contentView)
-    let offset = scroller.contentView.bounds.origin.y
-    XCTAssertGreaterThan(offset, 0)
-
-    await usage.refresh()
-    await Task.yield()
-    host.layoutSubtreeIfNeeded()
-
-    XCTAssertTrue(window.firstResponder === editor)
-    XCTAssertTrue(field.currentEditor() === editor)
-    XCTAssertTrue(editor.hasMarkedText())
-    let currentScroller = try XCTUnwrap(
-      descendants(host, of: NSScrollView.self).first {
-        ($0.documentView?.frame.height ?? 0) > HomeView.popoverSize.height
-      })
-    XCTAssertTrue(currentScroller === scroller)
-    XCTAssertEqual(currentScroller.contentView.bounds.origin.y, offset, accuracy: 0.5)
-    XCTAssertFalse(window.isVisible)
+    XCTAssertEqual(HomeView.sizeForToday(header: 97, tasks: 220.2), NSSize(width: 400, height: 318))
+    XCTAssertEqual(HomeView.sizeForToday(header: 97, tasks: 600), HomeView.popoverSize)
+    XCTAssertEqual(HomeView.sizeForToday(header: 97, tasks: nil), HomeView.popoverSize)
+    XCTAssertEqual(HomeView.sizeForToday(header: 0, tasks: 220), HomeView.popoverSize)
   }
 
   func testPopoverBodySwapsInPlaceAndSkipsFadeWithReduceMotion() throws {
@@ -109,7 +35,6 @@ final class HomeViewRenderingTests: XCTestCase {
       styleMask: [.borderless], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.ignoresMouseEvents = true
-    window.alphaValue = 0
     window.contentView = content
     window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
     window.orderFront(nil)
@@ -169,14 +94,12 @@ final class HomeViewRenderingTests: XCTestCase {
         return XCTFail("Could not create \(appearanceName) appearance")
       }
       for page in [
-        PopoverPage.home, .aiOverview, .usage(.codex), .usage(.vip), .usage(.deepSeek),
-        .tagManagement,
+        PopoverPage.home, .usage(.codex), .usage(.vip), .usage(.deepSeek), .tagManagement,
         .clipTask,
       ] {
         let pages = PopoverPageController()
         switch page {
         case .home: break
-        case .aiOverview: pages.showAIOverview()
         case .usage(let provider): pages.showUsage(provider)
         case .clipTask: pages.showClipTask()
         case .tagManagement: pages.showTagManagement()

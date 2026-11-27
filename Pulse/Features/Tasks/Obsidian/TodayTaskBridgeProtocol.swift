@@ -19,14 +19,7 @@ struct TodayBridgeTask: Equatable, Identifiable, Sendable {
   let title: String
   var completed: Bool
   let source: TodayBridgeSource
-  var pendingOperation: TodayBridgeOperation.Kind? = nil
-
-  var isPending: Bool { pendingOperation != nil }
-  private var confirmedCompleted: Bool { completed && !isPending }
-
-  static func inDisplayOrder(_ rows: [Self]) -> [Self] {
-    rows.filter { !$0.confirmedCompleted } + rows.filter(\.confirmedCompleted)
-  }
+  var isPending: Bool = false
 }
 
 enum TodayBridgeReceiptCode: String, Codable, Sendable {
@@ -209,21 +202,23 @@ struct TodayBridgeSessionState: Sendable {
       },
       uniquingKeysWith: { first, _ in first })
     let recorded = snapshot?.tasks.map(\.row) ?? []
-    let projected = recorded.map { task in
+    let projected: [TodayBridgeTask] = recorded.compactMap { task in
       guard let command = commands[task.id], command.day == day else { return task }
+      guard command.kind != .delete else { return nil }
       var pending = task
       pending.completed = command.completed ?? pending.completed
-      pending.pendingOperation = command.kind
+      pending.isPending = true
       return pending
     }
     let newTasks: [TodayBridgeTask] = client.operations.compactMap { command in
       guard command.kind == .add else { return nil }
       return command.title.map {
         TodayBridgeTask(
-          id: command.id, title: $0, completed: false, source: .quick, pendingOperation: .add)
+          id: command.id, title: $0, completed: false, source: .quick, isPending: true)
       }
     }
-    tasks = TodayBridgeTask.inDisplayOrder(projected + newTasks)
+    let rows = projected + newTasks
+    tasks = rows.filter { !$0.completed } + rows.filter(\.completed)
     let retryable = Dictionary(
       recorded.filter { commands[$0.id] == nil }.map { ($0.id, $0.title) },
       uniquingKeysWith: { first, _ in first })

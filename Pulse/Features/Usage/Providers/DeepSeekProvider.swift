@@ -32,14 +32,6 @@ enum DeepSeekUsageError: LocalizedError, Equatable, UsageFailureDescribing {
     }
   }
 
-  var failureKind: UsageFailureKind {
-    switch self {
-    case .missingAPIKey: .notConnected
-    case .invalidCredentials: .invalidCredentials
-    default: isUnavailable ? .unavailable : .requestFailed
-    }
-  }
-
   var userMessage: String {
     errorDescription ?? PulseLocalization.string("Could not refresh DeepSeek balance.")
   }
@@ -148,8 +140,7 @@ enum DeepSeekUsageDecoder {
       // is_available describes API funding; a reported zero/negative total is
       // still a valid balance and must not turn into a missing-account state.
       return UsageSnapshot(
-        providerID: DeepSeekProvider.providerID, fetchedAt: fetchedAt ?? Date(), metrics: metrics,
-        accountAvailable: response.isAvailable)
+        providerID: DeepSeekProvider.providerID, fetchedAt: fetchedAt ?? Date(), metrics: metrics)
     } catch {
       throw DeepSeekUsageError.invalidResponse
     }

@@ -186,7 +186,7 @@ restore_previous_app() {
   fi
   rm -rf "$INSTALLED_APP"
   if ditto "$BACKUP_APP" "$INSTALLED_APP"; then
-    open -g "$INSTALLED_APP" >/dev/null 2>&1 || true
+    open "$INSTALLED_APP" >/dev/null 2>&1 || true
     warn "restored the previous Pulse app from $BACKUP_APP and relaunched it"
   else
     warn "RESTORE FAILED. Manual recovery: ditto \"$BACKUP_APP\" \"$INSTALLED_APP\""
@@ -257,7 +257,7 @@ plan_text() {
   BACKUP_APP="$(new_backup_path @OLDVER@ @OLDBUILD@)"
   ditto /Applications/Pulse.app "$BACKUP_APP"
   rm -rf /Applications/Pulse.app && ditto "$APP" /Applications/Pulse.app
-  open -g /Applications/Pulse.app          # verify exactly one pid at the installed path
+  open /Applications/Pulse.app             # verify exactly one pid at the installed path
 
   # 9. Publish source + assets (skipped with --no-push); never force-push
   git add -A -- project.yml Pulse.xcodeproj Pulse Tests scripts docs .trellis README.md ':(exclude)docs/images'
@@ -297,7 +297,7 @@ install_app() {
       || die "cannot create a unique backup directory in $BACKUP_ROOT"
     printf '  backing up the installed app to %s\n' "$BACKUP_APP"
     ditto "$INSTALLED_APP" "$BACKUP_APP" || {
-      open -g "$INSTALLED_APP" >/dev/null 2>&1 || true
+      open "$INSTALLED_APP" >/dev/null 2>&1 || true
       die "failed to back up $INSTALLED_APP to $BACKUP_APP. The installed app was left untouched and relaunched; nothing was replaced."
     }
     assert_meta "$BACKUP_APP" "$installed_version" "$installed_build" "backup"
@@ -310,7 +310,7 @@ install_app() {
   verify_signed "$INSTALLED_APP" "installed app"
   assert_meta "$INSTALLED_APP" "$VERSION" "$NEW_BUILD" "installed app"
   assert_hash "$INSTALLED_APP" "$APP_EXEC_HASH" "installed app"
-  open -g "$INSTALLED_APP" || die "open -g $INSTALLED_APP failed"
+  open "$INSTALLED_APP" || die "open $INSTALLED_APP failed"
   deadline=$((SECONDS + 15))
   while ! pgrep -x Pulse >/dev/null 2>&1; do
     [ "$SECONDS" -lt "$deadline" ] || die "Pulse did not start within 15s after opening $INSTALLED_APP"

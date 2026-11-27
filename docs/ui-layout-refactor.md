@@ -1,35 +1,39 @@
 # Native panel and Settings interaction
 
-This document describes the native menu-bar panel and Settings window.
+This document describes the native UI introduced in Pulse 0.1.8, with complete
+list deletion and Undo updated in 0.1.9.
 
 ## Surfaces and navigation
 
 The menu-bar panel is 400 points wide and has a 520-point height cap.
-The date, recording, focus, copy and Settings controls sit above the task list.
-Both task sources shrink to fit short lists. Long lists scroll inside the task
-area with Add and the AI services entry in view. Settings
-opens in one independent 720 × 560 native window. Reopening Settings restores the
+The paired Today Tasks view shrinks to fit short lists and scrolls long ones. A stable toolbar with
+the focus timer and settings entry sits above AI status controls, a tag strip
+and the scrolling task list. Settings
+opens in one independent 720 × 560 native window, with General, AI services,
+Lists & tags, Updates and About categories. Reopening Settings restores the
 last category; contextual configuration actions open the relevant provider.
 Cmd+, opens Settings, Cmd+W closes its window, and closing it never quits Pulse.
 
-The AI services button opens an overview of enabled providers. Selecting a
-configured provider shows its detail and refresh action. Missing credentials
-lead to that provider in Settings. Back returns to the overview and then Home.
-Home restores the task selection and drafts. Closing the panel resets quick
-navigation and retains Settings and draft state. Pulse runs from the menu bar.
+Home, provider-specific Usage and tag management share the quick panel. Selecting
+a configured provider requests its own reading and opens its details; an
+unconfigured service opens its connection settings. Back restores the
+Home task selection and drafts. Closing the panel resets only quick navigation,
+not Settings or retained draft state. Pulse remains an accessory app with no
+Dock icon.
 
 ## Information and visual hierarchy
 
-The adaptive panel uses 16-point horizontal insets, soft paper and tag colors,
-and native transparency when enabled. Provider cards keep their identity colors
-in the overview and detail. The single Home summary normally shows the current
-Codex window and remaining quota. A service that needs attention takes priority.
+The opaque root uses adaptive neutral colors with a restrained violet accent.
+Readable task text, 16-point horizontal insets, soft tag colors and clear action
+hierarchy replace dense uniform gray controls. Real provider icons retain their
+identity colors. The Home strip shows icons and values in one compact row.
+Long amounts keep every decimal and the strip scrolls when needed.
 
-Codex and Gemini quota windows have separate percentages, reset times and
-progress bars in detail. Balance details show amounts in each original currency,
-and 88VIP includes reported allowance, usage and expiry. Failures and missing
-values get explicit status. Successful readings include their update time.
-Refresh provides in-place feedback and rejects duplicate requests.
+Codex remains a quota and other providers remain native-currency balances. No
+currency conversion, fabricated percentage or stale successful value is shown
+as current. Unconfigured services offer Connect; saved credentials are shown as
+Connected only after successful usage verification. Errors explain a recovery
+action. Refresh provides an in-place busy indicator and rejects duplicate work.
 
 Settings shows only one category at a time. Credential forms expand on request;
 Manage connection reveals Save and verify and Disconnect controls.
@@ -44,9 +48,6 @@ with visible overflow controls; Add and All tags remain reachable. The selected
 tag exposes an ellipsis menu, with context menus and keyboard reorder retained.
 All tags opens a searchable manager with full names and task counts. The same
 manager appears in Settings. There is no artificial tag-count limit.
-
-The task heading reports counts for work to do and confirmed completions. A
-disclosure opens completed rows. Queued Obsidian changes stay visible above it.
 
 Delete-list confirmation names the list and number of tasks being removed.
 Affected unsaved drafts block deletion and offer Return to draft; they cannot

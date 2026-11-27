@@ -73,50 +73,6 @@ final class CodexUsageTests: XCTestCase {
     XCTAssertEqual(UsageMenuFormatter.title(for: .success(snapshot)), "5h 100% 7d 0%")
   }
 
-  func testFractionalQuotaDoesNotTriggerExhaustedAlert() throws {
-    let snapshot = try decode(
-      """
-      {"result":{"rateLimits":{"primary":{"usedPercent":99.75,"windowDurationMins":300}}}}
-      """)
-    let presentation = ProviderUsagePresentation(provider: .codex, state: .success(snapshot))
-
-    XCTAssertEqual(presentation.primaryQuota?.remainingFraction, 0.0025)
-    XCTAssertEqual(presentation.status, .ready)
-    XCTAssertEqual(presentation.menuBarTitle, "<1%")
-    XCTAssertTrue(presentation.compactText.contains("<1%"))
-  }
-
-  func testHomeUsesMostUrgentEnabledServiceThenCodex() throws {
-    let healthy = try decode(
-      """
-      {"result":{"rateLimits":{"primary":{"usedPercent":24,"windowDurationMins":300}}}}
-      """)
-    let codex = ProviderUsagePresentation(provider: .codex, state: .success(healthy))
-    let noKey = ProviderUsagePresentation(provider: .vip, state: .loading, isConfigured: false)
-    let failed = ProviderUsagePresentation(provider: .deepSeek, state: .failure("Network"))
-    let unreported = ProviderUsagePresentation(
-      provider: .antigravity, state: .unavailable("No usage in report"), failureKind: .missingData)
-    let depleted = ProviderUsagePresentation(
-      provider: .antigravity,
-      state: .success(
-        UsageSnapshot(
-          providerID: "antigravity", fetchedAt: .now,
-          metrics: [
-            .quota(
-              QuotaWindow(
-                durationMinutes: 10_080, remainingPercent: 0, resetsAt: nil,
-                bucketID: AntigravityQuotaBucket.weekly.rawValue))
-          ])))
-
-    XCTAssertEqual(ProviderUsagePresentation.homeSummary(in: [noKey, codex])?.provider, .codex)
-    XCTAssertEqual(ProviderUsagePresentation.homeSummary(in: [codex, unreported])?.provider, .codex)
-    XCTAssertEqual(
-      ProviderUsagePresentation.homeSummary(in: [noKey, codex, failed])?.provider, .deepSeek)
-    XCTAssertEqual(
-      ProviderUsagePresentation.homeSummary(in: [noKey, codex, failed, depleted])?.provider,
-      .antigravity)
-  }
-
   func testUnknownWindowIsPreservedAlongsideKnownWindow() throws {
     let snapshot = try decode(
       """
@@ -125,18 +81,6 @@ final class CodexUsageTests: XCTestCase {
     XCTAssertEqual(snapshot.quotaWindows.count, 2)
     XCTAssertNil(snapshot.quotaWindows.first?.remainingPercent)
     XCTAssertEqual(UsageMenuFormatter.title(for: .success(snapshot)), "5h -- 7d 63%")
-  }
-
-  func testMissingReadingsAndProviderUnavailableHaveDistinctStatus() {
-    let missing = ProviderUsagePresentation(
-      provider: .codex, state: .unavailable("No quota reported"), failureKind: .missingData)
-    let unavailable = ProviderUsagePresentation(
-      provider: .codex, state: .unavailable("CLI is unavailable"), failureKind: .unavailable)
-
-    XCTAssertEqual(missing.statusText, PulseLocalization.string("No data reported"))
-    XCTAssertEqual(unavailable.statusText, PulseLocalization.string("Data unavailable"))
-    XCTAssertTrue(missing.showsRetry)
-    XCTAssertTrue(unavailable.showsRetry)
   }
 
   func testCodexBinaryOverrideDoesNotFallBack() {
@@ -217,10 +161,6 @@ final class UsageControllerTests: XCTestCase {
     await controller.refresh()
     if case .unavailable = controller.state {} else { XCTFail("Expected unavailable state") }
     XCTAssertEqual(UsageMenuFormatter.title(for: controller.state), "--")
-    XCTAssertEqual(controller.failureKind, .missingData)
-    let reading = ProviderUsagePresentation(provider: .codex, usage: controller)
-    XCTAssertTrue(reading.showsRetry)
-    XCTAssertNil(reading.updatedAt)
   }
 
   func testNonQuotaMetricRemainsAvailableToFutureProviders() async {
@@ -253,10 +193,6 @@ final class UsageControllerTests: XCTestCase {
     XCTAssertTrue(controller.refreshStartedAt.map { $0 >= beforeSecondRefresh } ?? false)
     XCTAssertEqual(controller.state, .success(snapshot))
     XCTAssertEqual(UsageMenuFormatter.title(for: controller.state), "75%")
-    let reading = ProviderUsagePresentation(provider: .codex, usage: controller)
-    XCTAssertTrue(reading.isRefreshing)
-    XCTAssertEqual(reading.updatedAt, snapshot.fetchedAt)
-    XCTAssertEqual(reading.primaryQuota?.percentageText, "75%")
 
     await provider.completeSecondFetch()
     await secondRefresh.value

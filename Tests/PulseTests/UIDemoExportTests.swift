@@ -19,43 +19,20 @@ final class UIDemoExportTests: XCTestCase {
     let output = URL(fileURLWithPath: outputPath, isDirectory: true)
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     let dashboardStillsOnly = environment["PULSE_UI_DASHBOARD_STILLS_ONLY"] == "1"
-    let fixture = try await DemoFixture(
-      language: language, snippetCount: dashboardStillsOnly ? 8 : 0,
-      detailedUsage: dashboardStillsOnly)
+    let fixture = try await DemoFixture(language: language, snippetCount: dashboardStillsOnly ? 8 : 0)
     defer { fixture.cleanUp() }
-    let todayTables =
-      dashboardStillsOnly
-      ? try await MotionTables(fixture: fixture, seedLongLocalList: false) : nil
-    if let todayTables {
-      try await todayTables.connect()
-      try await todayTables.queueExampleChanges()
-    }
 
     for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
       fixture.pages.showHome()
-      let homeDestination = output.appendingPathComponent("home-\(language)-\(name).png")
-      if dashboardStillsOnly {
-        try await exportHomeStill(fixture: fixture, appearance: appearance, to: homeDestination)
-      } else {
-        try await exportStill(
-          fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
-          destination: homeDestination)
-      }
+      try await exportStill(
+        fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
+        destination: output.appendingPathComponent("home-\(language)-\(name).png"))
       try await exportStill(
         fixture.settings.environment(\.pulsePopoverFocus, fixture.popoverFocus),
         size: SettingsWindowController.contentSize, fixture: fixture,
         appearance: appearance,
         destination: output.appendingPathComponent("settings-\(language)-\(name).png"))
       if dashboardStillsOnly {
-        if let todayTables {
-          try await exportHomeStill(
-            fixture: fixture, bridge: todayTables.bridge, appearance: appearance,
-            to: output.appendingPathComponent("today-\(language)-\(name).png"))
-        }
-        fixture.pages.showAIOverview()
-        try await exportStill(
-          fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
-          destination: output.appendingPathComponent("ai-overview-\(language)-\(name).png"))
         fixture.pages.showQuickCopy()
         try await exportStill(
           fixture.home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance,
@@ -84,14 +61,6 @@ final class UIDemoExportTests: XCTestCase {
               "clips-\(phase.rawValue)-\(language)-\(name).png"))
         }
       }
-    }
-    if let todayTables {
-      let failure = try XCTUnwrap(todayTables.bridge.failures.first)
-      XCTAssertTrue(failure.canRetry)
-      try await todayTables.bridge.retry(failure.id)
-      XCTAssertTrue(todayTables.bridge.failures.isEmpty)
-      XCTAssertEqual(todayTables.bridge.pendingCount, 2)
-      try await todayTables.bridge.disconnect()
     }
     if dashboardStillsOnly { return }
 
@@ -164,21 +133,9 @@ final class UIDemoExportTests: XCTestCase {
     }
   }
 
-  private func exportHomeStill(
-    fixture: DemoFixture, bridge: TodayTaskBridge? = nil, appearance: NSAppearance.Name, to url: URL
-  ) async throws {
-    var measuredHeight = HomeView.popoverSize.height
-    let home = fixture.home(recording: fixture.clips, todayBridge: bridge) {
-      measuredHeight = $0.height
-    }
-    try await exportStill(
-      home, size: HomeView.popoverSize, fixture: fixture, appearance: appearance, destination: url,
-      measuredHeight: { measuredHeight })
-  }
-
   private func exportStill<V: View>(
     _ content: V, size: NSSize, fixture: DemoFixture, appearance: NSAppearance.Name,
-    destination: URL, measuredHeight: (() -> CGFloat)? = nil
+    destination: URL
   ) async throws {
     let root = VStack(spacing: 0) {
       content
@@ -202,20 +159,6 @@ final class UIDemoExportTests: XCTestCase {
     XCTAssertEqual(fixture.tasks.document?.tags.count, 6)
     XCTAssertEqual(fixture.tasks.document?.tasks.count, 6)
     host.layoutSubtreeIfNeeded()
-    if let measuredHeight {
-      for _ in 0..<50 {
-        let height = measuredHeight()
-        if height < size.height {
-          if host.bounds.height == height + 28 { break }
-          window.setContentSize(NSSize(width: size.width, height: height + 28))
-        }
-        try await Task.sleep(for: .milliseconds(10))
-        host.layoutSubtreeIfNeeded()
-      }
-      XCTAssertLessThan(host.bounds.height, size.height + 28, "Short Home should fit its content")
-      XCTAssertEqual(host.bounds.height, measuredHeight() + 28, accuracy: 0.5)
-    }
-    XCTAssertFalse(window.isVisible)
     window.displayIfNeeded()
     try capture(host, scale: 2).write(to: destination)
   }
@@ -231,9 +174,10 @@ final class UIDemoExportTests: XCTestCase {
     window.ignoresMouseEvents = true
     window.contentView = host
     host.frame = NSRect(origin: .zero, size: size)
-    // Retain the native view hierarchy for layout and field editors without
-    // ordering the window or taking focus from the desktop.
+    // A real hosting window supplies native field/layout/animation lifecycle,
+    // but stays off the user's visible desktop and cannot receive input.
     window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
+    window.orderFront(nil)
     return window
   }
 
@@ -284,21 +228,17 @@ private final class DemoFixture: ObservableObject {
     isChinese ? "演示数据 · 本地示例账户与任务" : "Demo data · Local sample accounts and tasks"
   }
 
-  init(language: String, snippetCount: Int = 0, detailedUsage: Bool = false) async throws {
+  init(language: String, snippetCount: Int = 0) async throws {
     self.language = language
     suite = "Pulse.UIDemo.\(UUID().uuidString)"
     directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "PulseUIDemo-\(UUID())")
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     config = AppConfig(defaults: defaults, loginItemService: DemoLoginItems())
-    usage = UsageController(provider: DemoProvider(id: "codex", detailed: detailedUsage))
-    vipUsage = UsageController(
-      provider: DemoProvider(id: VIPProvider.providerID, detailed: detailedUsage))
-    deepSeekUsage = UsageController(
-      provider: DemoProvider(id: DeepSeekProvider.providerID, detailed: detailedUsage))
-    antigravityUsage = UsageController(
-      provider: DemoProvider(id: "antigravity", detailed: detailedUsage))
-    if detailedUsage { config.setAntigravityEnabled(true) }
+    usage = UsageController(provider: DemoProvider(id: "codex"))
+    vipUsage = UsageController(provider: DemoProvider(id: VIPProvider.providerID))
+    deepSeekUsage = UsageController(provider: DemoProvider(id: DeepSeekProvider.providerID))
+    antigravityUsage = UsageController(provider: DemoProvider(id: "antigravity"))
     vipConfiguration = VIPConfiguration(secretStore: DemoSecrets())
     deepSeekConfiguration = DeepSeekConfiguration(secretStore: DemoSecrets())
     tasks = LocalTaskController(
@@ -466,7 +406,6 @@ private final class DemoFixture: ObservableObject {
     case 320:
       taskPresentation.tagSearch = ""
       pages.showHome()
-    case 340: pages.showAIOverview()
     case 355:
       pages.showUsage(.deepSeek)
       caption = isChinese ? "真实的余额，清楚的状态。" : "Real balances. Clear status."
@@ -521,58 +460,20 @@ private struct DemoStage: View {
 
 private struct DemoProvider: UsageProviding {
   let id: String
-  let detailed: Bool
-
   func fetch() async throws -> UsageSnapshot {
-    let now = Date()
-    return UsageSnapshot(
-      providerID: id, fetchedAt: now,
-      metrics: detailed ? dashboardMetrics(now: now) : standardMetrics(now: now))
-  }
-
-  private func standardMetrics(now: Date) -> [UsageMetric] {
+    let metrics: [UsageMetric]
     switch id {
     case "codex", "antigravity":
-      [
+      metrics = [
         .quota(
           QuotaWindow(
-            durationMinutes: 300, remainingPercent: 86, resetsAt: now.addingTimeInterval(7200)))
+            durationMinutes: 300, remainingPercent: 86, resetsAt: Date().addingTimeInterval(7200)))
       ]
     case VIPProvider.providerID:
-      [.balance(amount: (Decimal(425) / 10), currency: "USD")]
-    default:
-      [.balance(amount: (Decimal(1286) / 10), currency: "CNY")]
+      metrics = [.balance(amount: (Decimal(425) / 10), currency: "USD")]
+    default: metrics = [.balance(amount: (Decimal(1286) / 10), currency: "CNY")]
     }
-  }
-
-  private func dashboardMetrics(now: Date) -> [UsageMetric] {
-    let weeklyReset = now.addingTimeInterval(86_400 * 3)
-    switch id {
-    case "codex":
-      return standardMetrics(now: now) + [
-        .quota(
-          QuotaWindow(
-            durationMinutes: 10_080, remainingPercent: 43, resetsAt: weeklyReset))
-      ]
-    case "antigravity":
-      return zip(AntigravityQuotaBucket.allCases, [93, 57, nil]).map { bucket, remaining in
-        .quota(
-          QuotaWindow(
-            durationMinutes: bucket.durationMinutes, remainingPercent: remaining,
-            resetsAt: bucket == .fiveHour ? now.addingTimeInterval(7_200) : weeklyReset,
-            bucketID: bucket.rawValue, displayNameKey: bucket.displayNameKey))
-      }
-    case VIPProvider.providerID:
-      return standardMetrics(now: now) + [
-        .allowance(amount: 50, currency: "USD"),
-        .usage(amount: Decimal(75) / 10, currency: "USD"),
-        .expiresAt(now.addingTimeInterval(86_400 * 10)),
-      ]
-    default:
-      return standardMetrics(now: now) + [
-        .balance(amount: Decimal(1_234_567_890_123_456_789) / 10_000, currency: "USD")
-      ]
-    }
+    return UsageSnapshot(providerID: id, fetchedAt: Date(), metrics: metrics)
   }
 }
 
@@ -611,123 +512,6 @@ private func demoTagID(_ index: UInt8) -> UUID {
 }
 
 extension UIDemoExportTests {
-  /// CPU-side timings on identical, never-ordered native fixtures. These
-  /// measure the work to lay out and draw offline, separate from presentation.
-  func testProfileOffscreenLayout() async throws {
-    let environment = ProcessInfo.processInfo.environment
-    guard let outputPath = environment["PULSE_MOTION_OFFSCREEN_OUTPUT"] else {
-      throw XCTSkip("Opt-in offscreen layout profiling")
-    }
-    let output = URL(fileURLWithPath: outputPath, isDirectory: true)
-    try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-    let trialCount = max(2, Int(environment["PULSE_MOTION_TRIALS"] ?? "10") ?? 10)
-    let fixture = try await DemoFixture(language: "en")
-    defer { fixture.cleanUp() }
-    let tables = try await MotionTables(fixture: fixture, seedLongLocalList: false)
-    let size = HomeView.popoverSize
-    var timings: [OffscreenLayoutTiming] = []
-
-    func record(_ scene: String, _ trial: Int, draw: () throws -> Void) rethrows {
-      let start = CACurrentMediaTime()
-      try draw()
-      timings.append(
-        OffscreenLayoutTiming(
-          scene: scene, trial: trial, milliseconds: (CACurrentMediaTime() - start) * 1000))
-    }
-
-    for paired in [false, true] {
-      if paired { try await tables.connect() }
-      let root = fixture.home(recording: fixture.clips, todayBridge: tables.bridge)
-      for trial in 0..<trialCount {
-        try record(paired ? "mount-today" : "mount-local", trial) {
-          let host = NSHostingView(rootView: root)
-          let window = makeWindow(host: host, size: size, appearance: .aqua)
-          defer { window.close() }
-          XCTAssertFalse(window.isVisible)
-          host.layoutSubtreeIfNeeded()
-          let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-          host.cacheDisplay(in: host.bounds, to: bitmap)
-        }
-        await Task.yield()
-      }
-    }
-
-    try await tables.bridge.disconnect()
-    try await tables.seedLongLocalList(fixture: fixture)
-    let root = fixture.home(recording: fixture.clips, todayBridge: tables.bridge)
-    let host = NSHostingView(rootView: root)
-    let window = makeWindow(host: host, size: size, appearance: .aqua)
-    defer { window.close() }
-    XCTAssertFalse(window.isVisible)
-    host.layoutSubtreeIfNeeded()
-    let buffer = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-    host.cacheDisplay(in: host.bounds, to: buffer)
-
-    func draw() {
-      host.layoutSubtreeIfNeeded()
-      host.cacheDisplay(in: host.bounds, to: buffer)
-    }
-
-    for trial in 0..<trialCount {
-      let list = try XCTUnwrap(
-        host.motionDescendants(NSScrollView.self).max {
-          ($0.documentView?.frame.height ?? 0) < ($1.documentView?.frame.height ?? 0)
-        })
-      let clip = list.contentView
-      let height = try XCTUnwrap(list.documentView?.frame.height)
-      XCTAssertGreaterThan(height - clip.bounds.height, 1600)
-      let offsets: [CGFloat] = [280, 620, 1_080, 1_550, 1_080, 620, 280, 0]
-      record("local-scroll-draw", trial) {
-        for offset in offsets {
-          clip.scroll(to: NSPoint(x: 0, y: offset))
-          list.reflectScrolledClipView(clip)
-          draw()
-        }
-      }
-
-      let field = try XCTUnwrap(
-        host.motionDescendants(NSTextField.self).first {
-          $0.accessibilityIdentifier() == "localTaskTextField"
-        })
-      try record("typing", trial) {
-        fixture.taskPresentation.beginAddingTask()
-        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
-        XCTAssertTrue(window.firstResponder === editor)
-        let key = try XCTUnwrap(
-          NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-            windowNumber: window.windowNumber, context: nil, characters: "a",
-            charactersIgnoringModifiers: "a", isARepeat: false, keyCode: 0))
-        window.sendEvent(key)
-        XCTAssertEqual(fixture.taskPresentation.quickDraft.text, "a")
-        editor.setMarkedText(
-          "qing", selectedRange: NSRange(location: 4, length: 0),
-          replacementRange: editor.selectedRange())
-        XCTAssertTrue(editor.hasMarkedText())
-        host.rootView = root
-        draw()
-        XCTAssertTrue(editor.hasMarkedText())
-        editor.insertText("清", replacementRange: editor.markedRange())
-        XCTAssertEqual(fixture.taskPresentation.quickDraft.text, "a清")
-        draw()
-      }
-      fixture.taskPresentation.discardAllDrafts()
-      host.rootView = root
-      draw()
-
-      record("page-switch-draw", trial) {
-        fixture.pages.showUsage(.codex)
-        host.rootView = root
-        draw()
-        fixture.pages.showHome()
-        host.rootView = root
-        draw()
-      }
-      await Task.yield()
-    }
-    try JSONEncoder().encode(timings).write(to: output.appendingPathComponent("offscreen.json"))
-  }
-
   /// Uses visible native surfaces so an external Instruments recording gets
   /// real compositor samples. No global mouse events or desktop preferences.
   func testProfileVisibleMotion() async throws {
@@ -862,7 +646,6 @@ extension UIDemoExportTests {
             case .home: fixture.pages.showHome()
             case .tagManagement: fixture.pages.showTagManagement()
             case .quickCopy: fixture.pages.showQuickCopy()
-            case .aiOverview: fixture.pages.showAIOverview()
             case .usage(let provider): fixture.pages.showUsage(provider)
             case .clipTask: fixture.pages.showClipTask()
             }
@@ -973,12 +756,6 @@ extension UIDemoExportTests {
   }
 }
 
-private struct OffscreenLayoutTiming: Encodable {
-  let scene: String
-  let trial: Int
-  let milliseconds: Double
-}
-
 private struct MotionReady: Encodable {
   let pid: Int32
   let display: String
@@ -1022,7 +799,7 @@ private struct MotionTables {
   let root: URL
   let now = Date()
 
-  init(fixture: DemoFixture, seedLongLocalList: Bool = true) async throws {
+  init(fixture: DemoFixture) async throws {
     vault = fixture.directory.appendingPathComponent("Motion vault", isDirectory: true)
     let plugin = vault.appendingPathComponent(".obsidian/plugins/dora-personal-dashboard")
     try FileManager.default.createDirectory(at: plugin, withIntermediateDirectories: true)
@@ -1033,10 +810,6 @@ private struct MotionTables {
     bridge = TodayTaskBridge(
       defaults: try XCTUnwrap(UserDefaults(suiteName: fixture.suite)), bridgeRoot: root,
       now: { date })
-    if seedLongLocalList { try await self.seedLongLocalList(fixture: fixture) }
-  }
-
-  func seedLongLocalList(fixture: DemoFixture) async throws {
     let tasks = (0..<320).map { index in
       LocalTask(text: Self.title(index), completed: index % 3 == 0, repeatsDaily: index % 8 == 0)
     }
@@ -1053,24 +826,7 @@ private struct MotionTables {
     try await publish(count: 3)
   }
 
-  func queueExampleChanges() async throws {
-    let remaining = bridge.tasks.filter { !$0.completed }
-    let waiting = try XCTUnwrap(remaining.first)
-    let conflicted = try XCTUnwrap(remaining.last)
-    try await bridge.setCompleted(true, taskID: waiting.id)
-    try await bridge.delete(taskID: conflicted.id)
-    let id = TodayBridgeVault(canonicalURL: try XCTUnwrap(bridge.vaultURL)).id
-    let client = root.appendingPathComponent(id).appendingPathComponent("client.json")
-    let queue = try JSONDecoder().decode(
-      TodayBridgeClientDocument.self, from: Data(contentsOf: client))
-    let operation = try XCTUnwrap(queue.operations.first { $0.taskID == conflicted.id })
-    try await publish(count: 3, receipts: [TodayBridgeReceipt(id: operation.id, code: .conflict)])
-    XCTAssertEqual(bridge.pendingCount, 1)
-    XCTAssertTrue(bridge.tasks.contains { $0.id == waiting.id && $0.isPending && $0.completed })
-    XCTAssertEqual(bridge.failures.map(\.id), [operation.id])
-  }
-
-  func publish(count: Int, receipts: [TodayBridgeReceipt] = []) async throws {
+  func publish(count: Int) async throws {
     let id = TodayBridgeVault(canonicalURL: try XCTUnwrap(bridge.vaultURL)).id
     let rows = (0..<count).map { index in
       TodayBridgeRecordedTask(
@@ -1079,7 +835,7 @@ private struct MotionTables {
     }
     let board = TodayBridgeBoardDocument(
       vaultID: id, heartbeat: Int64(now.timeIntervalSince1970 * 1000),
-      day: TodayBridgeStorage.dayKey(for: now), tasks: rows, receipts: receipts)
+      day: TodayBridgeStorage.dayKey(for: now), tasks: rows)
     let channel = root.appendingPathComponent(id, isDirectory: true)
     try JSONEncoder().encode(board).write(
       to: channel.appendingPathComponent("board.json"), options: .atomic)

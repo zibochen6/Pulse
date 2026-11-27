@@ -417,26 +417,3 @@
 "Couldn't copy the text." = "无法复制此内容。";
 
 "Clip recording shortcut" = "剪口播";
-
-"Back to AI services" = "返回 AI 服务";
-"To do %lld · Completed %lld" = "待做 %lld · 完成 %lld";
-"Completed (%lld)" = "已完成（%lld）";
-"Show completed tasks" = "展开已完成待办";
-"Hide completed tasks" = "收起已完成待办";
-"Removal waiting to sync" = "待同步移除";
-"%@ left in %@" = "%2$@余 %1$@";
-"Insufficient balance" = "余额不足";
-"Connection failed" = "连接失败";
-"Could not read data" = "读取失败";
-"Data unavailable" = "数据不可用";
-"No data reported" = "暂无可用数据";
-"Remaining unavailable" = "剩余量未知";
-"No enabled AI services" = "没有已启用的 AI 服务";
-"%@ left" = "余 %@";
-"%@ exhausted" = "%@已用完";
-"5-hour quota" = "5 小时额度";
-"Weekly quota" = "周额度";
-"Argon weekly quota" = "Argon 周额度";
-"Partial data" = "数据不完整";
-"Account unavailable" = "账户不可用";
-"%@ (%@)" = "%@（%@）";

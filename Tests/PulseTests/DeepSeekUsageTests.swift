@@ -20,9 +20,7 @@ final class DeepSeekUsageTests: XCTestCase {
         .balance(amount: Decimal(string: "2.3456789")!, currency: "USD"),
         .balance(amount: Decimal(string: "42.68")!, currency: "CNY"),
       ])
-    let presentation = ProviderUsagePresentation(provider: .deepSeek, state: .success(snapshot))
-    XCTAssertEqual(presentation.primaryBalance?.value, "¥42.68")
-    XCTAssertEqual(presentation.balances.map(\.value), ["$2.3456789", "¥42.68"])
+    XCTAssertEqual(DeepSeekUsageFormatter.title(for: .success(snapshot)), "¥42.68")
     XCTAssertTrue(snapshot.quotaWindows.isEmpty)
     let capturedRequest = await client.lastRequest()
     let request = try XCTUnwrap(capturedRequest)
@@ -41,11 +39,7 @@ final class DeepSeekUsageTests: XCTestCase {
             "{\"currency\":\"USD\",\"total_balance\":\"\(value)\"}", available: false
           ).utf8))
       XCTAssertEqual(snapshot.metrics, [.balance(amount: Decimal(string: value)!, currency: "USD")])
-      let presentation = ProviderUsagePresentation(provider: .deepSeek, state: .success(snapshot))
-      XCTAssertEqual(presentation.primaryBalance?.value, "$" + value)
-      XCTAssertEqual(
-        presentation.status,
-        value == "12345678.12345678" ? .accountUnavailable : .insufficientBalance)
+      XCTAssertNotEqual(DeepSeekUsageFormatter.title(for: .success(snapshot)), "!")
     }
   }
 
@@ -178,23 +172,15 @@ final class DeepSeekUsageTests: XCTestCase {
   }
 
   func testCompactStatesUseNativeCurrencyAndNeverOldMoney() throws {
-    let checking = ProviderUsagePresentation(provider: .deepSeek, state: .loading)
-    let disconnected = ProviderUsagePresentation(
-      provider: .deepSeek, state: .loading, isConfigured: false)
-    let failed = ProviderUsagePresentation(provider: .deepSeek, state: .failure("Retry"))
-    XCTAssertEqual(checking.status, .checking)
-    XCTAssertEqual(disconnected.status, .notConnected(nil))
-    XCTAssertTrue(disconnected.requiresConfiguration)
-    XCTAssertEqual(failed.status, .failed("Retry"))
-    XCTAssertTrue(failed.showsRetry)
-    XCTAssertTrue(failed.balances.isEmpty)
+    XCTAssertEqual(DeepSeekUsageFormatter.title(for: .loading), "…")
+    XCTAssertEqual(DeepSeekUsageFormatter.title(for: .unavailable("Setup")), "!")
+    XCTAssertEqual(DeepSeekUsageFormatter.title(for: .failure("Retry")), "!")
     let snapshot = try DeepSeekUsageDecoder.decode(
       Data(
         Self.body(
           #"{"currency":"USD","total_balance":"104.22"}"#
         ).utf8))
-    let presentation = ProviderUsagePresentation(provider: .deepSeek, state: .success(snapshot))
-    XCTAssertEqual(presentation.primaryBalance?.value, "$104.22")
+    XCTAssertEqual(DeepSeekUsageFormatter.title(for: .success(snapshot)), "$104.22")
   }
 
   @MainActor

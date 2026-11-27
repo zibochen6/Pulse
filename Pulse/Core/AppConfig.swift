@@ -50,17 +50,6 @@ final class AppConfig: ObservableObject {
     systemReducesTransparency ? 0 : windowTransparencyPercent
   }
 
-  var enabledUsageProviders: [ProviderID] {
-    ProviderID.allCases.filter { provider in
-      switch provider {
-      case .codex: true
-      case .vip: vipBalanceEnabled
-      case .deepSeek: deepSeekBalanceEnabled
-      case .antigravity: antigravityEnabled
-      }
-    }
-  }
-
   func setWindowTransparencyPercent(_ percent: Int) {
     let percent = Self.normalizedTransparency(percent)
     guard percent != windowTransparencyPercent else { return }

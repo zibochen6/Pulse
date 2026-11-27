@@ -28,8 +28,6 @@ final class TagBarLayoutTests: XCTestCase {
       contentRect: NSRect(x: -16_000, y: -16_000, width: 400, height: 400),
       styleMask: [.borderless], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
-    window.ignoresMouseEvents = true
-    window.alphaValue = 0
     window.contentView = host
     window.orderFront(nil)
     defer { window.close() }

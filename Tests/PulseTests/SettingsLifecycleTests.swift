@@ -167,13 +167,13 @@ final class SettingsLifecycleTests: XCTestCase {
     XCTAssertFalse(presentation.hasUnsavedEdits)
   }
 
-  func testPreparingWindowReusesInstanceAndCloseKeepsSession() {
+  func testWindowReusesInstanceAndCloseKeepsSession() {
     let presentation = SettingsPresentation()
     presentation.setDraft("kept only in memory", for: .deepSeek)
     let controller = SettingsWindowController(rootView: Text("Test settings"))
     let original = controller.window
-    controller.prepareToOpen()
-    controller.prepareToOpen()
+    controller.open()
+    controller.open()
     XCTAssertTrue(controller.window === original)
     XCTAssertTrue(controller.isOpen)
     XCTAssertEqual(controller.window?.contentView?.frame.size, SettingsWindowController.contentSize)
@@ -191,7 +191,6 @@ final class SettingsLifecycleTests: XCTestCase {
     let controller = SettingsWindowController(config: config, rootView: Text("Settings"))
     let window = try XCTUnwrap(controller.window)
     window.ignoresMouseEvents = true
-    window.alphaValue = 0
     window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
     window.orderFront(nil)
     defer { controller.close() }

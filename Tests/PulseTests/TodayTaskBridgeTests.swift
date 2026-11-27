@@ -59,13 +59,9 @@ final class TodayTaskBridgeTests: XCTestCase {
     }
     let queued = try await fixture.storage().refresh(vault)
     XCTAssertEqual(queued.operations.map(\.id), [finish.id, remove.id, first.id, second.id])
-    XCTAssertEqual(
-      queued.tasks.map(\.id), [fixture.quick.id, fixture.project.id, first.id, second.id])
-    XCTAssertEqual(queued.tasks.map(\.pendingOperation), [.complete, .delete, .add, .add])
-    XCTAssertTrue(try XCTUnwrap(queued.tasks.first).completed)
-    let waiting = TaskListSections(queued.tasks, completed: \.completed, pending: \.isPending)
-    XCTAssertEqual(waiting.confirmedCount, 0)
-    XCTAssertEqual(waiting.rows(expanded: false).map(\.id), queued.tasks.map { .task($0.id) })
+    XCTAssertEqual(queued.tasks.map(\.id), [first.id, second.id, fixture.quick.id])
+    XCTAssertEqual(queued.tasks.map(\.isPending), [true, true, true])
+    XCTAssertTrue(try XCTUnwrap(queued.tasks.last).completed)
 
     let receipts = [finish, remove, first, second].map {
       TodayBridgeReceipt(id: $0.id, code: .applied)
@@ -88,13 +84,6 @@ final class TodayTaskBridgeTests: XCTestCase {
     XCTAssertTrue(synced.operations.isEmpty)
     XCTAssertEqual(synced.tasks.map(\.id), newRows.map(\.id) + [done.id])
     XCTAssertEqual(synced.tasks.filter(\.isPending).count, 0)
-    let confirmed = TaskListSections(synced.tasks, completed: \.completed, pending: \.isPending)
-    XCTAssertEqual(confirmed.confirmedToDoCount, 2)
-    XCTAssertEqual(confirmed.completed.map(\.id), [done.id])
-    let collapsedRows =
-      newRows.map { TaskListSections<TodayBridgeTask>.Row.ID.task($0.id) } + [.disclosure]
-    XCTAssertEqual(confirmed.rows(expanded: false).map(\.id), collapsedRows)
-    XCTAssertEqual(confirmed.rows(expanded: true).map(\.id), collapsedRows + [.task(done.id)])
   }
 
   func testFailuresPersistAndRetryUsesTheCurrentCheckboxWithANewOperationID() async throws {
@@ -276,7 +265,6 @@ final class TodayTaskBridgeTests: XCTestCase {
       backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.ignoresMouseEvents = true
-    window.alphaValue = 0
     window.contentView = host
     window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
     window.orderFront(nil)
@@ -325,7 +313,7 @@ final class TodayTaskBridgeTests: XCTestCase {
     let longList = (0..<16).map { index in
       TodayBridgeRecordedTask(
         id: String(format: "%064x", index), title: "Task \(index + 1)",
-        completed: false, source: .quick)
+        completed: index.isMultiple(of: 2), source: .quick)
     }
     measurements.removeAll()
     try fixture.publish(vault, tasks: longList)

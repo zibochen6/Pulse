@@ -7,16 +7,12 @@ final class PopoverPageControllerTests: XCTestCase {
   func testPageTransitionsAndReset() {
     let pages = PopoverPageController()
     XCTAssertEqual(pages.page, .home)
-    pages.showAIOverview()
-    XCTAssertEqual(pages.page, .aiOverview)
     for provider in ProviderID.allCases {
       pages.showUsage(provider)
       XCTAssertEqual(pages.page, .usage(provider))
-      pages.goBack()
-      XCTAssertEqual(pages.page, .aiOverview)
+      pages.showHome()
+      XCTAssertEqual(pages.page, .home)
     }
-    pages.goBack()
-    XCTAssertEqual(pages.page, .home)
     pages.showTagManagement()
     XCTAssertEqual(pages.page, .tagManagement)
     pages.reset()

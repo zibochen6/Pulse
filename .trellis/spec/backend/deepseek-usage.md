@@ -41,8 +41,8 @@ The external request is `GET https://api.deepseek.com/user/balance` with `Author
 
 - Use the fixed official endpoint and a 20-second request timeout. Never import another tool's credentials or accept a reseller/custom base URL through this integration.
 - `balance_infos` is an array of records whose `currency` is `CNY` or `USD` and whose `total_balance` is a decimal string. `total_balance` already includes granted and topped-up balances; use it directly without adding components or dividing by 100. Parse complete strings into `Decimal`, never partial numeric prefixes or binary floating-point intermediates.
-- Keep each currency separate. The overview and detail list each reported balance with its explicit currency and Decimal precision. Zero and negative balances are valid readings.
-- `is_available` describes ability to fund API requests. Preserve valid balances when the account reports `false`. The availability status can flag an unfunded account or one that cannot make requests. A failed request has a separate status and recovery path.
+- Keep each currency separate. Never sum CNY and USD, relabel one as the other, or convert them. The compact summary prefers CNY when present, otherwise USD; Usage lists all reported balances with explicit currency. A valid zero or reported negative balance is data, not a failed request.
+- `is_available` describes ability to fund API requests. A false value with valid reported balances must not hide those balances or turn them into a network failure.
 - Reject malformed/empty balance data and duplicate-currency entries instead of inventing a zero or choosing an arbitrary duplicate. Preserve the snapshot's exact monetary values and set `fetchedAt` after response handling completes.
 - The DeepSeek Keychain account is `DeepSeek API key`, separate from `88VIP API key`. Keys live only in Keychain and the temporary SecureField text, never UserDefaults, snapshots, logs, fixtures, or errors. Clear form text after successful save/remove.
 - The app delegate owns an independent DeepSeek `UsageController`: refresh at launch and every 600 seconds, refresh when opening the popover if older than 60 seconds, and refresh immediately on manual action or credential mutation. The test-host `PULSE_DISABLE_LIVE_USAGE=1` gate must disable its live startup too.
@@ -66,8 +66,8 @@ The external request is `GET https://api.deepseek.com/user/balance` with `Author
 
 ## 5. Good / Base / Bad Cases
 
-- Good: CNY `total_balance: "42.68"` produces `.balance(amount: 42.68, currency: "CNY")` and a `¥42.68` reading.
-- Base: an account reports CNY and USD. The same two readings appear separately in the overview and detail. A zero balance still displays zero.
+- Good: CNY `total_balance: "42.68"` produces `.balance(amount: 42.68, currency: "CNY")` and a compact `¥42.68` reading.
+- Base: both CNY and USD are returned; Home chooses CNY and Usage shows both separately. A zero balance still displays zero.
 - Bad: a replaced key's slow response arrives after a new key was saved; reject the obsolete result and fetch with the current credential instead of displaying the old balance.
 
 ## 6. Tests Required

@@ -332,7 +332,10 @@ struct PulseRowButtonStyle: ButtonStyle {
   }
 }
 
-/// Shared hover, press and keyboard focus feedback for AI status buttons.
+/// Hover/press/focus feedback for a compact quota readout in the Home usage
+/// strip. The readout used to be `.plain`, i.e. the one tappable surface in the
+/// popover with no acknowledgement at all; it now reacts exactly like the icon
+/// buttons next to it (short, no bounce, shape-matched focus ring).
 struct PulseProviderStatusStyle: ButtonStyle {
   let paper: Color
   var radius = PulseDesignTokens.cornerMedium

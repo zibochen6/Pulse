@@ -75,12 +75,12 @@ config.$showMenuBarLabel.sink { [weak self] showName in
 
 ## Phase 2A addition: shared usage state
 
-`PulseAppDelegate` owns one `@MainActor UsageController` per provider. Keep quota and balance observation in the AI surface so provider refreshes leave the task layout, scroll offset and native field editor alone. `ProviderUsagePresentation` projects that state into the AppKit status item, the Home summary, the overview and the provider detail. When subscribing to `usage.$state`, use the emitted value because `@Published` emits during `willSet`. The Codex refresh period is 60 seconds. Manual refresh does not overlap an active fetch. A failed fetch clears the previous successful readout. See [Codex Usage](../backend/codex-usage.md) for the app-server contract and tests.
+`PulseAppDelegate` owns one `UsageController` and passes it to `HomeView`. The controller is `@MainActor` and publishes loading, success, unavailable, and failure. `UsageView` and the AppKit status item consume that same state. When subscribing to `usage.$state`, use the emitted value because `@Published` emits during `willSet`. The normal refresh period is 60 seconds; manual refresh does not overlap an active fetch. On failure, the status item shows `!` and the popover shows the message instead of presenting the previous percentage as current. See [Codex Usage](../backend/codex-usage.md) for the app-server contract and tests.
 
 ## Scenario: quick-panel navigation, Settings and guarded dismissal
 
 ### 1. Scope / Trigger
-Home, the AI overview, provider-specific Usage and tag management share a 400-point-wide
+Home, provider-specific Usage and tag management share a 400-point-wide
 popover capped at 520 points tall. Settings is a separate singleton 720 × 560 window. The approved
 redesign intentionally replaces the older in-popover Settings architecture.
 
@@ -89,15 +89,12 @@ redesign intentionally replaces the older in-popover Settings architecture.
 ```swift
 enum PopoverPage: Equatable {
   case home
-  case clipTask
-  case aiOverview
   case usage(ProviderID)
   case tagManagement
-  case quickCopy
 }
-func showAIOverview()
+// Existing showHome/reset remain; showUsage carries the selected provider.
 func showUsage(_ provider: ProviderID = .codex)
-func goBack()
+func showTagManagement()
 ```
 
 AppDelegate owns the shared controllers, LocalTaskPresentation and Settings
@@ -105,17 +102,18 @@ window/session. See [UI presentation](ui-presentation.md) for window, connection
 interaction-hold and update preflight contracts.
 
 ### 3. Contracts
-- Home starts with the localized date and recording, focus, copy and Settings
-  shortcuts. The timer reserves a stable frame between its idle label and
-  countdown. The active task list starts under this toolbar. An actionable
-  recording result and one AI services entry follow the task area.
-- The AI entry prefers the normal Codex reading and surfaces the highest
-  priority alert for an enabled service. The overview lists enabled services;
-  each service opens details or its connection settings. Detail returns to
-  the overview, which returns to Home. The status item stays Codex-only.
-- Both task sources fit the measured toolbar, task region and footer, capped
-  at 520 points. Rows keep the same lazy container across the short-list
-  limit. Only the task scroller stretches on a long list. Other pages and an
+- Home has a localized date and marked title, with recording, focus and
+  Settings controls beside it. The timer reserves a stable frame between its
+  idle label and countdown. The full recording label fits in the toolbar.
+  The provider band and task area remain separate.
+  Providers share one 32-point row with icons and readouts. Preserve full
+  values with intrinsic widths and scroll the row horizontally when needed.
+  The menu bar remains Codex-only and follows UsageMenuFormatter.
+- Clicking a configured provider refreshes only it and opens its Usage detail.
+  Missing optional credentials offer connection configuration; unavailable and
+  failure remain distinct from a successful reading. Never invent values.
+- Paired Today Tasks fits the measured header and list, capped at 520 points.
+  The list stays lazy as it crosses the short-list limit. Other pages and an
   active update banner use the full surface. Home reports the route, vault and
   staged version with the size. AppKit owns the viewport and applies the latest
   matching target once per main-queue pass without animating the window frame.

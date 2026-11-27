@@ -19,14 +19,6 @@ enum VIPUsageError: LocalizedError, Equatable, UsageFailureDescribing {
     }
   }
 
-  var failureKind: UsageFailureKind {
-    switch self {
-    case .missingAPIKey: .notConnected
-    case .invalidCredentials: .invalidCredentials
-    default: isUnavailable ? .unavailable : .requestFailed
-    }
-  }
-
   var userMessage: String {
     errorDescription ?? PulseLocalization.string("Could not refresh 88VIP balance.")
   }

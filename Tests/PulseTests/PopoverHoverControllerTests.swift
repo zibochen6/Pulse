@@ -423,9 +423,6 @@ final class PopoverHoverControllerTests: XCTestCase {
   }
 
   func testNativePresentationCallbacksWithAndWithoutAnimation() async throws {
-    guard ProcessInfo.processInfo.environment["PULSE_ALLOW_VISIBLE_NATIVE_TESTS"] == "1" else {
-      throw XCTSkip("Opt-in native popover presentation. Default tests keep the desktop clear.")
-    }
     // This session dictionary check is test-only. A locked WindowServer does
     // not complete visible popover animation; do not misreport UI acceptance.
     let session = CGSessionCopyCurrentDictionary() as? [String: Any]

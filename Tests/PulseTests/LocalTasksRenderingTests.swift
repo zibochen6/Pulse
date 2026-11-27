@@ -6,27 +6,14 @@ import XCTest
 
 @MainActor
 final class LocalTasksRenderingTests: XCTestCase {
-  private func controller(with document: LocalTaskDocument? = nil) async throws
-    -> LocalTaskController
-  {
+  private func controller() async throws -> LocalTaskController {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       "PulseTaskUI-\(UUID())")
     addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
-    let file = directory.appendingPathComponent("tasks.json")
-    if let document {
-      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-      try JSONEncoder().encode(document).write(to: file)
-    }
-    let controller = LocalTaskController(store: LocalTaskStore(fileURL: file))
+    let controller = LocalTaskController(
+      store: LocalTaskStore(fileURL: directory.appendingPathComponent("tasks.json")))
     await controller.refresh()
     return controller
-  }
-
-  private func orderOffscreen(_ window: NSWindow) {
-    window.setFrameOrigin(NSPoint(x: -16_000, y: -16_000))
-    window.alphaValue = 0
-    window.ignoresMouseEvents = true
-    window.orderFront(nil)
   }
 
   func testDefaultTodoRemainsSelectedAndCanAlwaysFindUntaggedTasks() async throws {
@@ -641,7 +628,7 @@ final class LocalTasksRenderingTests: XCTestCase {
       contentRect: NSRect(x: 0, y: 0, width: 368, height: 420),
       styleMask: [.borderless], backing: .buffered, defer: false)
     window.contentView = host
-    orderOffscreen(window)
+    window.orderFront(nil)
     defer { window.orderOut(nil) }
     host.layoutSubtreeIfNeeded()
     await Task.yield()
@@ -675,10 +662,7 @@ final class LocalTasksRenderingTests: XCTestCase {
         id: nil, text: "Task \(index)", tagIDs: [], newTagNames: [])
       XCTAssertTrue(saved)
     }
-    let targetID = try XCTUnwrap(controller.document?.tasks.last?.id)
-    await controller.setCompleted(true, taskID: targetID)?.value
     let target = try XCTUnwrap(controller.document?.tasks.last)
-    XCTAssertTrue(target.completed)
     let presentation = LocalTaskPresentation()
     presentation.beginEditingTask(target)
     let root = LocalTasksView(
@@ -690,7 +674,7 @@ final class LocalTasksRenderingTests: XCTestCase {
       contentRect: NSRect(x: 0, y: 0, width: 360, height: 455),
       styleMask: [.borderless], backing: .buffered, defer: false)
     window.contentView = host
-    orderOffscreen(window)
+    window.orderFront(nil)
     defer { window.orderOut(nil) }
     host.layoutSubtreeIfNeeded()
     try await Task.sleep(for: .milliseconds(30))
@@ -710,64 +694,12 @@ final class LocalTasksRenderingTests: XCTestCase {
       scrollViews(host).first { $0.documentView?.frame.height ?? 0 > 455 })
     XCTAssertGreaterThan(
       listScroll.documentVisibleRect.minY, 100,
-      "Returning from the editor must reveal the saved completed row below the collapsed group"
+      "The actual native scroll position must move beyond the initial viewport to the saved last row"
     )
     // Reconstructing the task surface must not create another reveal request.
     host.rootView = root
     host.layoutSubtreeIfNeeded()
     XCTAssertNil(presentation.revealedTaskID)
-  }
-
-  func testLocalTaskHeightIncludesComposerErrorsAndUndoWithCompletedRowsFolded() async throws {
-    let completed = (1...20).map { LocalTask(text: "Finished \($0)", completed: true) }
-    let active = LocalTask(text: "Next task")
-    let original = [completed[0], active] + completed.dropFirst()
-    let controller = try await controller(with: LocalTaskDocument(tasks: original))
-    let presentation = LocalTaskPresentation()
-    var measurements: [CGFloat?] = []
-    let host = NSHostingView(
-      rootView: LocalTasksView(
-        controller: controller, presentation: presentation, onEditingChanged: { _ in },
-        onContentHeight: { measurements.append($0) })
-    )
-    let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 400, height: 440),
-      styleMask: [.borderless], backing: .buffered, defer: false)
-    window.contentView = host
-    orderOffscreen(window)
-    defer { window.orderOut(nil) }
-
-    func waitForHeight(_ state: String, where matches: (CGFloat) -> Bool) async throws -> CGFloat {
-      for _ in 0..<50 {
-        host.layoutSubtreeIfNeeded()
-        if let height = measurements.last ?? nil, matches(height) { return height }
-        try await Task.sleep(for: .milliseconds(10))
-      }
-      return try XCTUnwrap(
-        nil as CGFloat?,
-        "Expected the intrinsic height for \(state). Measured \(measurements).")
-    }
-    let folded = try await waitForHeight("one active row and the folded completed group") {
-      $0 > 140 && $0 < 270
-    }
-    XCTAssertEqual(controller.document?.tasks, original)
-    window.setContentSize(NSSize(width: 400, height: folded))
-    presentation.beginAddingTask()
-    _ = try await waitForHeight("open composer after \(folded) pt") { $0 > folded + 12 }
-    presentation.collapseComposer()
-    _ = try await waitForHeight("closed composer at \(folded) pt") { $0 == folded }
-
-    // The number of rows in the folded viewport stays the same after deleting
-    // a completed item, so the change in height comes from the Undo bar.
-    let didDelete = await controller.deleteTask(id: completed[0].id)
-    XCTAssertTrue(didDelete)
-    let withUndo = try await waitForHeight("undo bar after \(folded) pt") { $0 > folded + 18 }
-    window.setContentSize(NSSize(width: 400, height: withUndo))
-    let didCreate = await controller.createTag(id: UUID(), name: "Todo")
-    XCTAssertFalse(didCreate)
-    _ = try await waitForHeight("error banner after \(withUndo) pt") { $0 > withUndo + 20 }
-    controller.dismissError()
-    _ = try await waitForHeight("dismissed error at \(withUndo) pt") { $0 == withUndo }
   }
 
   func testMountedComposerAcceptsImmediateKeyAndCollapsesWithoutRestoringOldFieldText()
@@ -786,7 +718,8 @@ final class LocalTasksRenderingTests: XCTestCase {
       contentRect: NSRect(x: -16_000, y: -16_000, width: 360, height: 455),
       styleMask: [.titled], backing: .buffered, defer: false)
     window.contentView = host
-    orderOffscreen(window)
+    window.ignoresMouseEvents = true
+    window.orderFront(nil)
     defer { window.orderOut(nil) }
     host.layoutSubtreeIfNeeded()
     func fields(_ view: NSView) -> [NSTextField] {
@@ -857,8 +790,9 @@ final class LocalTasksRenderingTests: XCTestCase {
       contentRect: NSRect(x: -16_000, y: -16_000, width: 360, height: 100),
       styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    window.ignoresMouseEvents = true
     window.contentView = host
-    orderOffscreen(window)
+    window.orderFront(nil)
     defer { window.close() }
     host.layoutSubtreeIfNeeded()
 
@@ -900,7 +834,7 @@ final class LocalTasksRenderingTests: XCTestCase {
       contentRect: NSRect(x: 0, y: 0, width: 360, height: 455),
       styleMask: [.borderless], backing: .buffered, defer: false)
     window.contentView = host
-    orderOffscreen(window)
+    window.orderFront(nil)
     defer { window.orderOut(nil) }
     host.layoutSubtreeIfNeeded()
     try await Task.sleep(for: .milliseconds(30))
@@ -1094,7 +1028,7 @@ final class LocalTasksRenderingTests: XCTestCase {
       contentRect: NSRect(x: 0, y: 0, width: 400, height: 400),
       styleMask: [.borderless], backing: .buffered, defer: false)
     window.contentView = host
-    orderOffscreen(window)
+    window.orderFront(nil)
     defer { window.orderOut(nil) }
     host.layoutSubtreeIfNeeded()
     func textEditor(_ view: NSView) -> NSTextView? {

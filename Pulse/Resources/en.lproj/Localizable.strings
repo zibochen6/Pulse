@@ -417,26 +417,3 @@
 "Couldn't copy the text." = "Couldn't copy the text.";
 
 "Clip recording shortcut" = "Clip";
-
-"Back to AI services" = "Back to AI services";
-"To do %lld · Completed %lld" = "To do %lld · Completed %lld";
-"Completed (%lld)" = "Completed (%lld)";
-"Show completed tasks" = "Show completed tasks";
-"Hide completed tasks" = "Hide completed tasks";
-"Removal waiting to sync" = "Removal waiting to sync";
-"%@ left in %@" = "%1$@ left in %2$@";
-"Insufficient balance" = "Insufficient balance";
-"Connection failed" = "Connection failed";
-"Could not read data" = "Could not read data";
-"Data unavailable" = "Data unavailable";
-"No data reported" = "No data reported";
-"Remaining unavailable" = "Remaining unavailable";
-"No enabled AI services" = "No enabled AI services";
-"%@ left" = "%@ left";
-"%@ exhausted" = "%@ exhausted";
-"5-hour quota" = "5-hour quota";
-"Weekly quota" = "Weekly quota";
-"Argon weekly quota" = "Argon weekly quota";
-"Partial data" = "Partial data";
-"Account unavailable" = "Account unavailable";
-"%@ (%@)" = "%@ (%@)";

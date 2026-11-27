@@ -1,359 +1,274 @@
 import SwiftUI
 
-struct AIUsageOverviewView: View {
-  let providers: [ProviderUsagePresentation]
-  let onOpenProvider: (ProviderID) -> Void
-  let onConfigureProvider: (ProviderID) -> Void
-  let onManage: () -> Void
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      if providers.isEmpty {
-        Text("No enabled AI services")
-          .foregroundStyle(PulseDesignTokens.muted)
-          .padding(12)
-      }
-
-      ForEach(providers, id: \.provider) { presentation in
-        UsageOverviewCard(presentation: presentation) {
-          if presentation.requiresConfiguration {
-            onConfigureProvider(presentation.provider)
-          } else {
-            onOpenProvider(presentation.provider)
-          }
-        }
-      }
-
-      Button("Manage AI services", action: onManage)
-        .buttonStyle(PulseActionButtonStyle())
-        .accessibilityIdentifier("manageAIUsageButton")
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .font(.system(size: PulseDesignTokens.footnote))
-    .foregroundStyle(PulseDesignTokens.ink)
-  }
-}
-
-private struct UsageOverviewCard: View {
-  let presentation: ProviderUsagePresentation
-  let action: () -> Void
-
-  private var provider: ProviderID { presentation.provider }
-  private var description: String {
-    PulseLocalization.format(
-      presentation.requiresConfiguration ? "Configure %@" : "Open %@ usage details", provider.name)
-  }
-
-  var body: some View {
-    Button(action: action) {
-      VStack(alignment: .leading, spacing: 6) {
-        HStack(spacing: 8) {
-          UsageProviderIcon(provider: provider)
-          Text(provider.name)
-            .font(.system(size: PulseDesignTokens.label, weight: .semibold))
-          Spacer(minLength: 4)
-          if presentation.isRefreshing && presentation.updatedAt != nil {
-            Text("Refreshing…")
-              .font(.system(size: PulseDesignTokens.caption))
-              .foregroundStyle(PulseDesignTokens.muted)
-          }
-          if presentation.requiresConfiguration {
-            Image(systemName: "gearshape")
-              .font(.system(size: 13, weight: .semibold))
-              .foregroundStyle(PulseDesignTokens.muted)
-              .accessibilityHidden(true)
-          } else {
-            Image(systemName: "chevron.right")
-              .font(.system(size: 10, weight: .semibold))
-              .foregroundStyle(PulseDesignTokens.muted)
-              .accessibilityHidden(true)
-          }
-        }
-        UsageReadingStatus(presentation: presentation)
-        UsageMetrics(presentation: presentation, showsDetails: false)
-      }
-      .padding(10)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .contentShape(RoundedRectangle(cornerRadius: PulseDesignTokens.cornerLarge))
-    }
-    .buttonStyle(
-      PulseProviderStatusStyle(
-        paper: provider.dashboardPaper, radius: PulseDesignTokens.cornerLarge)
-    )
-    .help(description)
-    .accessibilityHint(description)
-    .accessibilityIdentifier(provider.overviewButtonID)
-    .anchorPreference(key: ProviderHeaderBoundsKey.self, value: .bounds) {
-      [provider.overviewButtonID: $0]
-    }
-  }
-}
-
 struct UsageView: View {
   @ObservedObject var usage: UsageController
-  let provider: ProviderID
-  var isConfigured = true
-  var configurationError: String? = nil
+  @ObservedObject var vipUsage: UsageController
+  @ObservedObject var deepSeekUsage: UsageController
+  @ObservedObject var antigravityUsage: UsageController
   let onAddProvider: () -> Void
+  var provider: ProviderID? = nil
 
   var body: some View {
-    let presentation = ProviderUsagePresentation(
-      provider: provider, usage: usage, isConfigured: isConfigured,
-      configurationError: configurationError)
-
-    VStack(alignment: .leading, spacing: 10) {
-      VStack(alignment: .leading, spacing: 10) {
-        HStack(spacing: 8) {
-          UsageProviderIcon(provider: provider)
-          Text(
-            LocalizedStringKey(provider == .codex || provider == .antigravity ? "Usage" : "Balance")
-          )
-          .font(.system(size: PulseDesignTokens.label, weight: .semibold))
-          Spacer()
-          if isConfigured {
-            UsageRefreshButton(
-              provider: provider, refreshStartedAt: usage.refreshStartedAt,
-              showsRetry: presentation.showsRetry
-            ) { usage.requestRefresh() }
-          }
-        }
-
-        UsageReadingStatus(presentation: presentation, showsReason: true)
-        UsageMetrics(presentation: presentation, showsDetails: true)
-        UsageUpdatedAt(presentation: presentation)
-      }
-      .padding(14)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .pulsePaper(provider.dashboardPaper)
-
-      Button(
-        LocalizedStringKey(
-          presentation.requiresConfiguration ? "Open Providers settings" : "Manage connection"),
-        action: onAddProvider
-      )
-      .buttonStyle(PulseActionButtonStyle())
-      .accessibilityIdentifier("addProviderButton")
+    VStack(alignment: .leading, spacing: 12) {
+      if provider == nil || provider == .codex { codexContent }
+      if provider == nil || provider == .vip { vipContent }
+      if provider == nil || provider == .deepSeek { deepSeekContent }
+      if provider == .antigravity { antigravityContent }
+      Divider()
+      Button("Manage AI services", action: onAddProvider)
+        .buttonStyle(PulseActionButtonStyle())
+        .accessibilityIdentifier("addProviderButton")
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .font(.system(size: PulseDesignTokens.footnote))
-    .foregroundStyle(PulseDesignTokens.ink)
+    .font(.system(size: 13))
   }
-}
 
-private struct UsageReadingStatus: View {
-  let presentation: ProviderUsagePresentation
-  var showsReason = false
+  private var codexContent: some View {
+    quotaContent(
+      usage: usage, provider: .codex, refreshTitle: "Refresh Codex usage",
+      refreshingTitle: "Refreshing Codex usage", identifier: "refreshCodexUsageButton"
+    ) { CodexProviderIcon(size: 16) }
+  }
 
-  var body: some View {
-    if let status = presentation.statusText {
-      VStack(alignment: .leading, spacing: 4) {
-        if presentation.attentionPriority > 0 || presentation.status == .partial {
-          Label(status, systemImage: "exclamationmark.circle")
-            .foregroundStyle(
-              presentation.attentionPriority > 1
-                ? PulseDesignTokens.destructive : PulseDesignTokens.warning)
+  private var antigravityContent: some View {
+    quotaContent(
+      usage: antigravityUsage, provider: .antigravity, refreshTitle: "Refresh Gemini quotas",
+      refreshingTitle: "Refreshing Gemini quotas", identifier: "refreshAntigravityUsageButton"
+    ) { AntigravityProviderIcon(size: 16) }
+  }
+
+  private func quotaContent<Icon: View>(
+    usage: UsageController, provider: ProviderID, refreshTitle: String, refreshingTitle: String,
+    identifier: String, @ViewBuilder icon: () -> Icon
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 8) {
+        icon()
+        Text(provider.name)
+          .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
+        Spacer()
+        UsageRefreshButton(
+          refreshStartedAt: usage.refreshStartedAt, refreshTitle: refreshTitle,
+          refreshingTitle: refreshingTitle, identifier: identifier
+        ) { usage.requestRefresh() }
+      }
+
+      switch usage.state {
+      case .loading:
+        Text("Checking usage…")
+          .foregroundStyle(.secondary)
+      case .unavailable(let message):
+        Label(message, systemImage: "minus.circle")
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+      case .failure(let message):
+        Label(message, systemImage: "exclamationmark.triangle")
+          .foregroundStyle(PulseDesignTokens.destructive)
+          .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+      case .success(let snapshot):
+        ForEach(Array(snapshot.quotaWindows.enumerated()), id: \.offset) { index, window in
+          if index > 0 { Divider() }
+          quotaRow(window)
+        }
+        updated(at: snapshot.fetchedAt)
+      }
+    }
+    .padding(14)
+    .pulsePaper(provider.dashboardPaper)
+  }
+
+  private var vipContent: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 8) {
+        VIPProviderIcon(size: 16)
+        Text("88VIP")
+          .font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
+        Spacer()
+        UsageRefreshButton(
+          refreshStartedAt: vipUsage.refreshStartedAt, refreshTitle: "Refresh 88VIP balance",
+          refreshingTitle: "Refreshing 88VIP balance", identifier: "refreshVIPUsageButton"
+        ) { vipUsage.requestRefresh() }
+      }
+
+      switch vipUsage.state {
+      case .loading:
+        Text("Checking balance…")
+          .foregroundStyle(.secondary)
+      case .unavailable(let message):
+        Label(message, systemImage: "minus.circle")
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+      case .failure(let message):
+        Label(message, systemImage: "exclamationmark.triangle")
+          .foregroundStyle(PulseDesignTokens.destructive)
+          .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+      case .success(let snapshot):
+        if snapshot.metrics.contains(.unlimited) {
+          detailRow("Balance", value: PulseLocalization.string("Unlimited"))
         } else {
-          Text(status).foregroundStyle(PulseDesignTokens.muted)
-        }
-
-        if showsReason {
-          if let reason = presentation.statusReason {
-            reasonText(reason)
+          if let allowance = amount(for: .allowance, in: snapshot) {
+            detailRow(
+              "Limit", value: MoneyFormatter.string(allowance.amount, currency: allowance.currency))
           }
-          ForEach(Array(presentation.partialFailureReasons.enumerated()), id: \.offset) {
-            _, reason in
-            reasonText(reason)
+          if let used = amount(for: .usage, in: snapshot) {
+            detailRow("Used", value: MoneyFormatter.string(used.amount, currency: used.currency))
+          }
+          if let remaining = amount(for: .balance, in: snapshot) {
+            detailRow(
+              "Remaining",
+              value: MoneyFormatter.string(remaining.amount, currency: remaining.currency))
+          } else {
+            detailRow("Remaining", value: "--")
           }
         }
-      }
-      .font(.system(size: PulseDesignTokens.caption))
-      .fixedSize(horizontal: false, vertical: true)
-      .pulseContentFeedback(status)
-    }
-  }
-
-  private func reasonText(_ reason: String) -> some View {
-    Text(reason).foregroundStyle(PulseDesignTokens.muted)
-  }
-}
-
-private struct UsageMetrics: View {
-  let presentation: ProviderUsagePresentation
-  let showsDetails: Bool
-  @Environment(\.locale) private var locale
-
-  var body: some View {
-    if !presentation.quotaWindows.isEmpty {
-      VStack(alignment: .leading, spacing: showsDetails ? 8 : 6) {
-        ForEach(Array(presentation.quotaWindows.enumerated()), id: \.offset) { index, window in
-          if showsDetails && index > 0 { Divider() }
-          UsageQuotaRow(window: window, showsProgress: showsDetails)
+        if let expiry = expiry(in: snapshot) {
+          detailRow("Access until", value: expiry.formatted(date: .abbreviated, time: .shortened))
         }
+        ForEach(Array(unavailableMessages(in: snapshot).enumerated()), id: \.offset) { _, message in
+          Label(message, systemImage: "minus.circle")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        updated(at: snapshot.fetchedAt)
       }
     }
-
-    if presentation.isUnlimited {
-      UsageValueRow(
-        title: PulseLocalization.string("Balance"), value: PulseLocalization.string("Unlimited"))
-    }
-
-    ForEach(presentation.moneyReadings.filter { $0.kind == .balance || showsDetails }) { reading in
-      UsageValueRow(title: title(for: reading), value: reading.value)
-    }
-
-    if showsDetails {
-      if presentation.provider == .vip && !presentation.isUnlimited
-        && presentation.balances.isEmpty && presentation.updatedAt != nil
-      {
-        UsageValueRow(
-          title: PulseLocalization.string("Remaining"),
-          value: PulseLocalization.string("Data unavailable"))
-      }
-
-      if let expiry = presentation.accessExpiry {
-        UsageValueRow(
-          title: PulseLocalization.string("Access until"),
-          value: expiry.formatted(
-            .dateTime.month(.abbreviated).day().year().hour().minute().locale(locale)))
-      }
-    }
+    .padding(14)
+    .pulsePaper(ProviderID.vip.dashboardPaper)
   }
 
-  private func title(for reading: ProviderUsagePresentation.MoneyReading) -> String {
-    switch reading.kind {
-    case .balance:
-      if presentation.provider == .deepSeek {
-        return PulseLocalization.format("Total balance (%@)", reading.currency)
+  private var deepSeekContent: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 8) {
+        DeepSeekProviderIcon(size: 16)
+        Text("DeepSeek").font(.system(size: PulseDesignTokens.toolbarTitle, weight: .semibold))
+        Spacer()
+        UsageRefreshButton(
+          refreshStartedAt: deepSeekUsage.refreshStartedAt,
+          refreshTitle: "Refresh DeepSeek balance",
+          refreshingTitle: "Refreshing DeepSeek balance", identifier: "refreshDeepSeekUsageButton"
+        ) { deepSeekUsage.requestRefresh() }
       }
-      return PulseLocalization.format(
-        "%@ (%@)", PulseLocalization.string("Remaining"), reading.currency)
-    case .allowance:
-      return PulseLocalization.format(
-        "%@ (%@)", PulseLocalization.string("Limit"), reading.currency)
-    case .used:
-      return PulseLocalization.format("%@ (%@)", PulseLocalization.string("Used"), reading.currency)
+      switch deepSeekUsage.state {
+      case .loading:
+        Text("Checking balance…").foregroundStyle(.secondary)
+      case .unavailable(let message):
+        Label(message, systemImage: "minus.circle")
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+        Button("Open Providers settings", action: onAddProvider)
+          .buttonStyle(.borderless)
+          .font(.caption.weight(.medium))
+          .accessibilityIdentifier("configureDeepSeekButton")
+      case .failure(let message):
+        Label(message, systemImage: "exclamationmark.triangle")
+          .foregroundStyle(PulseDesignTokens.destructive)
+          .fixedSize(horizontal: false, vertical: true)
+          .pulseContentFeedback(message)
+      case .success(let snapshot):
+        ForEach(snapshot.balances, id: \.currency) { balance in
+          detailRow(
+            PulseLocalization.format("Total balance (%@)", balance.currency),
+            value: MoneyFormatter.string(balance.amount, currency: balance.currency))
+        }
+        updated(at: snapshot.fetchedAt)
+      }
     }
+    .padding(14)
+    .pulsePaper(ProviderID.deepSeek.dashboardPaper)
   }
-}
 
-private struct UsageQuotaRow: View {
-  let window: QuotaWindow
-  let showsProgress: Bool
-  @Environment(\.locale) private var locale
-  @Environment(\.pulseReduceMotion) private var reduceMotion
-
-  var body: some View {
-    let percentage =
-      window.percentageText.map { PulseLocalization.format("%@ left", $0) }
-      ?? PulseLocalization.string("Remaining unavailable")
-    VStack(alignment: .leading, spacing: 4) {
+  private func quotaRow(_ window: QuotaWindow) -> some View {
+    VStack(alignment: .leading, spacing: 3) {
       HStack(alignment: .firstTextBaseline, spacing: 8) {
         Text(window.displayName)
           .font(.system(size: PulseDesignTokens.caption))
-          .foregroundStyle(PulseDesignTokens.muted)
+          .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
-        Spacer(minLength: 0)
-        Text(percentage)
-          .font(.system(size: PulseDesignTokens.footnote, weight: .semibold))
+        Spacer(minLength: 8)
+        Text(window.remainingPercent.map { "\($0)%" } ?? "--")
+          .font(.system(size: 17, weight: .semibold))
           .monospacedDigit()
-          .fixedSize(horizontal: false, vertical: true)
-          .multilineTextAlignment(.trailing)
-          .pulseContentFeedback(percentage)
+          .pulseContentFeedback(window.remainingPercent)
+          .layoutPriority(1)
       }
-
-      if showsProgress, let fraction = window.remainingFraction {
-        ProgressView(value: fraction)
-          .progressViewStyle(.linear)
-          .tint(fraction == 0 ? PulseDesignTokens.warning : PulseDesignTokens.accent)
-          .animation(reduceMotion ? nil : PulseDesignTokens.feedbackAnimation, value: fraction)
-          .accessibilityHidden(true)
-      }
-
       Text(
         window.resetsAt.map {
-          PulseLocalization.format(
-            "Resets %@",
-            $0.formatted(.dateTime.month(.abbreviated).day().hour().minute().locale(locale)))
-        } ?? PulseLocalization.string("Reset time unavailable")
+          PulseLocalization.format("Resets %@", $0.formatted(date: .abbreviated, time: .shortened))
+        }
+          ?? PulseLocalization.string("Reset time unavailable")
       )
       .font(.system(size: PulseDesignTokens.caption))
-      .foregroundStyle(PulseDesignTokens.muted)
+      .foregroundStyle(.secondary)
       .fixedSize(horizontal: false, vertical: true)
     }
-    .accessibilityElement(children: .combine)
-  }
-}
-
-/// Keep the full number readable when either column cannot share a line.
-private struct UsageValueRow: View {
-  let title: String
-  let value: String
-
-  var body: some View {
-    ViewThatFits(in: .horizontal) {
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
-        label.fixedSize()
-        Spacer(minLength: 8)
-        reading.fixedSize()
-      }
-      VStack(alignment: .leading, spacing: 3) {
-        label
-        reading
-      }
-      .fixedSize(horizontal: false, vertical: true)
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .accessibilityElement(children: .combine)
   }
 
-  private var label: some View {
-    Text(title)
-      .font(.system(size: PulseDesignTokens.caption))
-      .foregroundStyle(PulseDesignTokens.muted)
-  }
-
-  private var reading: some View {
-    Text(value)
-      .font(.system(size: PulseDesignTokens.footnote, weight: .semibold))
-      .monospacedDigit()
-      .pulseContentFeedback(value)
-  }
-}
-
-private struct UsageUpdatedAt: View {
-  let presentation: ProviderUsagePresentation
-  @Environment(\.locale) private var locale
-
-  var body: some View {
-    if let updatedAt = presentation.updatedAt {
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text(
-          PulseLocalization.format(
-            "Updated %@",
-            updatedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute().locale(locale))
-          )
-        )
+  /// Label left, value right. The value is the number that matters, so it is
+  /// semibold monospaced while the label stays a quiet caption; both are free
+  /// to wrap instead of clipping digits when a balance runs long.
+  private func detailRow(_ title: String, value: String) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 8) {
+      Text(PulseLocalization.string(title))
+        .font(.system(size: PulseDesignTokens.caption))
+        .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
-        Spacer(minLength: 0)
-        if presentation.isRefreshing {
-          Text("Refreshing…")
-        }
-      }
-      .font(.system(size: PulseDesignTokens.caption))
-      .foregroundStyle(PulseDesignTokens.muted)
+      Spacer(minLength: 8)
+      Text(value)
+        .font(.system(size: PulseDesignTokens.footnote, weight: .semibold))
+        .monospacedDigit()
+        .multilineTextAlignment(.trailing)
+        .fixedSize(horizontal: false, vertical: true)
+        .pulseContentFeedback(value)
+        .layoutPriority(1)
     }
   }
-}
 
-private struct UsageProviderIcon: View {
-  let provider: ProviderID
+  private func updated(at date: Date) -> some View {
+    Text("Updated \(date.formatted(date: .omitted, time: .shortened))")
+      .font(.system(size: 12))
+      .foregroundStyle(PulseDesignTokens.muted)
+  }
 
-  var body: some View {
-    switch provider {
-    case .codex: CodexProviderIcon(size: 16)
-    case .vip: VIPProviderIcon(size: 16)
-    case .deepSeek: DeepSeekProviderIcon(size: 16)
-    case .antigravity: AntigravityProviderIcon(size: 16)
+  private enum VIPAmountKind {
+    case allowance
+    case usage
+    case balance
+  }
+
+  private func amount(
+    for kind: VIPAmountKind,
+    in snapshot: UsageSnapshot
+  ) -> (amount: Decimal, currency: String)? {
+    for metric in snapshot.metrics {
+      switch (kind, metric) {
+      case (.allowance, .allowance(let amount, let currency)),
+        (.usage, .usage(let amount, let currency)),
+        (.balance, .balance(let amount, let currency)):
+        return (amount, currency)
+      default:
+        continue
+      }
+    }
+    return nil
+  }
+
+  private func expiry(in snapshot: UsageSnapshot) -> Date? {
+    for metric in snapshot.metrics {
+      if case .expiresAt(let date) = metric { return date }
+    }
+    return nil
+  }
+
+  private func unavailableMessages(in snapshot: UsageSnapshot) -> [String] {
+    snapshot.metrics.compactMap {
+      guard case .unavailable(let reason) = $0 else { return nil }
+      return reason
     }
   }
 }
@@ -361,15 +276,15 @@ private struct UsageProviderIcon: View {
 /// The label keeps its geometry while refreshing. The busy glyph owns its
 /// delay, so completing or leaving this detail page cancels that delay.
 private struct UsageRefreshButton: View {
-  let provider: ProviderID
   let refreshStartedAt: ContinuousClock.Instant?
-  let showsRetry: Bool
+  let refreshTitle: String
+  let refreshingTitle: String
+  let identifier: String
   let action: () -> Void
 
   var body: some View {
     let isRefreshing = refreshStartedAt != nil
-    let title = PulseLocalization.string(
-      isRefreshing ? provider.refreshingHelp : provider.refreshHelp)
+    let title = PulseLocalization.string(isRefreshing ? refreshingTitle : refreshTitle)
     Button(action: action) {
       HStack(spacing: 6) {
         PulseBusyGlyph(isBusy: isRefreshing, startedAt: refreshStartedAt) {
@@ -377,52 +292,14 @@ private struct UsageRefreshButton: View {
         }
         .frame(width: 16, height: 16)
         .accessibilityHidden(true)
-        Text(LocalizedStringKey(showsRetry ? "Retry" : "Refresh"))
+        Text("Refresh")
       }
-      .frame(minWidth: 66)
+      .font(.system(size: 12, weight: .medium))
     }
     .buttonStyle(PulseActionButtonStyle())
     .disabled(isRefreshing)
     .help(title)
     .accessibilityLabel(title)
-    .accessibilityIdentifier(provider.refreshButtonID)
-  }
-}
-
-extension ProviderID {
-  fileprivate var overviewButtonID: String {
-    switch self {
-    case .codex: "openUsageButton"
-    case .vip: "openVIPUsageButton"
-    case .deepSeek: "openDeepSeekUsageButton"
-    case .antigravity: "openAntigravityUsageButton"
-    }
-  }
-
-  fileprivate var refreshButtonID: String {
-    switch self {
-    case .codex: "refreshCodexUsageButton"
-    case .vip: "refreshVIPUsageButton"
-    case .deepSeek: "refreshDeepSeekUsageButton"
-    case .antigravity: "refreshAntigravityUsageButton"
-    }
-  }
-
-  fileprivate var refreshHelp: String {
-    switch self {
-    case .codex: "Refresh Codex usage"
-    case .vip: "Refresh 88VIP balance"
-    case .deepSeek: "Refresh DeepSeek balance"
-    case .antigravity: "Refresh Gemini quotas"
-    }
-  }
-
-  fileprivate var refreshingHelp: String {
-    switch self {
-    case .codex: "Refreshing Codex usage"
-    case .vip: "Refreshing 88VIP balance"
-    case .deepSeek: "Refreshing DeepSeek balance"
-    case .antigravity: "Refreshing Gemini quotas"
-    }
+    .accessibilityIdentifier(identifier)
   }
 }

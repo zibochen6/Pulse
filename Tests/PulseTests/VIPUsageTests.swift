@@ -24,9 +24,7 @@ final class VIPUsageTests: XCTestCase {
     XCTAssertEqual(amount(.allowance, in: snapshot), 100)
     XCTAssertEqual(amount(.usage, in: snapshot), 12.34)
     XCTAssertEqual(amount(.balance, in: snapshot), 87.66)
-    let presentation = ProviderUsagePresentation(provider: .vip, state: .success(snapshot))
-    XCTAssertEqual(presentation.primaryBalance?.value, "$87.66")
-    XCTAssertEqual(presentation.moneyReadings.map(\.value), ["$100", "$12.34", "$87.66"])
+    XCTAssertEqual(VIPUsageFormatter.title(for: .success(snapshot)), "$87.66")
     XCTAssertEqual(expiry(in: snapshot), Date(timeIntervalSince1970: 1_780_000_000))
 
     let requests = await client.requestsMade()
@@ -48,27 +46,14 @@ final class VIPUsageTests: XCTestCase {
 
     XCTAssertEqual(amount(.allowance, in: snapshot), 25)
     XCTAssertNil(amount(.balance, in: snapshot))
-    let presentation = ProviderUsagePresentation(provider: .vip, state: .success(snapshot))
-    XCTAssertEqual(presentation.status, .partial)
-    XCTAssertEqual(presentation.moneyReadings.map(\.value), ["$25"])
-    XCTAssertTrue(presentation.balances.isEmpty)
+    XCTAssertEqual(VIPUsageFormatter.title(for: .success(snapshot)), "!")
     XCTAssertTrue(unavailableMessages(in: snapshot).contains { $0.contains("rate-limiting") })
     XCTAssertTrue(snapshot.hasPartialDataFailure)
   }
 
-  @MainActor
-  func testRejectedAPIKeyKeepsTypedSettingsRecovery() async {
-    let provider = VIPProvider(
-      secretStore: MemorySecretStore(value: "test-key"),
-      httpClient: QueueVIPHTTPClient(responses: [.failure(VIPUsageError.invalidCredentials)]))
-    let controller = UsageController(provider: provider)
-    await controller.refresh()
-    XCTAssertEqual(controller.failureKind, .invalidCredentials)
-    let presentation = ProviderUsagePresentation(provider: .vip, usage: controller)
-    XCTAssertTrue(presentation.requiresConfiguration)
-    XCTAssertGreaterThan(presentation.attentionPriority, 0)
+  func testCompactSummaryMarksUnavailableStateAsNeedsAttention() {
     XCTAssertEqual(
-      presentation.status, .credentialsRejected(VIPUsageError.invalidCredentials.userMessage))
+      VIPUsageFormatter.title(for: .unavailable(VIPUsageError.missingAPIKey.userMessage)), "!")
   }
 
   func testProviderReportsUnlimitedWithoutFabricatingMoney() async throws {
@@ -77,10 +62,7 @@ final class VIPUsageTests: XCTestCase {
     let snapshot = try await VIPProvider(secretStore: store, httpClient: client).fetch()
 
     XCTAssertEqual(snapshot.metrics, [.unlimited])
-    let presentation = ProviderUsagePresentation(provider: .vip, state: .success(snapshot))
-    XCTAssertTrue(presentation.isUnlimited)
-    XCTAssertEqual(presentation.status, .ready)
-    XCTAssertTrue(presentation.balances.isEmpty)
+    XCTAssertEqual(VIPUsageFormatter.title(for: .success(snapshot)), "∞")
   }
 
   func testMissingKeyAndHTTPFailuresAreClassified() async throws {

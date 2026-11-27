@@ -17,13 +17,6 @@ enum CodexUsageError: LocalizedError, Equatable, UsageFailureDescribing {
     }
   }
 
-  var failureKind: UsageFailureKind {
-    switch self {
-    case .noQuota: .missingData
-    default: isUnavailable ? .unavailable : .requestFailed
-    }
-  }
-
   var userMessage: String {
     errorDescription ?? PulseLocalization.string("Could not refresh Codex usage.")
   }
@@ -96,17 +89,16 @@ enum CodexRateLimitDecoder {
     let windows = [selected.primary, selected.secondary]
       .compactMap { $0 }
       .map { window -> QuotaWindow in
-        let remaining = window.usedPercent.flatMap { used -> Double? in
+        let remaining = window.usedPercent.flatMap { used -> Int? in
           guard used.isFinite else { return nil }
-          return 100 - min(100, max(0, used))
+          return Int((100 - min(100, max(0, used))).rounded())
         }
         let duration = window.windowDurationMins.flatMap { minutes -> Int? in
           guard minutes.isFinite, minutes > 0, minutes < Double(Int.max) else { return nil }
           return Int(minutes.rounded())
         }
         let reset = window.resetsAt.flatMap { $0.isFinite ? Date(timeIntervalSince1970: $0) : nil }
-        return QuotaWindow(
-          durationMinutes: duration, measuredRemainingPercent: remaining, resetsAt: reset)
+        return QuotaWindow(durationMinutes: duration, remainingPercent: remaining, resetsAt: reset)
       }
     var unique: [QuotaWindow] = []
     for window in windows where !unique.contains(window) { unique.append(window) }
