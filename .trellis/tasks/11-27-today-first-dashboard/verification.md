@@ -48,6 +48,6 @@ measurements.
 
 ## Release status
 
-The release gate remains pending. The installed bundle passed strict signature
-verification at 0.1.30, and GitHub Latest reported v0.1.30. The candidate remains
-on its local implementation branch.
+The preflight found a signed 0.1.30 (build 34) installed and v0.1.30 on GitHub.
+The user authorized publishing and installing 0.1.31 with tests off the desktop.
+The visible motion comparison remains pending.

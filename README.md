@@ -2,7 +2,7 @@
 
 Pulse is an early-stage, local-first macOS menu bar assistant for people who use AI services every day. The intended product brings AI usage status and daily to-dos into one quick daily entry point.
 
-**Pulse 0.1.30** brings frequently copied entries to the top of Quick Copy.
+**Pulse 0.1.31** opens on your task list and collects usage and balances in one AI overview.
 
 The menu bar shows Codex's quota. Home puts today's work first and offers an AI services overview below the list. Tasks support independent tag lists, quick entry, daily repeat and deletion undo. Everything stays local. Pulse stores API keys in macOS Keychain. See [UI and interaction](docs/ui-layout-refactor.md) and [motion](docs/popover-motion.md) for the current behavior.
 
@@ -10,12 +10,12 @@ The menu bar shows Codex's quota. Home puts today's work first and offers an AI 
 
 ## Download and install
 
-Download [Pulse 0.1.30](https://github.com/zibochen6/Pulse/releases/tag/v0.1.30)
+Download [Pulse 0.1.31](https://github.com/zibochen6/Pulse/releases/tag/v0.1.31)
 for macOS 13 or newer (Apple Silicon and Intel). Open the DMG and drag Pulse
 to Applications. Quit the previous Pulse instance before replacing it, then
 launch `/Applications/Pulse.app`; its settings and task storage are retained.
-The release publishes `Pulse-0.1.30.dmg` with a SHA-256 checksum for manual
-installs, plus `Pulse-0.1.30.zip` and its checksum for the in-app updater; the
+The release publishes `Pulse-0.1.31.dmg` with a SHA-256 checksum for manual
+installs, plus `Pulse-0.1.31.zip` and its checksum for the in-app updater; the
 DMG and ZIP contain the same signed app.
 
 This preview is signed with an Apple Development certificate, **not Developer ID
@@ -23,7 +23,7 @@ signed or notarized**. macOS may block first launch. If you trust the downloaded
 build, use the available **Open Anyway** option in System Settings → Privacy &
 Security after attempting to launch; follow [Apple's guidance](https://support.apple.com/102445)
 and do not disable Gatekeeper. Source builds
-remain available below. See [0.1.30 release notes](docs/releases/0.1.30.md) for
+remain available below. See [0.1.31 release notes](docs/releases/0.1.31.md) for
 changes and current limits.
 
 ## Automatic updates
